@@ -94,7 +94,7 @@ const HOT = {
   "src/game/deform/deform-contact.ts": ["stepStructure"],
   "src/game/deform/frame-tilt.ts": ["seatTilt"],
   "src/game/deform/hub-ride.ts": ["rideCage"],
-  "src/game/deform/deform-solve.ts": ["stepMassSlice", "stepShapeMatch", "stepBeams", "stepSuspension"],
+  "src/game/deform/deform-solve.ts": ["stepMassSlice", "stepShapeMatch", "stepBeams", "stepSuspension", "standsOnHubs"],
   "src/game/contact/sat.ts": ["physicsSlice", "sliceSpeed", "satCars", "deepestIn", "bandGrazes", "outlineNormal", "clipCarToBarrier"],
   "src/game/contact/cage-outline.ts": ["sampleField", "worldBand", "bandsMeet"],
   "src/game/contact/pair-contact.ts": ["resolveCarPair", "impulseCar", "pushCar", "scrapePair", "pointVelocity", "exchangePair", "loadPair"],

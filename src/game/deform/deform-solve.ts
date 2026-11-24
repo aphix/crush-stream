@@ -35,6 +35,8 @@ const SUSPENSION_C = 260;
 const SPRINGBACK = 0.08;
 /** How far (m) a planted hub stands off its pin in a quiet wreck (2 cm measured): within it a hub is at its pin and `holdHubVelocity` leaves its speed alone. */
 const HUB_STAND_SLACK = 0.03;
+/** A hub stands on the ground within this many tyre radii of the floor under it (a hub at a slab's foot reads 1.3, one under a truck in the air 7 or more). */
+const HUB_GROUND_RADII = 3;
 /** Share of a crush past the yield that springs back: real structure keeps 75-90 % of its peak crush (17 % back at 56 km/h, SAE 2006-01-0908). */
 const SPRING_SHARE = 0.1;
 
@@ -413,10 +415,20 @@ export abstract class DeformSolve extends DeformFreeze {
     m.world.copy(m.local).applyMatrix4(group.matrixWorld);
   }
 
-  /** A hub the clamp holds at its pin (car-frame offsets from rest: it stood at `fromX/fromZ`, the pin is `toX/toZ`) loses its speed, relative to the rigid body, away from the pin: as at a crush cap (`stopAtCap`), nothing pushes it, and the planted hub's stand slack let that speed walk it 0.26 m into the car. */
+  /** Whether every attached hub of the wreck stands on the ground (`HUB_GROUND_RADII`): a wreck with a hub in the air (a truck vaulting a slab, its tail 2.6 m up) is not standing on its tyres. */
+  private standsOnHubs(): boolean {
+    const reach = HUB_GROUND_RADII * this.rig.tyre.r;
+    for (let i = 0; i < this.masses.length; i++) {
+      const m = this.masses[i]!;
+      if (m.hub && !m.popped && !(m.world.y - this.floorPost[i]! <= reach)) return false;
+    }
+    return true;
+  }
+
+  /** A planted hub the clamp holds at its pin (car-frame offsets from rest: it stood at `fromX/fromZ`, the pin is `toX/toZ`) loses its speed, relative to the rigid body, away from the pin: as at a crush cap (`stopAtCap`), nothing pushes it, and the planted hub's stand slack let that speed walk it 0.26 m into the car. Only while the wreck stands on its hubs: in flight a hub's speed is the flight's. */
   private holdHubVelocity(m: MassNode, group: THREE.Object3D, fromX: number, fromZ: number, toX: number, toZ: number): void {
     const gap = hypot2(toX - fromX, toZ - fromZ);
-    if (gap < HUB_STAND_SLACK || this.quietTime() <= CONTACT_HOLD) return;
+    if (gap < HUB_STAND_SLACK || this.quietTime() <= CONTACT_HOLD || !this.standsOnHubs()) return;
     _a.set((toX - fromX) / gap, 0, (toZ - fromZ) / gap).applyQuaternion(group.quaternion);
     const rx = m.world.x - _clamp[5]!;
     const ry = m.world.y - _clamp[6]!;

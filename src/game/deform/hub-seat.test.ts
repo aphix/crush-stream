@@ -8,7 +8,7 @@ import { assignClass, CLASSES } from "../vehicle/vehicle-classes.ts";
 import { dummyGeom, massCentroid, paint } from "../vehicle/test-support.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 import { HUB_PIN_MAX } from "./constants.ts";
 import { hypot2 } from "./physics-util.ts";
 
@@ -393,5 +393,67 @@ describe("given a wreck after a squeeze's deep crush is over, one hub coasted 0.
     d.clamp(group);
     const off = hypot2(hub.local.x - left.x, hub.local.z - left.z);
     expect(off, `the hub stands ${off.toFixed(3)} m in plan off where the deep crush left it`).toBeLessThanOrEqual(HUB_KEPT_M);
+  });
+});
+
+/** A planted hub's stand off its pin (m), and its speed (m/s) off the body along the car, as the clamp's hold sees them. */
+const HELD_OFF_M = 0.06;
+const HUB_RUN = 3;
+/** How many tyre radii over its floor a hub stands on the ground, and how many it hangs in the air. */
+const ON_GROUND_RADII = 1;
+const IN_AIR_RADII = 15;
+
+describe("given a wreck quiet past 0.2 s whose planted hub stands 6 cm off its pin and runs 3 m/s off the body along the car", () => {
+  /** The hub's speed along its run (m/s) after the clamp's hold: it runs forward (+1) or back (-1) with its pin the other way, and the hub `inAir` (if any) hangs in the air. */
+  function speedAfterHold(name: string, run: 1 | -1, inAir: string | null): number {
+    const d = wreck();
+    const group = new THREE.Group();
+    group.updateMatrixWorld();
+    d.stepStructure(PLANT_QUIET + 0.05, new THREE.Quaternion());
+    d.ride(0, 0, 0);
+    for (const q of d.masses) if (q.hub) d["floorPost"][q.index] = q.world.y - (q.name === inAir ? IN_AIR_RADII : ON_GROUND_RADII) * d["rig"].tyre.r;
+    const hub = d.masses.find((q) => q.name === name)!;
+    hub.vel.set(0, 0, run * HUB_RUN);
+    d["holdHubVelocity"](hub, group, 0, 0, 0, -run * HELD_OFF_M);
+    return hub.vel.z * run;
+  }
+
+  it("when the wreck stands on its four hubs, then the hold takes the hub's speed away from its pin off, a rear hub's forward, a front hub's back or its forward", () => {
+    expect(speedAfterHold("hubRL", 1, null), "rear hub forward").toBeCloseTo(0, 6);
+    expect(speedAfterHold("hubFL", -1, null), "front hub back").toBeCloseTo(0, 6);
+    expect(speedAfterHold("hubFL", 1, null), "front hub forward").toBeCloseTo(0, 6);
+  });
+
+  it("when another hub of the wreck is in the air, then the hold leaves this hub's speed alone: the wreck is in flight, not standing on its tyres", () => {
+    expect(speedAfterHold("hubRL", 1, "hubRR")).toBeCloseTo(HUB_RUN, 6);
+  });
+});
+
+describe("given a wreck quiet past 0.2 s, planted, whose cell stands 2 cm off its seat", () => {
+  /** How far (m) the hub moves in x over one `followGroup` of the seat step, less how far the frame moves: 0 when it rides the step, minus the step when it stays where it stands. */
+  function hubLag(spin: number): number {
+    const d = wreck();
+    const group = new THREE.Group();
+    group.updateMatrixWorld();
+    d.stepStructure(PLANT_QUIET + 0.05, new THREE.Quaternion());
+    const cell = d.masses.find((q) => q.name === "cell")!;
+    cell.world.x += 0.02;
+    const velocity = new THREE.Vector3();
+    const omega = new THREE.Vector3(0, spin, 0);
+    d.followGroup(group, velocity, omega, 0);
+    const hub = d.masses.find((q) => q.hub && !q.popped)!;
+    const hubFrom = hub.world.x;
+    const groupFrom = group.position.x;
+    d.followGroup(group, velocity, omega, 1 / FINE_HZ);
+    expect(group.position.x - groupFrom, "the seat step moved the frame (m)").toBeGreaterThan(1e-3);
+    return hub.world.x - hubFrom - (group.position.x - groupFrom);
+  }
+
+  it("when it is at rest, then its planted hubs ride the frame's seat step", () => {
+    expect(hubLag(0)).toBeCloseTo(0, 6);
+  });
+
+  it("when it is still turning at 1 rad/s, then its hubs stay where they stand while the frame seats: a wreck in flight stands on no planted tyres", () => {
+    expect(hubLag(1), "the hub's lag behind the frame (m)").toBeLessThan(-1e-3);
   });
 });
