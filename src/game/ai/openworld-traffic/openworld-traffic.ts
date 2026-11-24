@@ -311,6 +311,11 @@ export class OpenWorldTraffic {
     return nearestFreeSpot(this.parkingSpots, x, z, this.context.taken);
   }
 
+  /** Whether no car stands at kerb space `spot` and none holds it (a resident's claim, a trip's end): a car put there stands on nothing. */
+  spotIsFree(spot: number): boolean {
+    return this.context.standing[spot] === STANDING.none && this.context.taken[spot] === 0;
+  }
+
   /**
    * Leases a car for `resident` (-1: none) to drive from space `fromSpot` to `toSpot`; null when no car is free or there is no way. `urgent`: ignores the signals, drives fast. `dueSeconds`: the crowd second
    * the rider is due at the other end; a car still on its way then, with no eye on it, is stood in its space.
