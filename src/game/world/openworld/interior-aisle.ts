@@ -164,6 +164,62 @@ export function planStandSpots(plan: InteriorPlan, customer: CounterSide, clerk:
   );
 }
 
+/** Appends nodes from node `from` to (deep, across), at most a grid step apart, each the child of the one before; the last node's index. */
+function extend(tree: PlanAisle, from: number, deep: number, across: number): number {
+  const fromDeep = tree.deep[from]!;
+  const fromAcross = tree.across[from]!;
+  const pieces = Math.max(1, Math.ceil(hypot2(deep - fromDeep, across - fromAcross) / AISLE_STEP));
+  let last = from;
+  for (let piece = 1; piece <= pieces; piece++) {
+    tree.parent.push(last);
+    last = tree.deep.length;
+    tree.deep.push(fromDeep + ((deep - fromDeep) * piece) / pieces);
+    tree.across.push(fromAcross + ((across - fromAcross) * piece) / pieces);
+  }
+  return last;
+}
+
+/** A clerk's galley is narrower than the grid sees: each clerk spot is joined to the aisle by the shortest route of one straight leg, or two meeting at a right angle, a body's half-width clear of every solid, so her walk never cuts the counter. */
+function joinClerks(boxes: readonly Box[], tree: PlanAisle, stands: Float32Array): void {
+  // A hair under a body's half-width: a spot sits exactly that far off a solid.
+  const reach = SPOT_CLEAR - 1e-4;
+  const grown = boxes.map((box) => ({ deep0: box.deep0 - reach, deep1: box.deep1 + reach, across0: box.across0 - reach, across1: box.across1 + reach }));
+  const clear = (d0: number, a0: number, d1: number, a1: number): boolean => !grown.some((box) => crosses(box, d0, a0, d1, a1));
+  const pending: number[] = [];
+  for (let at = (STAND_COLUMNS + STAND_SPOTS) * 2; at < stands.length; at += 2) pending.push(at);
+  while (pending.length > 0) {
+    let best = -1;
+    let parent = -1;
+    let bestLength = Infinity;
+    let bendDeep = 0;
+    let bendAcross = 0;
+    for (let spot = 0; spot < pending.length; spot++) {
+      const deep = stands[pending[spot]!]!;
+      const across = stands[pending[spot]! + 1]!;
+      for (let node = 0; node < tree.deep.length; node++) {
+        const fromDeep = tree.deep[node]!;
+        const fromAcross = tree.across[node]!;
+        for (let bend = 0; bend < 3; bend++) {
+          const wd = bend === 0 ? fromDeep : bend === 1 ? deep : fromDeep;
+          const wa = bend === 0 ? fromAcross : bend === 1 ? fromAcross : across;
+          const length = hypot2(wd - fromDeep, wa - fromAcross) + hypot2(deep - wd, across - wa);
+          if (length >= bestLength || !clear(fromDeep, fromAcross, wd, wa) || !clear(wd, wa, deep, across)) continue;
+          best = spot;
+          parent = node;
+          bestLength = length;
+          bendDeep = wd;
+          bendAcross = wa;
+        }
+      }
+    }
+    if (best < 0) throw new Error("a clerk's spot has no body-clear way to the aisle");
+    const bent = bendDeep !== tree.deep[parent]! || bendAcross !== tree.across[parent]!;
+    const mid = bent ? extend(tree, parent, bendDeep, bendAcross) : parent;
+    extend(tree, mid, stands[pending[best]!]!, stands[pending[best]! + 1]!);
+    pending.splice(best, 1);
+  }
+}
+
 /** The plan's aisle, or null where it has no serving counter (nobody is drawn inside it) or no floor at its door; its standing room keeps a spot's spacing from the counter's spots (`stands`, plan x, z pairs). */
 export function planAisle(plan: InteriorPlan, doorAcross: number, stands: Float32Array): PlanAisle | null {
   const counter = plan.furnishings.find((piece) => piece.serves);
@@ -186,5 +242,6 @@ export function planAisle(plan: InteriorPlan, doorAcross: number, stands: Float3
     if (walls.some((box) => crosses(box, deep, across, spotDeep, spotAcross))) continue;
     tree.room.push(node);
   }
+  joinClerks(boxes, tree, stands);
   return { deep: tree.deep, across: tree.across, parent: tree.parent, room: tree.room };
 }

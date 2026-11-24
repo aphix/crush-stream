@@ -509,6 +509,32 @@ describe("given customers who leave Kelly's Tap Room at the end of a stay cut sh
   });
 });
 
+/** A run's pace (m/s): the fastest a walk in a room may be drawn at. */
+const RUN_PACE = 3.5;
+
+describe("given a customer who reaches a counter venue with only a few ticks left before it closes", () => {
+  it("when she is drawn from her arrival, then she is first drawn at the door and walks in to her lane no faster than a run, and never appears at the counter", () => {
+    for (const name of ["Kelly's Tap Room", "Daily Grind Coffee", "Bodega Supreme"]) {
+      for (const stay of [4, 8]) {
+        const place = placeIn(city, name);
+        const state = createCityState(5, city, 60);
+        const resident = state.cast.length;
+        stageResident(state, resident, { place: HOME_OF_ROOM, tick: ROOM_ARRIVE, purpose: NEED.rest });
+        state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = ROOM_PACE;
+        expect(sendResidentTo(state, resident, ROOM_ARRIVE, place, PURPOSE.drink, TICKS_PER_GAME_HOUR), `${name}: control: she sets out`).toBe(true);
+        releaseSeat(state, resident);
+        const arrive = intAt(state, resident, RESIDENT_INT.arriveTick);
+        state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.nextDecisionTick] = arrive + stay;
+        const frames = drawnBetween(state, resident, arrive, arrive + stay);
+        const door = city.places[place]!;
+        expect(frames[0], `${name}, ${stay} ticks: drawn on her first frame`).not.toBeNull();
+        expect(hypot2(frames[0]!.x - door.doorX, frames[0]!.z - door.doorZ), `${name}, ${stay} ticks: metres from the door on her first frame`).toBeLessThan(1);
+        expect(longestStep(frames) / FRAME_SECONDS, `${name}, ${stay} ticks: her fastest walk (m/s)`).toBeLessThanOrEqual(RUN_PACE);
+      }
+    }
+  });
+});
+
 describe("given a customer seated at the back of Kelly's Tap Room who steps out to look on", () => {
   // mutation: sed -i 's/^  const walkOut = here \&\& isOutdoorPurpose(purpose) \&\& purpose !== PURPOSE.fight ? (out >= 0 ? out - tick : walkOutTicks(state, resident, place, left)) : 0;/  const walkOut = 0;/' src/game/ai/civilians/civilian-plan.ts
   it("when she stands outside its door, then she first stands up and walks out to it, never moving a metre in a frame", () => {
