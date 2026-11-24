@@ -248,9 +248,10 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
     /** The unit from the prism toward the arena's middle. */
     const [ix, iz] = [-prism.x / reach, -prism.z / reach];
     const from = massCentroid(wreck.deform.masses);
-    // Square to the prism's long axis, whichever way along it the slide left it facing.
-    const off = Math.atan2(Math.sin(prism.yaw - wreck.yaw), Math.cos(prism.yaw - wreck.yaw));
-    const turn = Math.abs(off) > Math.PI / 2 ? off - Math.sign(off) * Math.PI : off;
+    // Square to the prism's long axis and facing along it (its yaw), whichever way the slide left it: its crushed nose stands its footprint
+    // 0.35 m further out on that end of its masses' middle (0.39 m clear of box 55 facing along stack 54, 0.05 m facing back), so a settle
+    // that ends the other way round (as it does since the contact rules of REPLAY 252) must not restage every row of this describe.
+    const turn = Math.atan2(Math.sin(prism.yaw - wreck.yaw), Math.cos(prism.yaw - wreck.yaw));
     for (const m of wreck.deform.masses) {
       _turned.set(m.world.x - from.x, 0, m.world.z - from.z).applyAxisAngle(UP_AXIS, turn);
       m.world.x = from.x + _turned.x;
