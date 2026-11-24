@@ -1,8 +1,8 @@
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { carAtWalker, shownResident } from "../ai/civilians/civilian-crowd.test-util.ts";
-import { EVENT_KIND, FLAG, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../ai/civilians/civilian-constants.ts";
-import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
+import { actorOfCopSubject, EVENT_KIND, FLAG, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../ai/civilians/civilian-constants.ts";
+import { CHEST_HEIGHT, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { legPositionAt, LegPose } from "../ai/civilians/civilian-leg.ts";
 import { historyLines } from "../ai/civilians/civilian-mood.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -20,9 +20,11 @@ import { OFF_MENU } from "../world/tracks/index.ts";
 import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { OpenWorldActs } from "./engine-openworld-acts.ts";
-import { ACT } from "../net/act-codec.ts";
+import { ACT, Named, NAMED } from "../net/act-codec.ts";
+import type { ActorPlace } from "./engine-openworld-law.ts";
+import type { Meeting } from "../ai/civilians/civilian-look.ts";
 import { idleCullPorts, idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
-import { detAtan2, hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { SPECIES } from "../ai/civilians/civilian-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
@@ -79,6 +81,9 @@ const CAR_RUN_UP_M = 6;
 const CAR_MPS = 10;
 const HOOK_EYE_M = 10;
 const CIVILIAN_SPOT_GAP_M = 0.1;
+/** How far (m) the hook's ray reaches in the room's host (the tether's range), and the person it met. */
+const HOOK_REACH_M = 80;
+const hooked: Meeting = { index: -1, along: 0 };
 /** Where the host's hook has a first end held, as the room's fake ports answer. */
 const HELD_AT = { x: 31.5, y: 1.2, z: -12.25 };
 
@@ -102,10 +107,10 @@ type Drawn = { poses: CrowdPoses | null; held: Uint8Array | null; players: Crowd
 type FootPath = { x0: number; z0: number; vx: number; vz: number; t0: number; posture: number };
 type Launch = { vx: number; vy: number; vz: number };
 type Side = { director: OpenWorldDirector; thrown: FigureStrike[]; car: ReturnType<typeof pooledCar>; fake: FakeBodyHost | null; eye: { x: number; z: number }; drawn: Drawn; walk: { path: FootPath | null }; knocks: Launch[]; staggers: { dirX: number; dirZ: number }[]; holding: Set<number>; drags: { x: number; z: number }[]; tethers: TetherSet; cables: RemoteCables; looks: DriverLook[] };
-type RoomOptions = { bodies?: boolean; guests?: 1 | 2 };
+type RoomOptions = { bodies?: boolean; guests?: 1 | 2; law?: boolean };
 
 /** The host (a room of the open world) and one or two guests, their worlds on the open world's course and their crowds the directors of the engine, linked through netplay. With `bodies` each side has a dummies' world of its own (`FakeBodyHost`), an eye a test moves and an art that keeps the last poses and `held` it was handed. */
-function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
+function room({ bodies = false, guests = 1, law = false }: RoomOptions = {}) {
   const hub = new Hub();
   let now = 1000;
   const hostWorld = makeWorld();
@@ -148,6 +153,24 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
         return true;
       },
       playerLook: (car) => looks[car] ?? DUMMY_LOOK,
+      // With `law`: the police are on, and each machine knows where its own player stands from his path and every other as the host has him.
+      ...(law
+        ? {
+            law: { solids: () => null, playerBusted: () => {}, sirens: () => {}, lineOfSight: () => true, footArrest: { busted: () => {}, led: () => {}, taken: () => {}, delivered: () => {} } },
+            ownActor: () => slot,
+            actorPlace: (actor: number, out: ActorPlace): boolean => {
+              if (actor !== slot) return director.playerPlace(actor, out);
+              if (!walkerAt(walk.path, director.crowdTime(), motion)) return false;
+              out.x = motion.x;
+              out.y = motion.y;
+              out.z = motion.z;
+              out.heading = motion.heading;
+              out.velocityX = motion.vx;
+              out.velocityZ = motion.vz;
+              return true;
+            },
+          }
+        : {}),
       knockWalker: (vx, vy, vz) => {
         knocks.push({ vx, vy, vz });
         return true;
@@ -210,7 +233,12 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
       face: () => {},
       layGun: () => false,
       sendAct: () => {},
-      hookFire: () => {},
+      // As the engine's tether takes a person: another actor's ray meets one only when his own reticle lit her (`sawPerson`), the host's hook meets her as a remote ray does, and `hookBody` takes her.
+      hookFire: (actor, ray, sawPerson) => {
+        if (!sawPerson) return;
+        host.director.hookMet(ray, HOOK_REACH_M, hooked, true);
+        if (hooked.index >= 0) host.director.hookBody(hooked.index, ray.eyeX, ray.eyeZ, actor);
+      },
       hookCut: () => {},
       hookReel: () => {},
       seatedCar: () => -1,
@@ -643,6 +671,80 @@ describe("given a host and a guest in a room of the open world, the guest on foo
     expect(firstMismatch(r.host.thrown.map((strike) => strike.guard), [c]), "the host's ragdolls").toBeUndefined();
     expect(firstMismatch(knocked(r.host.director.eventLog()), [c]), "the host's log").toBeUndefined();
     expect(firstMismatch(knocked(r.guest.director.eventLog()), [c]), "the guest's log").toBeUndefined();
+  });
+});
+
+/** How far west of the person the guest stands to hook her or him (m). */
+const HOOK_FROM_M = 6;
+
+/** The players the crowd's log names as chased (`footChase`), in the order it holds them. */
+function chasedPlayers(log: Float64Array): number[] {
+  const out: number[] = [];
+  for (let at = 0; at + 2 < log.length; at += 3) if (log[at] === EVENT_KIND.footChase) out.push(actorOfCopSubject(log[at + 1]!));
+  return out;
+}
+
+/** The guest, standing at `from` on his own machine, fires his hook at the chest of person `id` of kind `kind` (`NAMED`) now at (x, z): his act names her and goes over the wire along the line to her. */
+function guestHooks(r: ReturnType<typeof room>, from: { x: number; z: number }, kind: number, id: number, at: { x: number; z: number }): void {
+  const toChest = { x: at.x - from.x, y: CHEST_HEIGHT - TORSO_ABOVE_FEET, z: at.z - from.z };
+  const length = hypot3(toChest.x, toChest.y, toChest.z);
+  const named = new Named();
+  named.kind = kind;
+  named.id = id;
+  named.y = CHEST_HEIGHT;
+  r.guestNet.sendAct(ACT.hookFire, 0, { x: from.x, y: TORSO_ABOVE_FEET, z: from.z }, { x: toChest.x / length, y: toChest.y / length, z: toChest.z / length }, named);
+}
+
+/** A started room (the police on, a dummies' world each side) whose guest stands on foot 6 m west of a shown civilian on his own machine, the host having heard it. */
+function hookRoom() {
+  const r = room({ bodies: true, law: true });
+  open.push(r.hostNet, r.guestNet);
+  r.step(60 + MORNING_FRAMES);
+  const hostCrowd = r.host.director["crowd"]!;
+  while (shownResident(hostCrowd) < 0) r.step(1);
+  const civilian = shownResident(hostCrowd);
+  const from = { x: hostCrowd.poses.x[civilian]! - HOOK_FROM_M, z: hostCrowd.poses.z[civilian]! };
+  r.guest.walk.path = { x0: from.x, z0: from.z, vx: 0, vz: 0, t0: r.guest.director.crowdTime(), posture: BODY_POSTURE.stand };
+  r.step(FOOT_HEARD_FRAMES);
+  return { r, civilian, from, poses: hostCrowd.poses };
+}
+
+describe("given a host and a guest in a room of the open world, a foot cop on the host's street 6 m east of the guest on foot", () => {
+  it("when the guest's hook act names the cop, then the cop is down on the host with a dummy thrown for him and the cops are after the guest, not the host's player, on the host and on the guest's machine", () => {
+    const { r, civilian, from, poses } = hookRoom();
+    const hostScene = r.host.director["law"]!["scene"];
+    const guestScene = r.guest.director["law"]!["scene"];
+    const strip = { cops: 0, hold: 0, left: 0 };
+    hostScene.foot.walkers.place(0, poses.x[civilian]!, poses.z[civilian]!);
+    r.step(1);
+    expect(hostScene.copPoses.shown[0], "control: the cop is out on the street").toBe(1);
+    expect(hostScene.footChaseOf(strip, GUEST_CAR), "control: nobody is chased before the hook").toBe(false);
+    guestHooks(r, from, NAMED.cop, 0, { x: hostScene.copPoses.x[0]!, z: hostScene.copPoses.z[0]! });
+    r.step(AFTERMATH_FRAMES);
+    expect(hostScene.copPoses.shown[0], "the cop is no longer drawn standing on the host").toBe(0);
+    expect(r.host.thrown.length, "a dummy was thrown for him on the host").toBeGreaterThan(0);
+    expect(hostScene.footChaseOf(strip, GUEST_CAR), "the host's law chases the guest").toBe(true);
+    expect(hostScene.footChaseOf(strip, HOST_CAR_SLOT), "the host's law does not chase the host's player").toBe(false);
+    expect(firstMismatch(chasedPlayers(r.host.director.eventLog()), [GUEST_CAR]), "the players the host's log names as chased").toBeUndefined();
+    expect(guestScene.footChaseOf(strip, GUEST_CAR), "the guest's own law hears the chase of him").toBe(true);
+    expect(firstMismatch(chasedPlayers(r.guest.director.eventLog()), [GUEST_CAR]), "the players the guest's log names as chased").toBeUndefined();
+  });
+});
+
+describe("given a host and a guest in a room of the open world, a civilian 6 m east of the guest on foot, and a host with no body to stand for her", () => {
+  it("when the guest's hook act names her, then the host's hook meets nobody and stands no body for her and the law is not told; the same act with a body free stands one (that the fire is then a miss, holding nothing, is `fireFor`'s, pinned in engine-tether-actors.test.ts)", () => {
+    const { r, civilian, from, poses } = hookRoom();
+    const bodies = r.host.director["bodies"]!;
+    const hostScene = r.host.director["law"]!["scene"];
+    const canStand = vi.spyOn(bodies, "canStand").mockReturnValue(false);
+    guestHooks(r, from, NAMED.civilian, civilian, { x: poses.x[civilian]!, z: poses.z[civilian]! });
+    r.step(AFTERMATH_FRAMES);
+    expect(bodies.has(civilian), "no body stands for her").toBe(false);
+    expect(hostScene.footChaseOf({ cops: 0, hold: 0, left: 0 }, GUEST_CAR), "nothing was done to the law").toBe(false);
+    canStand.mockRestore();
+    guestHooks(r, from, NAMED.civilian, civilian, { x: poses.x[civilian]!, z: poses.z[civilian]! });
+    r.step(AFTERMATH_FRAMES);
+    expect(bodies.has(civilian), "control: with a body free, the same act stands one").toBe(true);
   });
 });
 
