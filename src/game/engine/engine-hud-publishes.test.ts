@@ -8,6 +8,7 @@ import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { OFF_MENU } from "../world/tracks/index.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
+import { detAtan2 } from "../kernel/physics-core.js";
 
 const WALL_REACH = 8;
 const SEED = 0xbeef;
@@ -17,6 +18,8 @@ const WINDOW_SECONDS = 10;
 const MIN_TRIES = 60;
 /** What a window of ten seconds may cost a view where nothing but a camera or a bubble moves: the gauge going or coming, the camera's name, a cut's bubble or two; the publishes that change nothing visible are no notification at all. */
 const MOST_NOTIFICATIONS = 6;
+/** His car is set this far (m) back down its street before the pedal goes down: ten seconds of full throttle cover about 350 m, and from the start place the street's end wall is 280 m ahead (measured: he hit it at 8.6 s and was thrown, so the window held a thrown driver and his look panel, not a view where only a camera moves). */
+const ROAD_BACK_M = 100;
 
 const lots = fixtureLots(WALL_REACH);
 const map = buildOpenWorldMap(lots);
@@ -72,11 +75,18 @@ describe("given the real engine in the open world, the HUD subscribed to its sto
   });
 
   it("when the Auto camera is up and the pedal is down, then the car's gauge is not on screen and the HUD hears of almost nothing", () => {
+    const car = engine["live"]()[engine["seat"].carIndex]!;
+    const { x, z } = car.group.position;
+    car.spawnFacing(x - car.fwdFlat.x * ROAD_BACK_M, z - car.fwdFlat.z * ROAD_BACK_M, detAtan2(car.fwdFlat.x, car.fwdFlat.z), 0);
     engine["openWorld"].setAuto(true);
     engine["keys"].add("KeyW");
     const watched = playWindow(WINDOW_SECONDS);
     engine["keys"].delete("KeyW");
+    const atTheWheel = hud.get().foot?.out === false;
+    const speed = car.velocity.length();
     engine["openWorld"].setAuto(false);
+    expect(atTheWheel, "control: he is at the wheel at the window's end (no crash threw him)").toBe(true);
+    expect(speed, "control: the car is at speed at the window's end (m/s)").toBeGreaterThan(30);
     expect(watched.tries, "tries the engine made").toBeGreaterThanOrEqual(MIN_TRIES);
     expect(watched.notifications, "notifications of the HUD").toBeLessThanOrEqual(MOST_NOTIFICATIONS);
   });
