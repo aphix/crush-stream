@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
@@ -11,6 +11,9 @@ const WALK_AWAY_M = 4;
 /** The most a held car creeps on its brakes while he is out (m). */
 const HELD_CREEP_M = 0.5;
 const FALL_WITHIN_S = 1.5;
+/** He lies this long (s) after the first throw, past the strike cooldown, before the second car comes; the second car's pass takes this long. */
+const LIES_S = 1;
+const SECOND_PASS_S = 1;
 /** Gas on the touch strip short of its Boost cap, held this long (s): he walks at least this far (m) and does not run. */
 const TOUCH_WALK_GAS = 0.95;
 const TOUCH_WALK_S = 2;
@@ -207,5 +210,26 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     rig.run(0.5);
     expect(rig.engine["onFoot"].armed(), "armed").toBe(false);
     expect(rig.walker()["punchFor"], "no punch began").toBeGreaterThanOrEqual(0.45);
+  });
+
+  it("when a car runs him down and a car reaches him again while he lies, then he is thrown once and the second car does not throw him", () => {
+    const own = rig.cars()[0]!;
+    const start = own.group.position.clone();
+    rig.getOut();
+    rig.walkTo(new THREE.Vector3(start.x + 4, 0, start.z + WALK_AWAY_M), 1.5, 15);
+    const thrown = vi.spyOn(rig.engine["ragdolls"], "knockWalker");
+    try {
+      rig.runDownBy(rig.cars()[1]!, own);
+      for (let t = 0; t < FALL_WITHIN_S && rig.walker().state === "stand"; t += FRAME) rig.run(FRAME);
+      expect(rig.walker().state, "the car knocked him down").not.toBe("stand");
+      expect(thrown, "throws by the first car").toHaveBeenCalledTimes(1);
+      rig.run(LIES_S);
+      expect(rig.walker().state, "he still lies when the second car comes").not.toBe("stand");
+      rig.runDownBy(rig.cars()[1]!, own);
+      rig.run(SECOND_PASS_S);
+      expect(thrown, "throws after the second car reached him").toHaveBeenCalledTimes(1);
+    } finally {
+      thrown.mockRestore();
+    }
   });
 });

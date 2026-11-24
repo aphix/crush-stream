@@ -523,12 +523,12 @@ export class OnFootDirector {
     walker.ask();
   }
 
-  /** A car moving fast enough over him (`runsDown`, the lawn guards' and the VIP's rule) throws him with the same launch (`fell`): he goes ragdoll. */
+  /** A car moving fast enough over a man on his feet (`runsDown`, the lawn guards' and the VIP's rule) throws him with the same launch (`fell`): he goes ragdoll. One who already lies is not thrown again (a guest's body is judged the same, `OpenWorldPlayers.step`): a car that reaches him moves him as a solid does. */
   private runDown(): void {
     if (this.host.openWorld() && this.host.guest()) return;
     const { ragdolls } = this.host;
     const walker = ragdolls.walker;
-    if (walker.sinceStruck < STRIKE_COOLDOWN || !ragdolls.walkerTorso(_torso)) return;
+    if (walker.state !== "stand" || walker.sinceStruck < STRIKE_COOLDOWN || !ragdolls.walkerTorso(_torso)) return;
     const ground = activeGround().heightAt(_torso.x, _torso.z, _torso.y);
     if (ground === NO_FLOOR) return;
     const cars = this.host.cars();

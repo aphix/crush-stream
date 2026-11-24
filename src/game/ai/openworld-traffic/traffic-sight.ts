@@ -26,3 +26,6 @@ export type CommuterFeed = { legs: DriveLegs; parked: ParkedResidentCars };
 
 /** The people on the streets, as the crowd draws them (`CrowdPoses` is one): a car stops for any shown one on its way. */
 export type PeopleField = { readonly count: number; readonly x: Float32Array; readonly z: Float32Array; readonly shown: Uint8Array };
+
+/** The bodies on foot the crowd makes room for (`CrowdWalkers` is one: the players, standing or lying, and the foot cops), each of the first `count` there: a car stops for one on its way as for a person. */
+export type WalkerField = { readonly count: number; readonly x: Float32Array; readonly z: Float32Array };
