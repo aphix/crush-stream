@@ -62,18 +62,20 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 
 - `main` = Windows mount = GitHub = 5989b47a0 (NET 72, REPLAY 249).
 - `play/union` (`~/worktrees/land`), not yet gated or reviewed as a whole: ae0007683 (a derby driver that cannot get rolling
-  lifts off, REPLAY 250), seven picks of `lane-hub-creep4` and 50cefd7eb (REPLAY 251: the planted hubs' pins and seat ride).
-  Owed there: strip the three `// mutation:` lines those picks added (`compactor.test.ts`, `crush-keep.test.ts`,
-  `slice-budget.test.ts`).
+  lifts off, REPLAY 250), seven picks of `lane-hub-creep4` and 50cefd7eb (REPLAY 251: the planted hubs' pins and seat ride),
+  this plan, and the merge of PerfPath (reviewed: ship; its speed still to be measured once, on the worker).
+- Reviews are kept in `~/crash-wt/landing/reviews/<Lane>-review.json`.
 
 |Lane|Goal|State|
 |---|---|---|
-|PerfPath|`projectPath` skips samples that cannot hold the nearest; `guardContact` reads a per-car cache; both bit-equal|reported (e462c48c5, 29aeb938c); in review|
-|SmallCuts|the crease blur's row pass bounded to the dent (texel-equal); far clusters of plants and rocks beyond a race course (drawn only, desktop full share)|reported (6e5d20987, dd70deb23); in review; the clusters' cost on dam-spine, four-count and razor-shelf is unmeasured: Main reads it once and drops them if a frame is worse|
-|LooseBatch|torn car parts in one draw batch|working|
-|CageWasm|the cage raster and plan field (`vehicle/cage-fields.ts`) in the Rust kernel, bit-equal to the JS|working; the skin stack (section 5) waits on it, both rebuild `skin-kernel.wasm`|
+|PerfPath|`projectPath` skips samples that cannot hold the nearest; `guardContact` reads a per-car cache; both bit-equal|merged (2c13f5d08); worktree removed|
+|SmallCuts|the crease blur's row pass bounded to the dent (texel-equal); far clusters of plants and rocks beyond a race course (drawn only, desktop full share)|reviewed: the blur is sound; the clusters went back with two must-fix items (the sweep runs where nothing is drawn: four-count's placement 107 to 196 ms; no cap: up to 245k triangles on dam-spine, shadows included). Fixing: a `far` flag, no shadows, a 30k-triangle budget a course|
+|LooseBatch|torn car parts in one draw batch|reported (970e74908); in review. Headless GL has no `WEBGL_multi_draw`, so its draw calls read the same there; whether it is a gain in a browser is the review's first question|
+|CageWasm|the cage raster and plan field (`vehicle/cage-fields.ts`) in the Rust kernel, bit-equal to the JS|reported (461ade765, parity row green); in review; the lane's profile put the raster at 2 to 4 % of a race, so the gain may be nil: Main measures once and drops it if it is not faster. The skin stack (section 5) waits on it|
 |ContactRows|six small contact fixes with their rows (among them `moveAsOneBody` taking the body's roll and pitch)|working|
-|DeformSeat|the frame's tilt and the hub riding the cage|working|
+|DeformSeat|the frame's tilt and the hub riding the cage|reported (9783655ca, a0eed289e); in review; `car-smooth.test.ts` reads red on 7 rows there: the reviewer and Main read what it protects before anything is re-pinned|
+|CopStoops|foot cops, and the suspects in their hands, are drawn at the stoop's height where they stand on one (section 4, item 1)|working|
+|GuestEdge|a guest's shot out of a doorway is not refused; the wall test of a hook fire whose eye is behind him; a guest's hook onto a foot cop, end to end; what a guest sees when the host has no body for the civilian he hooks (section 4, items 2, 5, 6)|working|
 
 ## 4. Open world and host/guest: what is open
 
@@ -92,7 +94,7 @@ To dispatch, each as its own lane with a reviewer:
 
 To verify before any lane (a scout with a closer read; many were closed by lanes that landed after the list was written):
 the parking claims that displace the brain's pick (`openworld-traffic.ts` `spotFor`/`claimFor`); seed 7's decision that stays at
-a shut place; the 0.4 m newel margins and the left/right strength gap on a party wall (`ragdoll-walker-brush.test.ts`); a shot at
+a shut place; police car 14 throwing its driver at 15 to 23 m/s in seed aa3a76 (`vehicle/ejection.ts`); a shot at
 a dummy's first-use cost (`pickDoll`, 587 KB); headless engine tests that still boot phone-class (one file opts into
 `device: "desktop"`); Needle's worker path in a production build, never run in a browser.
 
