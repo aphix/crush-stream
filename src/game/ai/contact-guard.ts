@@ -70,6 +70,47 @@ function sampleTimes(): Float64Array {
   return Float64Array.from(times);
 }
 
+/** Cars the per-car cache covers (ids 0 to this minus 1); another id is worked out afresh each call, in `UNCACHED_SLOT`. */
+const CACHE_CARS = 256;
+const UNCACHED_SLOT = CACHE_CARS;
+/** The values of the other car the cache was filled for: it is valid while all four are unchanged (`Object.is`, which tells -0 from 0). */
+const OTHER_VALID = new Uint8Array(CACHE_CARS + 1);
+const OTHER_KEY_VX = new Float64Array(CACHE_CARS + 1);
+const OTHER_KEY_VZ = new Float64Array(CACHE_CARS + 1);
+const OTHER_KEY_YAW = new Float64Array(CACHE_CARS + 1);
+const OTHER_KEY_LEAD = new Float64Array(CACHE_CARS + 1);
+/** The unit vector of the line the other car keeps driving (its velocity's, or its nose's when it crawls). */
+const OTHER_DIR_X = new Float64Array(CACHE_CARS + 1);
+const OTHER_DIR_Z = new Float64Array(CACHE_CARS + 1);
+/** How far the other car has travelled down that line at each sample time, braking at `lead` to a stop: `STEPS` values a car, car `slot` from `slot * STEPS`. */
+const OTHER_SHED = new Float64Array((CACHE_CARS + 1) * STEPS);
+
+/** The cache slot holding `o`'s direction and shed distances for this `lead` (`ospeed`: its speed), filled first when its key moved. Depends on nothing else, so the guarded cars of a step share it. */
+function otherSlot(o: AiCar, ospeed: number, lead: number): number {
+  const id = o.id;
+  const slot = Number.isInteger(id) && id >= 0 && id < CACHE_CARS ? id : UNCACHED_SLOT;
+  const vx = o.vx;
+  const vz = o.vz;
+  const yaw = o.yaw;
+  if (slot !== UNCACHED_SLOT && OTHER_VALID[slot] === 1 && Object.is(OTHER_KEY_VX[slot]!, vx) && Object.is(OTHER_KEY_VZ[slot]!, vz) && Object.is(OTHER_KEY_YAW[slot]!, yaw) && Object.is(OTHER_KEY_LEAD[slot]!, lead)) return slot;
+  OTHER_DIR_X[slot] = ospeed > 0.1 ? vx / ospeed : detSin(yaw);
+  OTHER_DIR_Z[slot] = ospeed > 0.1 ? vz / ospeed : detCos(yaw);
+  const stopTime = ospeed / lead;
+  const shedBase = slot * STEPS;
+  for (let i = 0; i < STEPS; i++) {
+    const te = Math.min(TIMES[i]!, stopTime);
+    OTHER_SHED[shedBase + i] = ospeed * te - 0.5 * lead * te * te;
+  }
+  if (slot !== UNCACHED_SLOT) {
+    OTHER_KEY_VX[slot] = vx;
+    OTHER_KEY_VZ[slot] = vz;
+    OTHER_KEY_YAW[slot] = yaw;
+    OTHER_KEY_LEAD[slot] = lead;
+    OTHER_VALID[slot] = 1;
+  }
+  return slot;
+}
+
 /**
  * The last rule of every racing drive: do not drive into a car you are closing on. The guarded car is followed at its
  * speed round the arc its steer asks for (`turn`: yaw rate at full lock, rad/s), each car of `cars` (ids below `count`) that
@@ -86,6 +127,7 @@ function sampleTimes(): Float64Array {
  *
  * Cost: the guarded car's own arc is worked out once, and only when some other car is near enough to reach it: a pair
  * whose centres are further apart than the zone plus what the two cars can close in `HORIZON` s (their speeds added) cannot touch.
+ * What a pair needs of the other car (its direction and shed distances) is cached per car id, keyed on its vx, vz, yaw and `lead`, so the guarded calls of a step after the first reuse it.
  */
 export function guardContact(self: AiCar, cars: readonly AiCar[], count: number, spare: Uint8Array, tune: Float64Array, out: DriveInput, steer = out.steer): void {
   const brake = tune[GUARD_BRAKE_IDX]!;
@@ -165,14 +207,14 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
     let n0 = 0;
     let l0 = 0;
     let reach = 0;
-    const ox = ospeed > 0.1 ? o.vx / ospeed : detSin(o.yaw);
-    const oz = ospeed > 0.1 ? o.vz / ospeed : detCos(o.yaw);
     if (k < rivals && contests(self, o, risk, late)) continue;
+    const slot = otherSlot(o, ospeed, lead);
+    const ox = OTHER_DIR_X[slot]!;
+    const oz = OTHER_DIR_Z[slot]!;
+    const shedBase = slot * STEPS;
     for (let i = 0; i < STEPS; i++) {
       const t = TIMES[i]!;
-      // The other keeps its heading and sheds speed at `lead` (a car ahead braking for what it sees), down to a stop.
-      const te = Math.min(t, ospeed / lead);
-      const shed = ospeed * te - 0.5 * lead * te * te;
+      const shed = OTHER_SHED[shedBase + i]!;
       const rx = o.x + ox * shed - self.x - DX[i]!;
       const rz = o.z + oz * shed - self.z - DZ[i]!;
       const pn = rx * GX[i]! + rz * GZ[i]!;

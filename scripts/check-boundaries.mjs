@@ -104,7 +104,7 @@ const HOT = {
   "src/game/match/session.ts": ["step", "stepCar", "gates", "reroute", "measure", "stretch", "drafting", "busting", "settle", "deadline"],
   "src/game/ai/derby-ai.ts": ["think"],
   "src/game/ai/race-ai.ts": ["think", "plan", "line", "crowded", "pickRoute", "upcoming", "pointAhead", "charge"],
-  "src/game/ai/contact-guard.ts": ["guardContact"],
+  "src/game/ai/contact-guard.ts": ["guardContact", "otherSlot"],
   "src/game/ai/traffic.ts": ["think"],
   "src/game/ai/police.ts": ["drive"],
   "src/game/ai/cop-brain.ts": ["think", "attackTarget", "pursuitSteer"],
