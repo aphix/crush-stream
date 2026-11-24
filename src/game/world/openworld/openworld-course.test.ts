@@ -9,7 +9,8 @@ import { PREFAB, SURFACE } from "../constants.ts";
 import { placeCourse } from "../placements.ts";
 import { Track, blankProjection, projectPath } from "../track.ts";
 import { parseTrack } from "../track-schema.ts";
-import { LAMP_FROM_CURB, LAYOUT, PARK, SPAWN_LATERAL_SHIFT, WALL_THICKNESS } from "./openworld-constants.ts";
+import { ROOM_MAX } from "../../../lib/multiplayer/rooms.ts";
+import { LAMP_FROM_CURB, LAYOUT, PARK, SPAWN_LATERAL_SHIFT, SPAWN_SEATS, WALL_THICKNESS } from "./openworld-constants.ts";
 import { OPENWORLD_ID, openWorldCourse } from "./openworld-course.ts";
 import { fixtureLots } from "./openworld-lots.test-util.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
@@ -33,7 +34,7 @@ const DOOR_BOX_HALF_ALONG_M = 1;
 /** Another car's middle nearer than this (m) to a door's spot blocks it (`CAR_CLEARANCE` in engine/onfoot-doors.ts). */
 const CAR_CLEARANCE_M = 2.6;
 /** The seats a full room starts in. */
-const ROOM_SEATS = 12;
+const ROOM_SEATS = ROOM_MAX;
 
 /** The walls stand on the outer streets' far property line, or on their far curb. */
 const WALL_CASES = [
@@ -196,7 +197,7 @@ for (const wallCase of WALL_CASES) {
       expect(parked.length, "parked cars inside the walls").toBe(0);
     });
 
-    /** The seats a 12-player room starts in, as `humanSlot` hands them out. */
+    /** The seats a full room starts in, as `humanSlot` hands them out. */
     const seatsOf = (): { x: number; z: number; yaw: number }[] => {
       must(course.survival, "the course has spawn anchors");
       return Array.from({ length: ROOM_SEATS }, (_, slot) => humanSlot(course.survival!.start, slot, course.survival!.seats));
@@ -246,7 +247,12 @@ for (const wallCase of WALL_CASES) {
     };
 
     // mutation: sed -i 's/const z = geometry.streetZ\[1\]! + SPAWN_LATERAL_SHIFT;/const z = geometry.streetZ[0]! + SPAWN_LATERAL_SHIFT;/' src/game/world/openworld/openworld-course.ts
-    it("when a room's twelve drivers are seated, then each stands in the first interior east-west street's width, not inside a building, and the first seat is the start anchor heading east", () => {
+    it("when the course names its seats, then there is one for every player a room holds", () => {
+      expect(SPAWN_SEATS, "seats the world names").toBe(ROOM_MAX);
+      expect(course.survival!.seats!.length, "seats in the course").toBe(ROOM_MAX);
+    });
+
+    it("when a full room's drivers are seated, then each stands in the first interior east-west street's width, not inside a building, and the first seat is the start anchor heading east", () => {
       const seats = seatsOf();
       for (let slot = 0; slot < ROOM_SEATS; slot++) {
         const seat = seats[slot]!;
@@ -261,7 +267,7 @@ for (const wallCase of WALL_CASES) {
       expect(course.survival!.formation.length, "cop slots").toBeGreaterThanOrEqual(4);
     });
 
-    it("when a room's twelve cars stand at the start, then each car's footprint and both its front doors' swing boxes lie on the street between the intersections, outside every intersection box and every zebra crossing's band", () => {
+    it("when a full room's cars stand at the start, then each car's footprint and both its front doors' swing boxes lie on the street between the intersections, outside every intersection box and every zebra crossing's band", () => {
       const roadHalf = geometry.carriageway / 2;
       const bands = crossingBands();
       let nearestToBand = Infinity;
@@ -284,7 +290,7 @@ for (const wallCase of WALL_CASES) {
       expect(nearestToBand, "control: the first row stands within a metre of a crossing's band, so the bands were read").toBeLessThan(1);
     });
 
-    it("when a room's twelve cars stand at the start, then no two cars' footprints or door boxes overlap, and no door's spot is within 2.6 m of another car's middle", () => {
+    it("when a full room's cars stand at the start, then no two cars' footprints or door boxes overlap, and no door's spot is within 2.6 m of another car's middle", () => {
       const seats = seatsOf();
       const boxes = seats.map(carBoxes);
       for (let a = 0; a < ROOM_SEATS; a++) {

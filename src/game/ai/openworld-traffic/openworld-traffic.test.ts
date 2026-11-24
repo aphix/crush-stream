@@ -18,6 +18,8 @@ import { Clock, CYCLE_SECONDS, emptyFeed, FakeField, HOLD, homeAt, makeTraffic, 
 const FAR = 1500;
 const HOME = { x: -100, z: -45 };
 const WORK = { x: 120, z: 60 };
+/** A home on the east side, mirroring `HOME`: the start formation keeps the spaces beside `HOME` empty, and these rows count the spaces by a door. */
+const KERB_HOME = { x: 100, z: -45 };
 const MOST_SECONDS = 900;
 const SPOT_REACH = 1.5;
 
@@ -491,9 +493,9 @@ describe("given residents whose cars show at the kerb and drive off, over a minu
   it("when a car of each body is among the pool, then no car is rebuilt for a body: each resident gets a pool car that wears his", () => {
     const field = new FakeField();
     const feed = parkedFeed(BODIES_ASKED);
-    const traffic = makeTraffic(field, { movers: 6, kerb: 6 }, feed, [homeAt(HOME.x, HOME.z)]);
+    const traffic = makeTraffic(field, { movers: 6, kerb: 6 }, feed, [homeAt(KERB_HOME.x, KERB_HOME.z)]);
     const base = field.rebuilt.length;
-    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
+    field.cars[0]!.stand(KERB_HOME.x, KERB_HOME.z + 10, 0);
     const clock = new Clock();
     runSeconds(field, traffic, clock, 30);
     for (const resident of residents) {
@@ -513,9 +515,9 @@ describe("given residents whose cars show at the kerb and drive off, over a minu
     feed.parked.count = 1;
     feed.parked.resident[0] = mismatched;
     feed.parked.place[0] = 0;
-    const traffic = new OpenWorldTraffic([homeAt(HOME.x, HOME.z)], field.ports, new SeenSight(field.ports), { movers: 0, kerb: 2, patrol: 0, ambulance: 0 }, feed);
+    const traffic = new OpenWorldTraffic([homeAt(KERB_HOME.x, KERB_HOME.z)], field.ports, new SeenSight(field.ports), { movers: 0, kerb: 2, patrol: 0, ambulance: 0 }, feed);
     const base = field.rebuilt.length;
-    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
+    field.cars[0]!.stand(KERB_HOME.x, KERB_HOME.z + 10, 0);
     runSeconds(field, traffic, new Clock(), 3);
     expect(residentSpace(traffic, mismatched), "his car has a space").toBeGreaterThanOrEqual(0);
     expect(traffic.counts().kerb, "kerb cars stand").toBeGreaterThan(0);
@@ -532,7 +534,7 @@ describe("given a resident's car leased for a drive whose rider is due at the fa
     field.cars[0]!.stand(playerAt.x, playerAt.z, 0);
     const traffic = makeTraffic(field, { movers: 3, kerb: 0 });
     const to = traffic.nearestSpot(WORK.x, WORK.z);
-    const car = traffic.spawnDrivenCar(7, traffic.nearestSpot(HOME.x, HOME.z), to, { dueSeconds: DUE_SECONDS })!;
+    const car = traffic.spawnDrivenCar(7, traffic.nearestSpot(KERB_HOME.x, KERB_HOME.z), to, { dueSeconds: DUE_SECONDS })!;
     expect(car, "a car was leased").not.toBeNull();
     return { field, traffic, clock: new Clock(), car, to };
   }
@@ -551,7 +553,7 @@ describe("given a resident's car leased for a drive whose rider is due at the fa
   // mutation: sed -i 's/ \&\& this.unseenAndFar(slot, car)) this.standInSpace(slot);/) this.standInSpace(slot);/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when a player's car is near it at that second, then the car is not moved: it drives on and parks when it gets there", () => {
     const { field, traffic, clock, car } = dueCar(FAR_AWAY);
-    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
+    field.cars[0]!.stand(KERB_HOME.x, KERB_HOME.z + 10, 0);
     runSeconds(field, traffic, clock, DUE_SECONDS + 1);
     expect(car.arrived, "still on the road at the second").toBe(false);
   });
@@ -562,7 +564,7 @@ describe("given residents whose cars stand at a place's kerb", () => {
   it("when two residents of one place have cars, then each holds a different one of the four empty spaces nearest its door, the one he is by number", () => {
     const field = quietField();
     const feed = emptyFeed(8);
-    const traffic = makeTraffic(field, { movers: 0, kerb: 0 }, feed, [homeAt(HOME.x, HOME.z)]);
+    const traffic = makeTraffic(field, { movers: 0, kerb: 0 }, feed, [homeAt(KERB_HOME.x, KERB_HOME.z)]);
     const clock = new Clock();
     feed.parked.count = 2;
     feed.parked.resident[0] = 1;
@@ -571,8 +573,10 @@ describe("given residents whose cars stand at a place's kerb", () => {
     feed.parked.place[1] = 0;
     runSeconds(field, traffic, clock, 1);
     const near = new Int32Array(KERB_CANDIDATES);
-    const count = kerbSpotsNear(traffic.parkingSpots, HOME.x, HOME.z, near);
-    const held = Array.from(traffic.claimedSpots.keys()).filter((spot) => traffic.claimedSpots[spot] === 1);
+    const count = kerbSpotsNear(traffic.parkingSpots, KERB_HOME.x, KERB_HOME.z, near);
+    // The spaces beside the start formation are held for good (`maskedSpaces`); the rows count the residents' own.
+    const claims = traffic["context"].residentSpot;
+    const held = Array.from(traffic.claimedSpots.keys()).filter((spot) => traffic.claimedSpots[spot] === 1 && (claims[1] === spot || claims[2] === spot));
     const wanted = [near[1 % count]!, near[2 % count]!].sort((a, b) => a - b);
     held.sort((a, b) => a - b);
     expect(held.length, "spaces held").toBe(2);
@@ -584,10 +588,10 @@ describe("given residents whose cars stand at a place's kerb", () => {
   it("when a resident's own space is held by another's claim only as his fallback, then she gets her own space, as the brain draws her, and he moves on; a claim that is its holder's own pick is kept", () => {
     const field = quietField();
     const feed = emptyFeed(8);
-    const traffic = makeTraffic(field, { movers: 0, kerb: 0 }, feed, [homeAt(HOME.x, HOME.z)]);
+    const traffic = makeTraffic(field, { movers: 0, kerb: 0 }, feed, [homeAt(KERB_HOME.x, KERB_HOME.z)]);
     const clock = new Clock();
     const near = new Int32Array(KERB_CANDIDATES);
-    const count = kerbSpotsNear(traffic.parkingSpots, HOME.x, HOME.z, near);
+    const count = kerbSpotsNear(traffic.parkingSpots, KERB_HOME.x, KERB_HOME.z, near);
     expect(count, "control: four spaces by the door").toBe(4);
     // 1 and 5 both pick near[1]: 1 claims it first, 5 falls back to near[2], which is 2's own pick.
     feed.parked.count = 3;
@@ -609,25 +613,25 @@ describe("given residents whose cars stand at a place's kerb", () => {
     // A door a few metres along from his, and a neighbour there, whose pick is his own pick while his pick by her door is another space.
     let found: { holder: number; dx: number; dz: number; neighbour: number } | null = null;
     for (let holder = 0; holder < 8 && found === null; holder++) {
-      const his = residentSpotAt(spots, HOME.x, HOME.z, holder);
+      const his = residentSpotAt(spots, KERB_HOME.x, KERB_HOME.z, holder);
       for (let step = 1; step <= 48 && found === null; step++) {
         const dx = (step % 2 === 0 ? 1 : -1) * Math.ceil(step / 4) * 1.5 * (step % 4 < 2 ? 1 : 0);
         const dz = (step % 2 === 0 ? 1 : -1) * Math.ceil(step / 4) * 1.5 * (step % 4 < 2 ? 0 : 1);
-        if (residentSpotAt(spots, HOME.x + dx, HOME.z + dz, holder) === his) continue;
-        for (let neighbour = 0; neighbour < 16 && found === null; neighbour++) if (neighbour !== holder && residentSpotAt(spots, HOME.x + dx, HOME.z + dz, neighbour) === his) found = { holder, dx, dz, neighbour };
+        if (residentSpotAt(spots, KERB_HOME.x + dx, KERB_HOME.z + dz, holder) === his) continue;
+        for (let neighbour = 0; neighbour < 16 && found === null; neighbour++) if (neighbour !== holder && residentSpotAt(spots, KERB_HOME.x + dx, KERB_HOME.z + dz, neighbour) === his) found = { holder, dx, dz, neighbour };
       }
     }
     expect(found, "control: adjacent doors whose candidates are shifted").not.toBeNull();
     const feed = emptyFeed(8);
     const HOLDER = found!.holder;
-    const traffic = makeTraffic(field, { movers: 0, kerb: 0 }, feed, [homeAt(HOME.x, HOME.z), homeAt(HOME.x + found!.dx, HOME.z + found!.dz)]);
+    const traffic = makeTraffic(field, { movers: 0, kerb: 0 }, feed, [homeAt(KERB_HOME.x, KERB_HOME.z), homeAt(KERB_HOME.x + found!.dx, KERB_HOME.z + found!.dz)]);
     const clock = new Clock();
     feed.parked.count = 1;
     feed.parked.resident[0] = HOLDER;
     feed.parked.place[0] = 0;
     runSeconds(field, traffic, clock, 1);
     const his = residentSpace(traffic, HOLDER);
-    expect(his, "control: he holds his own pick").toBe(residentSpotAt(spots, HOME.x, HOME.z, HOLDER));
+    expect(his, "control: he holds his own pick").toBe(residentSpotAt(spots, KERB_HOME.x, KERB_HOME.z, HOLDER));
     feed.parked.count = 2;
     feed.parked.resident[1] = found!.neighbour;
     feed.parked.place[1] = 1;

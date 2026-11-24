@@ -6,6 +6,7 @@ import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, nearestFreeSpot, residentSpotAt, spotAt, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
+import { spawnSeats } from "../../world/openworld/openworld-spawn.ts";
 import { buildRoadNetwork, type RoadNetwork } from "../../world/openworld/openworld-roads.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { blankAiCar, type AiCar } from "../derby-ai.ts";
@@ -14,6 +15,7 @@ import { BodySwaps } from "./body-swaps.ts";
 import { KerbCars } from "./kerb-cars.ts";
 import { LEASE, MoverFleet, type DrivenCar } from "./mover-fleet.ts";
 import { carPoseAtSpot, type ResidentCarPose } from "./traffic-look.ts";
+import { maskSeatSpaces } from "./spawn-mask.ts";
 import { RedLightWatch } from "./red-light-watch.ts";
 import { EVERYDAY_BODIES, FEED_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
@@ -69,6 +71,8 @@ export class OpenWorldTraffic {
   /** How many pool cars the law may lease. */
   readonly patrolPool: number;
   private sinceFeed = 0;
+  /** How many spaces no car stands in because a start seat's doors or car are beside them (`maskSeatSpaces`). */
+  readonly maskedSpaces: number;
 
   constructor(places: readonly Place[], ports: TrafficPorts, sight: TrafficSight, size: TrafficSize, feed: CommuterFeed | null) {
     const network = buildRoadNetwork(openWorldGeometry(LAYOUT));
@@ -108,6 +112,8 @@ export class OpenWorldTraffic {
       probe: sightBase + this.total,
       snaps: Array.from({ length: MAX_CARS }, (_, id) => ({ ...blankAiCar(id), alive: false })),
     };
+    // A masked space is held for good: the movers, the residents and the kerb all pass it by as they do a taken one.
+    this.maskedSpaces = maskSeatSpaces(spots, spawnSeats(openWorldGeometry(LAYOUT)), this.context.taken);
     this.refreshSnaps(ports.cars());
     this.watch = new RedLightWatch(network);
     this.driver = new TrafficDriver(network);
