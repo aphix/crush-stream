@@ -131,6 +131,7 @@ lies on the footprint (grown by `WRECK_MARGIN`) of a place inside the walls is a
 | Knock, wreck | host-authoritative events: the host detects in its sim step, gives them to its brain at once and sends them |
 | Game clock and seed | the host's: a client runs the host's crowd time on its own clock |
 | A person the hook holds | the host: her torso, velocity, posture and cable bits ride `MSG.bodies` at 15 Hz |
+| A player's weapon, shots and held hook end | his own machine says the weapon and the far end of each shot (his record in `MSG.bodies`, a guest's via `MSG.foot`: 7 bytes a player); the host says where a held first end is (6 bytes more); each machine draws the gun, flash, tracer and marker itself (`RemoteGuns`, `TetherArt`), local presentation |
 | The ragdoll of a knocked civilian | local presentation, thrown from the strike (the host's own, a client's from the car nearest the civilian when its clock reaches the knock) |
 | Stride, look word | local presentation (still a pure function of the rows) |
 | Drawn spot (separation), bump clip | local presentation: the brain's spots at the crowd time, eased from the last frame's |

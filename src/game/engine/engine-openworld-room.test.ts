@@ -38,6 +38,9 @@ import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { BodyMotion } from "../net/body-codec.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import { DRAWN } from "./openworld-shared.ts";
+import { RemoteGuns } from "./engine-remote-guns.ts";
+import { gunModel } from "../present/weapon-models.ts";
+import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 
 /** How close a cable's far end is drawn to the host's ground point (m): the wire's centimetre. */
 const CABLE_END_M = 0.01;
@@ -76,6 +79,8 @@ const CAR_RUN_UP_M = 6;
 const CAR_MPS = 10;
 const HOOK_EYE_M = 10;
 const CIVILIAN_SPOT_GAP_M = 0.1;
+/** Where the host's hook has a first end held, as the room's fake ports answer. */
+const HELD_AT = { x: 31.5, y: 1.2, z: -12.25 };
 
 /** The walker on `path` at crowd second `crowdSeconds` into `out`; false for none. */
 function walkerAt(path: FootPath | null, crowdSeconds: number, out: BodyMotion): boolean {
@@ -148,7 +153,11 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
         return true;
       },
       staggerWalker: (dirX, dirZ) => void staggers.push({ dirX, dirZ }),
-      hookHolds: (actor) => holding.has(actor),
+      hookHold: (actor, out) => {
+        if (!holding.has(actor)) return false;
+        Object.assign(out, HELD_AT);
+        return true;
+      },
       dragWalker: (t) => void drags.push({ x: t.x, z: t.z }),
       now: () => now / 1000,
       throwFigure: (strike) => thrown.push(strike) - 1,
@@ -701,5 +710,139 @@ describe("given a host and two guests in an open-world room, the first guest on 
     expect(slot, "control: the host stood a body for him").toBeDefined();
     expect(r.host.director.playerSlot(GUEST_CAR), "the slot the host names as his").toBe(slot);
     expect(r.host.director.playerSlot(2), "the slot named for the second guest").toBe(-1);
+  });
+});
+
+/** Where the shots of the rows below end, the shot counter's tracer life (s) and the metres a muzzle may stand from its player's torso. */
+const FAR_END = { x: 130.5, y: 1.3, z: 80.25 };
+const TRACER_LIFE_S = 0.07;
+const MUZZLE_REACH_M = 1.5;
+const HEARD_FAR_M = 200;
+const SHOTGUN_SLOT = 2;
+const RIFLE_SLOT = 3;
+/** The 600-frame loops run before the allocation row reads: cold code boxes every double, and V8 optimizes the drawing only after some hundred thousand frames. */
+const WARM_LOOPS = 200;
+
+/** The guns `side` draws for the players on foot, as the engine wires them (figures only: no dummies' world), and the shots it heard. `draw` is one frame of them from an eye `awayX` m east of the side's own. */
+function gunsOf(side: Side) {
+  const heard: string[] = [];
+  const guns = new RemoteGuns(new THREE.MeshBasicMaterial(), () => false, (weapon) => void heard.push(weapon));
+  const draw = (awayX = 0): void => {
+    guns.dt = SIM_STEP;
+    guns.eyeX = side.eye.x + awayX;
+    guns.eyeZ = side.eye.z;
+    guns.frame(side.director.playerArms);
+  };
+  return { guns, heard, draw };
+}
+
+/** Net frames until `done` holds (at most `limit`, a frame of 1/30 s each, `draw` after each), how many it took. */
+function stepsUntil(r: { step(n: number): void }, draw: () => void, done: () => boolean, limit: number): number {
+  let steps = 0;
+  while (steps < limit && !done()) {
+    r.step(1);
+    draw();
+    steps++;
+  }
+  return steps;
+}
+
+describe("given a host and two guests in an open-world room, all on foot, each drawing the others' guns", () => {
+  it("when the host takes the shotgun, then within 3 net frames the first guest draws a shotgun in his hand; and when he fires, then within 3 more it flashes once and one tracer runs from his gun's tip to the far end, heard 15 m off but not 200 m off", () => {
+    const r = footRoom();
+    r.host.walk.path = { x0: FOOT_AT.x, z0: FOOT_AT.z, vx: 0, vz: 0, t0: r.host.director.crowdTime(), posture: BODY_POSTURE.stand };
+    const { guns, heard, draw } = gunsOf(r.guest);
+    const arms = (): NonNullable<typeof r.guest.director.playerArms> => r.guest.director.playerArms!;
+    r.step(15);
+    draw();
+    expect(arms().armsSeen[HOST_CAR_SLOT], "control: the guest sees the host on foot").toBe(1);
+    expect(guns["meshes"][HOST_CAR_SLOT]?.visible ?? false, "control: the host holds fists: no gun drawn").toBe(false);
+    r.host.director.armsHeld(SHOTGUN_SLOT);
+    expect(stepsUntil(r, draw, () => arms().armsWeapon[HOST_CAR_SLOT] === SHOTGUN_SLOT, 3), "net frames until the guest has his weapon").toBeLessThan(3);
+    const mesh = guns["meshes"][HOST_CAR_SLOT]!;
+    expect(mesh.visible, "the shotgun is drawn").toBe(true);
+    expect(mesh.geometry, "it is the shotgun's model").toBe(gunModel("shotgun").geometry);
+    expect(guns["shots"].firing, "control: no flash before a shot").toBe(false);
+    r.host.director.shotMade(FAR_END.x, FAR_END.y, FAR_END.z);
+    expect(stepsUntil(r, draw, () => heard.length === 1, 3), "net frames until the guest sees his shot").toBeLessThan(3);
+    expect(heard, "the shot is heard 15 m off").toHaveLength(1);
+    const shots = guns["shots"];
+    const tracers = Array.from(shots["tracerAge"]).flatMap((age, k) => (age < TRACER_LIFE_S ? [k] : []));
+    expect(tracers, "tracers in the air").toHaveLength(1);
+    expect(shots["flashAge"][HOST_CAR_SLOT], "seconds since the flash lit").toBeLessThanOrEqual(0.05);
+    const k = tracers[0]!;
+    const end = Array.from(shots["tracerAt"].subarray(6 * k + 3, 6 * k + 6));
+    expect(Math.max(Math.abs(end[0]! - FAR_END.x), Math.abs(end[1]! - FAR_END.y), Math.abs(end[2]! - FAR_END.z)), "metres from the tracer's end to his shot's far end").toBeLessThanOrEqual(0.01);
+    expect(hypot2(shots["tracerAt"][6 * k]! - FOOT_AT.x, shots["tracerAt"][6 * k + 2]! - FOOT_AT.z), "metres from the tracer's start to his torso").toBeLessThanOrEqual(MUZZLE_REACH_M);
+    for (let frames = 0; frames < 6; frames++) {
+      r.step(1);
+      draw();
+    }
+    expect(heard, "no second shot from the same record").toHaveLength(1);
+    r.host.director.shotMade(FAR_END.x, FAR_END.y, FAR_END.z);
+    r.step(3);
+    draw(HEARD_FAR_M);
+    expect(shots.firing, "a shot 200 m off is still drawn").toBe(true);
+    expect(heard, "a shot 200 m off is not heard").toHaveLength(1);
+  });
+
+  it("when the first guest takes the rifle on his own machine, then within 6 net frames the host and the second guest each draw a rifle in his hand; and when he fires, each sees one shot ending at his far end", () => {
+    const r = footRoom();
+    startWalking(r, 0);
+    const watchers = [r.host, r.second!].map((side) => ({ side, ...gunsOf(side) }));
+    r.step(15);
+    r.guest.director.armsHeld(RIFLE_SLOT);
+    for (const { side, guns, heard, draw } of watchers) {
+      expect(stepsUntil(r, draw, () => side.director.playerArms!.armsWeapon[GUEST_CAR] === RIFLE_SLOT, 6), "net frames until he has the rifle").toBeLessThan(6);
+      expect(guns["meshes"][GUEST_CAR]!.geometry, "it is the rifle's model").toBe(gunModel("rifle").geometry);
+      expect(heard, "control: no shot yet").toHaveLength(0);
+    }
+    r.guest.director.shotMade(FAR_END.x, FAR_END.y, FAR_END.z);
+    for (const { side, heard, draw } of watchers) {
+      expect(stepsUntil(r, draw, () => heard.length === 1, 6), "net frames until the shot is seen").toBeLessThan(6);
+      expect(Math.abs(side.director.playerArms!.armsFar[3 * GUEST_CAR]! - FAR_END.x), "metres from the far end he sent").toBeLessThanOrEqual(0.01);
+    }
+  });
+
+  it("when the host's hook has the first guest holding a first end, then his own machine reads the host's point within 1 cm and the second guest's reads none; and when it lets go, then his reads none", () => {
+    const r = footRoom();
+    startWalking(r, 0);
+    const point = { x: 0, y: 0, z: 0 };
+    r.step(30);
+    expect(r.guest.director.hookHeldAt(point), "control: before the hook").toBe(false);
+    r.host.holding.add(GUEST_CAR);
+    r.step(FOOT_HEARD_FRAMES);
+    expect(r.guest.director.hookHeldAt(point), "his machine reads a held end").toBe(true);
+    expect(Math.max(Math.abs(point.x - HELD_AT.x), Math.abs(point.y - HELD_AT.y), Math.abs(point.z - HELD_AT.z)), "metres from the host's point").toBeLessThanOrEqual(0.01);
+    expect(r.second!.director.hookHeldAt(point), "the second guest's machine reads none").toBe(false);
+    r.host.holding.delete(GUEST_CAR);
+    r.step(FOOT_HEARD_FRAMES);
+    expect(r.guest.director.hookHeldAt(point), "after the host lets go").toBe(false);
+  });
+
+  it("when a player fires every frame for 600 frames, then drawing his gun, flash and tracer allocates under 8 KB", () => {
+    const r = footRoom();
+    r.host.walk.path = { x0: FOOT_AT.x, z0: FOOT_AT.z, vx: 0, vz: 0, t0: r.host.director.crowdTime(), posture: BODY_POSTURE.stand };
+    const guns = new RemoteGuns(new THREE.MeshBasicMaterial(), () => false, () => {});
+    guns.dt = SIM_STEP;
+    guns.eyeX = r.guest.eye.x;
+    guns.eyeZ = r.guest.eye.z;
+    const draw = (): void => guns.frame(r.guest.director.playerArms);
+    r.host.director.armsHeld(RIFLE_SLOT);
+    r.step(15);
+    draw();
+    const table = r.guest.director.playerArms!;
+    expect(table.armsWeapon[HOST_CAR_SLOT], "control: the guest has the rifle").toBe(RIFLE_SLOT);
+    for (const [axis, value] of [FAR_END.x, FAR_END.y, FAR_END.z].entries()) table.armsFar[3 * HOST_CAR_SLOT + axis] = value;
+    const fire = (): void => {
+      for (let frame = 0; frame < 600; frame++) {
+        table.armsShots[HOST_CAR_SLOT] = (table.armsShots[HOST_CAR_SLOT]! + 1) & 31;
+        draw();
+      }
+    };
+    for (let warm = 0; warm < WARM_LOOPS; warm++) fire();
+    const bytes = untilQuiet(() => allocatedBytes(fire), 8192);
+    expect(guns["shots"].firing, "control: the gun fired").toBe(true);
+    expect(bytes, "bytes allocated by 600 frames of firing").toBeLessThanOrEqual(8192);
   });
 });

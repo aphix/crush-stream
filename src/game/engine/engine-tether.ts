@@ -50,6 +50,8 @@ interface TetherHost extends SightHost {
   guest(): boolean;
   /** Guest: whether the host has this machine's player holding a first end, and how many of the host's cables are his. */
   hostHolds(): boolean;
+  /** Guest: where the host says this machine's player's first end is, into `out`; false when he holds none. */
+  hostHoldAt(out: { x: number; y: number; z: number }): boolean;
   hostCables(): number;
   /** Sends act `kind` to the host with the sight line it was made along. */
   sendAct(kind: number, arg: number, eye: Triple, dir: Triple): void;
@@ -77,6 +79,7 @@ class Hold {
 const _eye = new THREE.Vector3();
 const _point = new THREE.Vector3();
 const _origin = new THREE.Vector3();
+const _held = new THREE.Vector3();
 
 /** `code`'s thing at `at` as the end of a rope. */
 function thingEnd(code: number, at: [number, number, number]): RopeEnd {
@@ -176,9 +179,15 @@ export class TetherDirector {
     return { count: guest ? this.host.hostCables() : this.ownCount(), pending, aim: this.mine.state, free: this.host.playerCar() < 0, sight: this.sightFromTop() };
   }
 
-  /** Whether `actor` holds a first end, his second fire to come. */
-  holding(actor: number): boolean {
-    return this.holds[actor]?.held === true;
+  /** Where `actor`'s first end is now, into `out`; false when he holds none. The host tells every machine through his record (`PLAYER_FLAG.holds` and the point). */
+  heldPoint(actor: number, out: { x: number; y: number; z: number }): boolean {
+    const hold = this.holds[actor];
+    const at = hold === undefined ? null : this.heldPlaceOf(hold);
+    if (at === null) return false;
+    out.x = at.x;
+    out.y = at.y;
+    out.z = at.z;
+    return true;
   }
 
   /** Once per drawn frame, after the camera and the cars' drawn poses are set: the retract, the aim, a waiting fire, and the drawing. */
@@ -322,8 +331,9 @@ export class TetherDirector {
     }
   }
 
-  /** Where this machine's player's held first object is now, or null when none is held. */
+  /** Where this machine's player's held first object is now, or null when none is held (a guest holds none: the host says where his is). */
   private heldPlace(): THREE.Vector3 | null {
+    if (this.host.guest()) return this.host.hostHoldAt(_held) ? _held : null;
     const hold = this.holds[this.host.actor()];
     return hold === undefined ? null : this.heldPlaceOf(hold);
   }

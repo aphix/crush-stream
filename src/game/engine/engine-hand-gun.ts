@@ -42,6 +42,10 @@ export class HandGuns {
   /** The side of the last shot's lay: the gun keeps it while that lay is held and eased, whatever side the aim point has. */
   private laySideX = 1;
   private laySideZ = 0;
+  /** The point `toward` aims the barrel at, written by its caller (a number handed across a call is boxed; a field is written in place). */
+  private qx = 0;
+  private qy = 0;
+  private qz = 0;
   /** The frame's seconds, set before `pose` (a double handed across a call is boxed; a field is written in place). */
   dt = 0;
   /** The tip's row of the flash set (x, y, z), written in place by every pose and lay. */
@@ -66,11 +70,11 @@ export class HandGuns {
     return this.mesh;
   }
 
-  /** Into (tx, ty, tz): the barrel from `hand` that puts (x, y, z) on the bore's line: the direction to the point, tipped down by the bore's height over the grip seen from that far. False when the hand is on the point. */
-  private toward(hand: THREE.Vector3, x: number, y: number, z: number): boolean {
-    const dx = x - hand.x;
-    const dy = y - hand.y;
-    const dz = z - hand.z;
+  /** Into (tx, ty, tz): the barrel from `hand` that puts the point (qx, qy, qz) on the bore's line: the direction to the point, tipped down by the bore's height over the grip seen from that far. False when the hand is on the point. */
+  private toward(hand: THREE.Vector3): boolean {
+    const dx = this.qx - hand.x;
+    const dy = this.qy - hand.y;
+    const dz = this.qz - hand.z;
     const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (length < 1e-3) return false;
     const ux = dx / length;
@@ -126,7 +130,10 @@ export class HandGuns {
     this.model(weapon);
     const along = (hand.x - aim.eyeX) * aim.dirX + (hand.y - aim.eyeY) * aim.dirY + (hand.z - aim.eyeZ) * aim.dirZ + GUN_AIM_M;
     const laid = this.holdLeft > 0 || this.easeLeft > 0;
-    this.toward(hand, aim.eyeX + aim.dirX * along, aim.eyeY + aim.dirY * along, aim.eyeZ + aim.dirZ * along);
+    this.qx = aim.eyeX + aim.dirX * along;
+    this.qy = aim.eyeY + aim.dirY * along;
+    this.qz = aim.eyeZ + aim.dirZ * along;
+    this.toward(hand);
     if (laid) {
       this.sideX = this.laySideX;
       this.sideZ = this.laySideZ;
@@ -157,7 +164,27 @@ export class HandGuns {
   /** A shot is fired at (x, y, z): the gun is laid from `hand` with its bore on it now, so its barrel, its tip and the bullet's line are one line; the tip is in the muzzle row. False when the hand is on the point (no direction). */
   layOn(weapon: WeaponId, hand: THREE.Vector3, x: number, y: number, z: number): boolean {
     this.model(weapon);
-    if (!this.toward(hand, x, y, z)) return false;
+    this.qx = x;
+    this.qy = y;
+    this.qz = z;
+    if (!this.toward(hand)) return false;
+    this.keepLay(weapon, hand);
+    return true;
+  }
+
+  /** `layOn` at the point `row[at..at + 3)`: no number crosses the call, so a frame's shot allocates nothing. */
+  layOnRow(weapon: WeaponId, hand: THREE.Vector3, row: Float32Array, at: number): boolean {
+    this.model(weapon);
+    this.qx = row[at]!;
+    this.qy = row[at + 1]!;
+    this.qz = row[at + 2]!;
+    if (!this.toward(hand)) return false;
+    this.keepLay(weapon, hand);
+    return true;
+  }
+
+  /** The barrel that `toward` found is the gun's lay now, held for the flash and eased back after it. */
+  private keepLay(weapon: WeaponId, hand: THREE.Vector3): void {
     this.bx = this.tx;
     this.by = this.ty;
     this.bz = this.tz;
@@ -169,6 +196,5 @@ export class HandGuns {
     this.holdLeft = FLASH_S;
     this.easeLeft = GUN_EASE_S;
     this.place(weapon, hand);
-    return true;
   }
 }

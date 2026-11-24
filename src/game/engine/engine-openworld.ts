@@ -75,6 +75,8 @@ export type DollPick = { slot: number; x: number; y: number; z: number; along: n
 export type CarPick = { car: number; x: number; y: number; z: number; along: number; pane: GlassName | null };
 
 const NO_EVENTS = new Float64Array(0);
+/** Where an actor's first hook end is, as `writeBodies` asks it. */
+const _hold = { x: 0, y: 0, z: 0 };
 /** The HUD hears of the clock once every five game minutes, so it does not publish every real second. */
 const CLOCK_STEP_MINUTES = 5;
 /** The pursuit strip prints seconds to a tenth and its meter moves in hundredths: finer changes are not a change. */
@@ -226,8 +228,8 @@ export type OpenWorldPorts = {
   knockWalker(vx: number, vy: number, vz: number): boolean;
   /** The host's cable holds this machine's walker's body at `t`: he follows it. */
   dragWalker(t: BodyMotion): void;
-  /** Whether actor `actor` holds a first hook end on this machine (`TetherDirector.holding`): the host tells his machine so. */
-  hookHolds(actor: number): boolean;
+  /** Whether actor `actor` holds a first hook end on this machine (`TetherDirector.heldPoint`): where, into `out`; the host tells his machine so. */
+  hookHold(actor: number, out: { x: number; y: number; z: number }): boolean;
   /** How far along the ray the nearest standing knockable prop nearer than `limit` m is, Infinity for none; nothing is knocked (`RaceField.propMet`). */
   propMet(ray: LookRay, limit: number): number;
 };
@@ -544,6 +546,7 @@ export class OpenWorldDirector {
       this.shared.bodyRecords(this.local, 1 << BODY_KIND.player, this.ports.ownCarIndex(), crowd.crowdSeconds, this.ray.eyeX, this.ray.eyeZ);
       this.seenFrame = this.local;
     }
+    this.players?.readArms(this.seenFrame, this.ports.ownCarIndex(), crowd.crowdSeconds);
     this.ports.eye(this.ray);
     this.frameSigns(this.map);
     this.gaze?.frame(crowd.poses, this.ray.eyeX, this.ray.eyeZ, wallDt, this.bodies);
@@ -755,12 +758,18 @@ export class OpenWorldDirector {
     return slot;
   }
 
-  /** Host: `out` is the frame of people its guests are sent (`MSG.bodies`): the players on foot (his own walker first, each marked while he holds a first hook end), then the civilians its hook holds. */
+  /** Host: `out` is the frame of people its guests are sent (`MSG.bodies`): the players on foot (his own walker first, each marked, with the point, while he holds a first hook end), then the civilians its hook holds. */
   writeBodies(out: BodyFrame): void {
     clearBodyFrame(out);
     if (this.ports.isClient()) return;
     this.players?.writeRecords(out, this.ports.ownCarIndex(), this.ports.footAnchor(this.ownMotion) ? this.ownMotion : null, this.crowdTime(), this.bodies);
-    for (let at = 0; at < out.count; at++) if (this.ports.hookHolds(out.id[at]!)) out.state[at] = out.state[at]! | PLAYER_FLAG.holds;
+    for (let at = 0; at < out.count; at++) {
+      if (!this.ports.hookHold(out.id[at]!, _hold)) continue;
+      out.state[at] = out.state[at]! | PLAYER_FLAG.holds;
+      out.holdAt[3 * at] = _hold.x;
+      out.holdAt[3 * at + 1] = _hold.y;
+      out.holdAt[3 * at + 2] = _hold.z;
+    }
     this.law?.writePoses(out, this.crowd!.poses);
     this.medics?.writePoses(out);
     this.bodies?.writeHooked(out);
@@ -832,6 +841,27 @@ export class OpenWorldDirector {
     const own = this.ports.ownCarIndex();
     for (let at = 0; at < frame.count; at++) if (frame.kind[at] === BODY_KIND.player && frame.id[at] === own) return (frame.state[at]! & PLAYER_FLAG.holds) !== 0;
     return false;
+  }
+
+  /** Guest: where the host says this machine's player's first hook end is, by the frame last heard, however old (as `hookHeld`); false when he holds none. */
+  hookHeldAt(out: { x: number; y: number; z: number }): boolean {
+    const frame = this.ports.isClient() ? (this.shared?.frame ?? null) : null;
+    return this.players?.holdAt(frame, this.ports.ownCarIndex(), out) ?? false;
+  }
+
+  /** This machine's player holds weapon slot `slot` of the arms: his record and his `MSG.foot` carry it. */
+  armsHeld(slot: number): void {
+    this.players?.setOwnWeapon(slot);
+  }
+
+  /** This machine's player fired, his tracer ending at (x, y, z): his record and his `MSG.foot` carry one more shot. */
+  shotMade(x: number, y: number, z: number): void {
+    this.players?.noteShot(x, y, z);
+  }
+
+  /** The players on foot as this machine reads them (their arms, from the frame last seen); null where there is no crowd. */
+  get playerArms(): OpenWorldPlayers | null {
+    return this.players;
   }
 
   /** Guest: how many of the host's cables are this machine's player's, by the frame last heard, however old. */
