@@ -132,4 +132,9 @@ describe("given a record whose shot counter the table reads every drawn frame, t
     });
     expect(drawn, "shots drawn").toBe(HONEST_IN_A_SECOND);
   });
+
+  it("when two shots reach the table one 15 Hz frame apart (67 ms, sooner than the rifle's 120 ms), then both are drawn: the second waits its turn", () => {
+    const drawn = drawnIn(0.5, (_time, frame) => frame === 1 || frame === 5);
+    expect(drawn, "shots drawn").toBe(2);
+  });
 });

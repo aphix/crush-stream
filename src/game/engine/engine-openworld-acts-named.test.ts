@@ -225,7 +225,7 @@ describe("given a host that hears a guest's hook fire naming the person his reti
 
   const keepsTheLine = [
     { it: "when she stands 6 m off the line, then the hook goes along the sent line and still knows a person was lit", at: { x: 16, y: 1.3, z: 35 }, wall: 0 },
-    { it: "when a wall stands between his torso and where she stands, then the hook goes along the sent line", at: { x: 11.5, y: 1.3, z: 35 }, wall: 28 },
+    { it: "when a wall stands between his camera's eye and where she stands, then the hook goes along the sent line", at: { x: 11.5, y: 1.3, z: 35 }, wall: 28 },
   ] as const;
   for (const testCase of keepsTheLine) {
     it(testCase.it, () => {

@@ -8,7 +8,6 @@ import { ENTER_MAX_SPEED, EXIT_MAX_SPEED } from "../present/onfoot-flow.ts";
 import type { Pole } from "../present/ragdoll-ground.ts";
 import { DoorSwings } from "./engine-openworld-door-swings.ts";
 import type { ActorPlace } from "./engine-openworld-law.ts";
-import { hypot2 } from "../kernel/physics-core.js";
 import { doorAt, doorBlocked, doorSpot, exitSide } from "./onfoot-doors.ts";
 
 /** What asking for a seat came to: done (the table says so now), sent (a guest waits for the host's answer) or refused (`OpenWorldSeats.refusal` says why). */
@@ -129,7 +128,8 @@ export class OpenWorldSeats {
       const side = doorAt(body, torso, _speed);
       if (side === 0) continue;
       doorSpot(body, _spot, side);
-      const gap = hypot2(_spot.x - torso.x, _spot.z - torso.z);
+      // Squared: only compared.
+      const gap = (_spot.x - torso.x) * (_spot.x - torso.x) + (_spot.z - torso.z) * (_spot.z - torso.z);
       if (gap >= nearest) continue;
       nearest = gap;
       out.car = car;
