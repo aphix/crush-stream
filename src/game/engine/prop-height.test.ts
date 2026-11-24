@@ -342,26 +342,36 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
 
   // A top scrapes the body it stops as a side does (`wallBounce`): a monster whose keel dipped a centimetre under the oval's wall top slid on it,
   // its fall stopped every slice and its speed along the top kept, so it never pitched down and came off the wall faster than off a lower slab.
+  /** The plan speed of the wreck's dynamic masses, mass-weighted (m/s): the ones `standOnTop` rubs. */
+  const massSlide = (wreck: DeformableCar): number => {
+    let x = 0;
+    let z = 0;
+    let mass = 0;
+    for (const m of wreck.deform.masses) {
+      if (!m.dynamic) continue;
+      x += m.vel.x * m.mass;
+      z += m.vel.z * m.mass;
+      mass += m.mass;
+    }
+    return hypot2(x, z) / mass;
+  };
   it("when it comes down on the K-rail 66 (1.8 m) at 5.7 m/s with 16 m/s along, then the top's friction takes MU_BODY of the stopped fall from its slide, its masses' with the body's", () => {
     const v = [8.46, -5.72, 13.22] as const;
     const { slice, wreck } = place(66, -1, 1.4, -0.009, [...v]);
-    const massSlide = (): number => {
-      let x = 0;
-      let z = 0;
-      let mass = 0;
-      for (const m of wreck.deform.masses) {
-        x += m.vel.x * m.mass;
-        z += m.vel.z * m.mass;
-        mass += m.mass;
-      }
-      return hypot2(x, z) / mass;
-    };
     const body = hypot2(wreck.velocity.x, wreck.velocity.z);
-    const masses = massSlide();
+    const masses = massSlide(wreck);
     slice(0.0021);
     const lost = MU_BODY * -v[1];
     expect(body - hypot2(wreck.velocity.x, wreck.velocity.z), "the speed along the top the body lost (m/s): MU_BODY of its stopped fall").toBeCloseTo(lost, 2);
-    expect(masses - massSlide(), "the speed along the top the masses lost (m/s): what the body lost").toBeCloseTo(lost, 2);
+    expect(masses - massSlide(wreck), "the speed along the top the masses lost (m/s): what the body lost").toBeCloseTo(lost, 2);
+  });
+
+  // The friction stops a slide, it never turns one round: MU_BODY of a 5.46 m/s fall is 3.3 m/s, against 0.38 m/s of slide.
+  it("when it lands on the tyre stack 54 (1.5 m) at 5.5 m/s sliding 0.38 m/s, then its slide over the top ends at rest, not thrown back the other way", () => {
+    const { slice, wreck } = place(54, 0.8, 1.4, -0.016, [0.18, -5.46, 0.34]);
+    slice(0.0026);
+    expect(hypot2(wreck.velocity.x, wreck.velocity.z), "the body's speed along the top after the landing (m/s)").toBeLessThan(1e-6);
+    expect(massSlide(wreck), "its masses' speed along the top after the landing (m/s)").toBeLessThan(1e-6);
   });
 
   // Standing or sliding on a top a few mm to 3 cm under it (a wall hit crushed the wreck 3 cm in one slice, vy -0.07 m/s): the side path's

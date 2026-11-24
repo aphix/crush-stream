@@ -291,7 +291,9 @@ function standOnTop(car: DeformableCar, under: number, rvx: number, rvz: number,
   v.z -= rvz * k;
   car.group.position.y += rise;
   if (car.deform.massActive) {
-    for (const m of car.deform.masses) {
+    const masses = car.deform.masses;
+    for (let i = 0; i < masses.length; i++) {
+      const m = masses[i]!;
       m.world.y += rise;
       if (!m.dynamic) continue;
       m.vel.y += stop;

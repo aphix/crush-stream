@@ -98,7 +98,7 @@ const HOT = {
   "src/game/contact/sat.ts": ["physicsSlice", "sliceSpeed", "satCars", "deepestIn", "bandGrazes", "outlineNormal", "clipCarToBarrier"],
   "src/game/contact/cage-outline.ts": ["sampleField", "worldBand", "bandsMeet"],
   "src/game/contact/pair-contact.ts": ["resolveCarPair", "impulseCar", "pushCar", "scrapePair", "pointVelocity", "exchangePair", "loadPair"],
-  "src/game/contact/prop-contact.ts": ["propContact", "solidContact", "sideContact", "measure", "coplanar"],
+  "src/game/contact/prop-contact.ts": ["propContact", "solidContact", "sideContact", "measure", "coplanar", "standOnTop"],
   "src/game/contact/external-contact.ts": ["partContactPair", "partContact", "faceOverlap", "shiftVelocities", "carRow", "takeRow", "moveAsOneBody", "exchange"],
   "src/game/vehicle/car-drive.ts": ["applyDrive", "input"],
   "src/game/vehicle/drive-input.ts": ["readIntent", "shapeDrive"],
