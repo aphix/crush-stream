@@ -208,13 +208,15 @@ function chooseByUtility(state: CityState, resident: number, current: number, ti
   considerInteractions(state, resident, current, tick, hour, bestUtility, draw);
 }
 
-/** A customer takes a free seat at a coffee shop, bar or diner for a dwell worth sitting through, else a standing spot of their own at a counter; staff take a clerk's spot; someone sitting out takes a stoop seat. */
+/** A customer takes a free seat at a coffee shop, bar or diner for a dwell worth sitting through, else a standing spot of their own at a counter; staff take a clerk's spot; someone sitting out takes a stoop seat; someone standing at a door in the street takes nothing. */
 function takeSeat(state: CityState, resident: number, place: number, purpose: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   if (purpose === PURPOSE.stoopSit) {
     claimSeat(state, resident, place, true);
     return;
   }
+  // Standing at a door in the street (loitering, a row, a fight, looking on, waiting out a shut place) holds nothing inside: a seat, a spot or a clerk's spot stays free for someone in the room.
+  if (isOutdoorPurpose(purpose)) return;
   const dwellMinutes = (state.ints[base + RESIDENT_INT.nextDecisionTick]! - state.ints[base + RESIDENT_INT.arriveTick]!) / TICKS_PER_GAME_MINUTE;
   if (state.ints[base + RESIDENT_INT.species] !== SPECIES.person) return;
   if (state.ints[base + RESIDENT_INT.work] === place) {
@@ -521,13 +523,18 @@ export function decideResident(state: CityState, resident: number, tick: number)
   const home = state.ints[base + RESIDENT_INT.home]!;
   const atWork = current === state.ints[base + RESIDENT_INT.work];
   const guest = !atWork && current !== home;
-  // Outside a place's hours (its sign shows it shut), or in a room full but for her (every seat and standing spot held, none hers), a customer is not kept inside it; nor is staff once the place has closed up: with nowhere else to go she goes home, unless the walk would make a named resident miss her appointment.
-  const closedUp = atWork && staffTicksLeft(state, current, tick, 1) === 0;
-  const shutIn = (guest || closedUp) && home !== NO_PLACE && (closedUp || !withinHours(state, current, tick) || fullBesideHer(state, resident, current)) && (!named || walkFitsBeforeAppointment(state, resident, tick, current, home));
+  // Outside a place's hours (its sign shows it shut), wrecked, or in a room full but for her (every seat and standing spot held, none hers), a customer is not kept inside it; nor is staff once the place has closed up or been wrecked: with nowhere else to go she goes home. A named resident whose walk home would make her miss her appointment waits at the shut place's door instead (`shutOut`): a stay outside is not a stay in it.
+  const closedUp = atWork && (!isOpen(state, current, tick) || staffTicksLeft(state, current, tick, 1) === 0);
+  const shutNow = !isOpen(state, current, tick) || !withinHours(state, current, tick);
+  const mustLeave = (guest || closedUp) && home !== NO_PLACE && (closedUp || shutNow || fullBesideHer(state, resident, current));
+  const fitsHome = !mustLeave || !named || walkFitsBeforeAppointment(state, resident, tick, current, home);
+  const shutIn = mustLeave && fitsHome;
+  const shutOut = mustLeave && !fitsHome && (closedUp || shutNow);
   if (place !== NO_PLACE && place !== current && planLeg(state, resident, tick, place, purpose, dwell, customer)) {
     if (row !== null) afterInteraction(state, resident, tick, row);
   } else if (!(shutIn && (place !== current || customer) && planLeg(state, resident, tick, home, NEED.rest, dwellTicksOf(PLACE_KIND.home, draw())))) {
-    if (place === NO_PLACE) stayPut(state, resident, tick, current, stayTicks(state, current, resident, guest, tick, STAY_MINUTES * TICKS_PER_GAME_MINUTE), NEED.rest);
+    if (shutOut) stayPut(state, resident, tick, current, STAY_MINUTES * TICKS_PER_GAME_MINUTE, PURPOSE.loiter);
+    else if (place === NO_PLACE) stayPut(state, resident, tick, current, stayTicks(state, current, resident, guest, tick, STAY_MINUTES * TICKS_PER_GAME_MINUTE), NEED.rest);
     else if (place !== current) {
       const stayFor = row === null ? purpose : NEED.rest;
       stayPut(state, resident, tick, current, stayTicks(state, current, resident, guest && !isOutdoorPurpose(stayFor), tick, dwell), stayFor);

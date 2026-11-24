@@ -30,7 +30,10 @@ const AMBULANCE_FRAME = 106 * 16;
 const KNOCK_FRAME = 100 * 16;
 const FIGHT_FRAME = 120 * 16;
 const BUST_FRAME = 130 * 16;
-const WRECK_FRAME = 150 * 16;
+/** The wreck is heard a minute before the hour tick at crowd second 60 (tick 120), when a named customer, still settled in the bodega until tick 224, is inside it. */
+const WRECK_FRAME = 50 * 16;
+const BEFORE_HOUR_FRAME = 58 * 16;
+const AFTER_HOUR_FRAME = 62 * 16;
 /** Two generated residents the host raises a fight between, then a bust of the first. */
 const FIGHTER_OFFSETS = [20, 21] as const;
 /** The resident who turns on the player (shoving from the east, a quarter turn in the wire's steps), and the jaywalker the police take in. */
@@ -104,11 +107,12 @@ function openRun(label: string, worker?: typeof CountingWorker | typeof LateWork
   return { label, crowd: newCrowd(map, CROWD_RESIDENTS, CROWD_SEED, remote), remote };
 }
 
-/** The host's log as it was heard by `frame`: a danger at a node, an ambulance call for the one run down, a fight with the player, a jaywalk arrest, the knock, a fight of two residents, the bust of one of them and the wreck, each from its own frame on. */
+/** The host's log as it was heard by `frame`: a danger at a node, an ambulance call for the one run down, a fight with the player, a jaywalk arrest, the knock, a fight of two residents and the bust of one of them, each from its own frame on, with the wreck the first of all. */
 function logAt(frame: number, knocked: number, fighters: readonly number[], dangerNode: number): Float64Array {
   const fightSeconds = FIGHT_FRAME * FRAME_SECONDS;
   const playerFightSeconds = PLAYER_FIGHT_FRAME * FRAME_SECONDS;
   const heard: readonly { from: number; triples: readonly number[] }[] = [
+    { from: WRECK_FRAME, triples: [EVENT_KIND.wreck, bodega, WRECK_FRAME * FRAME_SECONDS] },
     { from: DANGER_FRAME, triples: [EVENT_KIND.danger, dangerNode, DANGER_FRAME * FRAME_SECONDS] },
     { from: AMBULANCE_FRAME, triples: [EVENT_KIND.ambulance, knocked, AMBULANCE_FRAME * FRAME_SECONDS] },
     { from: PLAYER_FIGHT_FRAME, triples: [EVENT_KIND.fight, fighters[2]!, playerFightSeconds, EVENT_KIND.walker, EAST, playerFightSeconds] },
@@ -116,7 +120,6 @@ function logAt(frame: number, knocked: number, fighters: readonly number[], dang
     { from: KNOCK_FRAME, triples: [EVENT_KIND.knock, knocked, KNOCK_FRAME * FRAME_SECONDS] },
     { from: FIGHT_FRAME, triples: [EVENT_KIND.fight, fighters[0]!, fightSeconds, EVENT_KIND.alongside, fighters[1]!, fightSeconds] },
     { from: BUST_FRAME, triples: [EVENT_KIND.bust, fighters[0]!, BUST_FRAME * FRAME_SECONDS] },
-    { from: WRECK_FRAME, triples: [EVENT_KIND.wreck, bodega, WRECK_FRAME * FRAME_SECONDS] },
   ];
   return Float64Array.from(heard.filter((event) => frame >= event.from).flatMap((event) => event.triples));
 }
@@ -127,7 +130,7 @@ function look(run: Run): string {
 }
 
 /** Every frame's step of all runs in lockstep, as a client's: the real worker's answers awaited by count before the tick that needs them, the late worker's said after the step. Returns the frames at which a run differed from the first. */
-async function runAll(runs: readonly Run[], plain: Run, knocked: { resident: number }, fighters: readonly number[]): Promise<string[]> {
+async function runAll(runs: readonly Run[], plain: Run, knocked: { resident: number }, fighters: readonly number[], inBodega: { resident: number; before: number; after: number }): Promise<string[]> {
   const apart: string[] = [];
   let lastTick = -1;
   for (let frame = 1; frame <= FRAMES; frame++) {
@@ -141,6 +144,12 @@ async function runAll(runs: readonly Run[], plain: Run, knocked: { resident: num
     }
     plain.crowd.step(seconds, [], false);
     LateWorker.last.say(tick);
+    const lone = runs[0]!.crowd.state;
+    if (frame === BEFORE_HOUR_FRAME) {
+      for (let resident = 0; resident < lone.capacity; resident++) if (lone.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.place] === bodega && inBodega.resident < 0) inBodega.resident = resident;
+      inBodega.before = inBodega.resident < 0 ? -1 : lone.ints[inBodega.resident * RESIDENT_INT_STRIDE + RESIDENT_INT.place]!;
+    }
+    if (frame === AFTER_HOUR_FRAME && inBodega.resident >= 0) inBodega.after = lone.ints[inBodega.resident * RESIDENT_INT_STRIDE + RESIDENT_INT.place]!;
     lastTick = tick;
     for (const run of runs.slice(1)) if (look(run) !== look(runs[0]!)) apart.push(`${run.label} at frame ${frame}`);
   }
@@ -159,8 +168,12 @@ describe("given the same crowd stepped five minutes with the real worker, with n
     const plain = openRun("no events");
     const knocked = { resident: -1 };
     const fighters = [...FIGHTER_OFFSETS, PLAYER_FIGHTER_OFFSET, JAYWALKER_OFFSET].map((offset) => alone.crowd.state.cast.length + offset);
-    const apart = await runAll([alone, threaded, late], plain, knocked, fighters);
+    const inBodega = { resident: -1, before: -1, after: -1 };
+    const apart = await runAll([alone, threaded, late], plain, knocked, fighters, inBodega);
     expect(apart.slice(0, 5), "frames at which a run differed from the main thread's own").toEqual([]);
+    expect(inBodega.resident, "control: a resident is inside the bodega a few ticks before the wreck's hour tick").toBeGreaterThanOrEqual(0);
+    expect(inBodega.before, "where she is before the hour tick").toBe(bodega);
+    expect(inBodega.after, "where she is bound once the hour tick has passed: not the wrecked bodega").not.toBe(bodega);
     expect(alone.remote.usingWorker, "the lone run has no worker").toBe(false);
     expect(threaded.remote.usingWorker, "the worker run still uses it").toBe(true);
     expect(threaded.remote.traffic.heardMessages, "answers the worker sent").toBeGreaterThan(300);

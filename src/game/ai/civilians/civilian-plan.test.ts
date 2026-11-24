@@ -239,6 +239,32 @@ describe("given a shop and a workplace that are shut, with nobody afraid of them
     expect(intAt(state, resident, RESIDENT_INT.place), "where she heads").toBe(intAt(state, resident, RESIDENT_INT.home));
     expect(intAt(state, resident, RESIDENT_INT.pathCount), "nodes on her walk").toBeGreaterThan(1);
   });
+
+  it("when a customer is at the shop at noon after a car has wrecked it and wants nothing pressing, then she walks home rather than staying inside", () => {
+    const state = createCityState(5, map, 60);
+    const bodega = placeNamed(map, PLACE_NAMES.bodega);
+    const resident = adultWhere(state, (candidate) => intAt(state, candidate, RESIDENT_INT.work) !== bodega && intAt(state, candidate, RESIDENT_INT.home) !== bodega);
+    const tick = tickOfHour(state, 2, 12);
+    expect(state.venues.hourWeight[bodega * HOURS_PER_GAME_DAY + 12], "control: the shop is within its hours at noon").toBeGreaterThanOrEqual(1);
+    state.closedUntilTick[bodega] = tick + 1000;
+    dwellingWithNeeds(state, resident, bodega, tick, needsOf(-1));
+    decideResident(state, resident, tick);
+    expect(intAt(state, resident, RESIDENT_INT.place), "where she heads").toBe(intAt(state, resident, RESIDENT_INT.home));
+    expect(intAt(state, resident, RESIDENT_INT.pathCount), "nodes on her walk").toBeGreaterThan(1);
+  });
+
+  it("when a clerk is at the shop at noon after a car has wrecked it and wants nothing pressing, then she walks home rather than staying inside", () => {
+    const state = createCityState(5, map, 60);
+    const bodega = placeNamed(map, PLACE_NAMES.bodega);
+    const resident = adultWhere(state, (candidate) => intAt(state, candidate, RESIDENT_INT.home) !== bodega);
+    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.work] = bodega;
+    const tick = tickOfHour(state, 2, 12);
+    state.closedUntilTick[bodega] = tick + 1000;
+    dwellingWithNeeds(state, resident, bodega, tick, needsOf(-1));
+    decideResident(state, resident, tick);
+    expect(intAt(state, resident, RESIDENT_INT.place), "where she heads").toBe(intAt(state, resident, RESIDENT_INT.home));
+    expect(intAt(state, resident, RESIDENT_INT.pathCount), "nodes on her walk").toBeGreaterThan(1);
+  });
 });
 
 /** Steps a city of 60 through `days` game days, handing each tick's answer to `each`. */

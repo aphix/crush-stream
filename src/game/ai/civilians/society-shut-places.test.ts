@@ -5,14 +5,17 @@ import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { hourOfDay } from "./civilian-clock.ts";
-import { HOURS_PER_GAME_DAY, NEED, NO_PLACE, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_DAY, TICKS_PER_GAME_MINUTE } from "./civilian-constants.ts";
+import { DECISION_HZ, EVENT_KIND, FLAG, HOURS_PER_GAME_DAY, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_DAY, TICKS_PER_GAME_HOUR, TICKS_PER_GAME_MINUTE } from "./civilian-constants.ts";
+import { queueEvents } from "./civilian-events.ts";
 import { decideResident } from "./civilian-plan.ts";
-import { tickOfHour } from "./civilian-run.test-util.ts";
+import { runTicks, tickOfHour } from "./civilian-run.test-util.ts";
 import type { CityState } from "./civilian-state.ts";
+import { newAppointmentSlot, nextAppointment } from "./civilian-story.ts";
 import { computeTick } from "./civilian-tick.ts";
 import { createCityState } from "./society.ts";
-import { intAt, needsWith, stageResident } from "./society.test-util.ts";
-import { VENUE } from "./society-venues.ts";
+import { intAt, needsWith, placeIn, stageResident } from "./society.test-util.ts";
+import { walkMetres } from "./society-cars.ts";
+import { VENUE, isOutdoorPurpose } from "./society-venues.ts";
 
 const map = buildOpenWorldMap(layOutLots());
 const RESIDENTS = 150;
@@ -104,5 +107,145 @@ describe("given the neighbourhood living three game days (Jamal hands out flyers
       }
       expect([...inShut], `staying in a shut place (seed ${seed})`).toEqual([]);
     }
+  });
+});
+
+/** A resident still this long (ticks) in a place whose sign reads shut is past the closing stagger (30) and her walk out of the room. */
+const STILL_IN_SHUT_TICKS = 40;
+/** The hours on day 1 at which the most crowded place away from anyone's home is wrecked: a coffee shop's morning, a shop's noon, a bar's evening. */
+const WRECK_HOURS = [10, 12, 19];
+
+/** The place away from every home that holds the most residents settled in it (their stay begun) at `tick`, not already wrecked: -1 for none. */
+function busiestPlace(state: CityState, tick: number): number {
+  const held = new Map<number, number>();
+  for (let resident = 0; resident < state.capacity; resident++) {
+    const place = intAt(state, resident, RESIDENT_INT.place);
+    if (intAt(state, resident, RESIDENT_INT.alive) === 0 || intAt(state, resident, RESIDENT_INT.arriveTick) > tick || place === intAt(state, resident, RESIDENT_INT.home) || state.closedUntilTick[place]! > tick) continue;
+    held.set(place, (held.get(place) ?? 0) + 1);
+  }
+  let best = NO_PLACE;
+  for (const [place, count] of held) if (best === NO_PLACE || count > held.get(best)!) best = place;
+  return best;
+}
+
+describe("given the neighbourhood's most crowded place wrecked at three hours of day 1, and the days after", () => {
+  it("when everyone away from home with no walk under way and not standing at a door is looked at every tick for four days, then nobody stays inside a place whose sign reads shut (wrecked or out of hours) past the closing stagger", () => {
+    for (const seed of [4, 6, 11, 21]) {
+      const state = createCityState(seed, map, RESIDENTS);
+      const wrecksAt = WRECK_HOURS.map((hour) => tickOfHour(state, 1, hour));
+      const stuck = new Map<number, number>();
+      const inShut = new Set<string>();
+      for (let tick = 0; tick < 4 * TICKS_PER_GAME_DAY; tick++) {
+        if (wrecksAt.includes(tick)) {
+          const place = busiestPlace(state, tick);
+          if (place !== NO_PLACE) queueEvents(state, tick, [EVENT_KIND.wreck, place, tick / DECISION_HZ]);
+        }
+        computeTick(state, tick);
+        for (let resident = 0; resident < state.capacity; resident++) {
+          const place = intAt(state, resident, RESIDENT_INT.place);
+          const wrecked = state.closedUntilTick[place]! > tick;
+          const staffInHours = place === intAt(state, resident, RESIDENT_INT.work) && !wrecked;
+          const shut = wrecked || (signShut(state, place, tick) && !staffInHours);
+          if (!shut || intAt(state, resident, RESIDENT_INT.alive) === 0 || intAt(state, resident, RESIDENT_INT.pathCount) !== 0 || intAt(state, resident, RESIDENT_INT.arriveTick) > tick || place === intAt(state, resident, RESIDENT_INT.home) || isOutdoorPurpose(intAt(state, resident, RESIDENT_INT.legPurpose))) {
+            stuck.delete(resident);
+            continue;
+          }
+          const ticks = (stuck.get(resident) ?? 0) + 1;
+          stuck.set(resident, ticks);
+          if (ticks === STILL_IN_SHUT_TICKS) inShut.add(`${resident} (${(intAt(state, resident, RESIDENT_INT.flags) & FLAG.cast) !== 0 ? "named" : "unnamed"}, ${place === intAt(state, resident, RESIDENT_INT.work) ? "staff" : "customer"}) in ${map.places[place]!.name}${wrecked ? " wrecked" : ""} at ${hourOfDay(tick, state.startHour)}h`);
+        }
+      }
+      expect([...inShut], `still inside a shut place (seed ${seed})`).toEqual([]);
+    }
+  });
+});
+
+describe("given a customer and a clerk settled in the bodega at noon on day 2 for hours, and a car that wrecks it", () => {
+  /** The bodega with a customer and a clerk (adults who live elsewhere) in it, their stays set to last three hours, a wreck posted at noon; the city run on to `ticks` ticks after it. */
+  function wreckedAtNoon(ticks: number): { state: CityState; bodega: number; customer: number; clerk: number } {
+    const state = createCityState(7, map, RESIDENTS);
+    const bodega = placeIn(map, "Bodega Supreme");
+    const noon = tickOfHour(state, 2, 12);
+    runTicks(state, noon);
+    const customer = state.cast.length;
+    const clerk = customer + 1;
+    for (const [resident, work] of [[customer, NO_PLACE], [clerk, bodega]] as const) {
+      const home = intAt(state, resident, RESIDENT_INT.home);
+      stageResident(state, resident, { place: bodega, home, work, tick: noon, dwell: 10, nextDecision: noon + 3 * TICKS_PER_GAME_HOUR });
+    }
+    runTicks(state, ticks, new Map([[noon, [EVENT_KIND.wreck, bodega, noon / DECISION_HZ]]]));
+    return { state, bodega, customer, clerk };
+  }
+
+  it("when the wreck's hour comes, then both are still in it a half hour before and both have set out at once at it, the clerk laid off", () => {
+    const before = wreckedAtNoon(TICKS_PER_GAME_HOUR / 2);
+    expect(intAt(before.state, before.customer, RESIDENT_INT.place), "control: the sign still reads open and her stay goes on").toBe(before.bodega);
+    expect(intAt(before.state, before.clerk, RESIDENT_INT.place), "control: the sign still reads open and her shift goes on").toBe(before.bodega);
+    const after = wreckedAtNoon(TICKS_PER_GAME_HOUR + 1);
+    expect(after.state.closedUntilTick[after.bodega], "control: the bodega is wrecked now").toBeGreaterThan(0);
+    expect(intAt(after.state, after.customer, RESIDENT_INT.place), "where the customer is bound").not.toBe(after.bodega);
+    expect(intAt(after.state, after.clerk, RESIDENT_INT.place), "where the laid-off clerk is bound").not.toBe(after.bodega);
+    expect(intAt(after.state, after.clerk, RESIDENT_INT.flags) & FLAG.laidOff, "the clerk is laid off").toBe(FLAG.laidOff);
+  });
+});
+
+describe("given Dee, a named resident whose home is the one farthest on foot from the bodega where her 23:00 coffee is, at the shut place nearest the bodega with that coffee three hours off", () => {
+  const city = (() => {
+    let made: { state: CityState; dee: number; bodega: number; home: number; shut: number } | null = null;
+    return () => {
+      if (made !== null) return made;
+      const state = createCityState(5, map, RESIDENTS);
+      runTicks(state, tickOfHour(state, 1, 20));
+      const dee = state.cast.findIndex((resolved) => resolved.member.key === "dee");
+      const bodega = placeIn(map, "Bodega Supreme");
+      const homes = map.places.flatMap((place, index) => (place.kind === PLACE_KIND.home && place.doorNode >= 0 ? [index] : []));
+      const home = homes.reduce((far, candidate) => (walkMetres(state, candidate, bodega) > walkMetres(state, far, bodega) ? candidate : far));
+      let shut = NO_PLACE;
+      for (let place = 0; place < map.places.length; place++) {
+        if (place === bodega || place === home || map.places[place]!.doorNode < 0 || state.venues.opensAt[place]! < 0 || !signShut(state, place, tickOfHour(state, 1, 20))) continue;
+        if (shut === NO_PLACE || walkMetres(state, place, bodega) < walkMetres(state, shut, bodega)) shut = place;
+      }
+      made = { state, dee, bodega, home, shut };
+      return made;
+    };
+  })();
+
+  /** Dee, at `place` with her decision due at `tick`, her coffee not yet kept, deciding. */
+  function deeDecides(place: number, tick: number): CityState {
+    const { state, dee, home } = city();
+    stageResident(state, dee, { place, home, tick, flags: FLAG.cast });
+    state.ints[dee * RESIDENT_INT_STRIDE + RESIDENT_INT.storyTick] = 0;
+    decideResident(state, dee, tick);
+    return state;
+  }
+
+  it("when she decides at 20:00, then she waits at the shut door instead of inside: her walk home would miss the coffee, and she does not set out", () => {
+    const { dee, bodega, home, shut } = city();
+    const tick = tickOfHour(city().state, 1, 20);
+    const slot = newAppointmentSlot();
+    nextAppointment(city().state, dee, tick, slot);
+    expect(slot.place, "control: her next appointment is the coffee at the bodega").toBe(bodega);
+    expect(walkMetres(city().state, shut, home) + walkMetres(city().state, home, bodega), "control: home and on to the bodega is a longer way than from here").toBeGreaterThan(2 * walkMetres(city().state, shut, bodega));
+    const state = deeDecides(shut, tick);
+    expect(intAt(state, dee, RESIDENT_INT.place), "where she dwells").toBe(shut);
+    expect(intAt(state, dee, RESIDENT_INT.legPurpose), "what she does there").toBe(PURPOSE.loiter);
+    expect(intAt(state, dee, RESIDENT_INT.pathCount), "nodes on a walk").toBe(0);
+  });
+
+  // mutation: sed -i 's/^  if (isOutdoorPurpose(purpose)) return;/  void purpose;/' src/game/ai/civilians/civilian-plan.ts
+  it("when she waits at the door of a shut coffee shop with seats, then she holds no seat inside it", () => {
+    const { state, dee } = city();
+    const tick = tickOfHour(state, 1, 20);
+    const shutCoffee = state.venues.byVenue[VENUE.coffee]!.filter((place) => map.places[place]!.doorNode >= 0 && signShut(state, place, tick));
+    expect(shutCoffee.length, "control: coffee shops are shut at 20:00").toBeGreaterThan(0);
+    let waited = 0;
+    for (const place of shutCoffee) {
+      if (place === city().home) continue;
+      deeDecides(place, tick);
+      if (intAt(state, dee, RESIDENT_INT.legPurpose) !== PURPOSE.loiter) continue;
+      waited++;
+      expect(intAt(state, dee, RESIDENT_INT.seat), `her seat in ${map.places[place]!.name}`).toBe(NO_SEAT);
+    }
+    expect(waited, "control: she waits at a shut coffee shop's door").toBeGreaterThan(0);
   });
 });
