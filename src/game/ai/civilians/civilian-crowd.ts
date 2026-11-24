@@ -619,9 +619,9 @@ export class CivilianCrowd {
     this.postBatch();
   }
 
-  /** Where a throw of `resident` starts at (x, z): the ground and the stoop step she was last drawn on (`feetY`), so she is not thrown from inside the steps. */
+  /** Where a throw of `resident` starts at (x, z): the stoop step she was last drawn on (`feetY`, a world height), the ground's where it is higher, as the bodies read it, so she is not thrown from inside the steps. */
   private groundUnder(resident: number, x: number, z: number): number {
-    return activeGround().heightAt(x, z) + this.poses.feetY[resident]!;
+    return Math.max(activeGround().heightAt(x, z), this.poses.feetY[resident]!);
   }
 
   /** The player's blow fells `resident` (a knock-out): hidden, thrown along (dirX, dirZ), the knock in the log. */

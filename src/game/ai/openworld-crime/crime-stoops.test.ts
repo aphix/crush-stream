@@ -54,6 +54,31 @@ describe("given a guest whose host punched down the cop on a rowhome's landing",
   });
 });
 
+describe("given a guest with the host's frames whose last one hid the cop on the landing before the host's knock came due", () => {
+  it("when it throws him, then he starts at the landing's height from the host's last record of him", () => {
+    const run = harness([DOOR_X, DOOR_X + 3, DOOR_X], { authority: false });
+    run.scene.stoops = new Stoops([HOUSE], [DOOR_NODE]);
+    const car = pooledCar(0);
+    car.group.position.set(DOOR_X + 20, 0, 0);
+    run.cars.push(car);
+    run.scene.heardPoses = true;
+    const cops = run.scene.copPoses;
+    cops.shown[0] = 1;
+    cops.x[0] = DOOR_X;
+    cops.z[0] = 0;
+    run.scene.liftHeard(run.poses);
+    cops.shown[0] = 0;
+    run.scene.foot.walkers.place(0, 0, 0);
+    runFor(run, 2 * STEP_SECONDS);
+    run.scene.hearCopDown(0, run.now);
+    runFor(run, 2 * STEP_SECONDS);
+    const strikes = run.scene.takeCopStrikes();
+    expect(strikes.length, "one throw").toBe(1);
+    expect(strikes[0]!.x, "from where the host drew him (m)").toBeCloseTo(DOOR_X, 1);
+    expect(strikes[0]!.y, "where the thrown cop starts (m)").toBeCloseTo(STOOP.sill, 2);
+  });
+});
+
 describe("given a suspect the law holds on a rowhome's stoop", () => {
   /** A crime at the stoop's door with a cop on it: the cuffs go on at the first poll. */
   function cuffsOn(): Harness {

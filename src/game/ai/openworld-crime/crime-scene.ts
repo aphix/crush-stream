@@ -121,10 +121,10 @@ export class CrimeScene {
     liftHeard(this.law, crowdPoses, this.copPoses, this.stoops);
   }
 
-  /** The height the ground and the stoop under foot cop `cop` give his feet: where a throw of him starts. */
+  /** The height of foot cop `cop`'s feet where he is drawn, where a throw of him starts: `feetY` is a world height (the stoop's step), the ground's where it is higher, as the bodies read it. */
   private copGround(cop: number): number {
     const poses = this.copPoses;
-    return activeGround().heightAt(poses.x[cop]!, poses.z[cop]!) + poses.feetY[cop]!;
+    return Math.max(activeGround().heightAt(poses.x[cop]!, poses.z[cop]!), poses.feetY[cop]!);
   }
 
   /** The host's knock of foot cop `cop` at crowd second `seconds`, heard (a client) or its own echoed back: applied once, when this peer's clock reaches it. */
@@ -288,10 +288,10 @@ export class CrimeScene {
     }
   }
 
-  /** A guest's throw of the cop the host's knock named: from where he is drawn (the host's record, lifted by `liftHeard`: the host throws him from there too), else from where the law has him. */
+  /** A guest's throw of the cop the host's knock named: from where he is drawn (the host's record, lifted by `liftHeard`: the host throws him from there too). With the host's frames heard the host's last record stands in `copPoses` even after a frame without him (it hides him as it raises the knock, before this clock reaches it); else from where the law has him. */
   private throwFromNearest(cop: number, cars: readonly DeformableCar[]): void {
     const { walkers } = this.law;
-    const drawn = this.copPoses.shown[cop] === 1;
+    const drawn = this.heardPoses || this.copPoses.shown[cop] === 1;
     const x = drawn ? this.copPoses.x[cop]! : walkers.x[cop]!;
     const z = drawn ? this.copPoses.z[cop]! : walkers.z[cop]!;
     let nearest = -1;
