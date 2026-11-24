@@ -107,7 +107,7 @@ export const BOX_BLOCKING_SPEED = 2;
 /** A car this close (m) to the end of its route, and slower than `ARRIVED_SPEED` (m/s), has arrived. */
 export const ARRIVED_DISTANCE = 0.8;
 export const ARRIVED_SPEED = 0.5;
-/** Seconds a driving car may stand still before it is towed: a full red lasts at most 45 s. */
+/** Seconds a driving car may stand still before it is towed, unless a person holds it (then once no eye sees it and no player is near): a full red lasts at most 45 s. */
 export const STUCK_SECONDS = 90;
 
 /** No car appears within this far (m) of a player's car, seen or not: it would show up behind the camera. */

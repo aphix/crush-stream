@@ -1086,6 +1086,111 @@ describe("given a pool the engine built as the fleet's mix, a coupe and a monste
   });
 });
 
+/** A sight that is looking at everything when `watched` (a player is near every car), and at nothing otherwise. */
+class WatchedSight extends ProximitySight {
+  watched = true;
+  override near(x: number, z: number, radius: number): boolean {
+    return this.watched || super.near(x, z, radius);
+  }
+}
+
+describe("given a car of the traffic held still in its lane by a walker for longer than it is let stand", () => {
+  const AHEAD_M = 30;
+  const HELD_S = 100;
+  /** By this many seconds the car has braked to a stop short of the walker. */
+  const SETTLED_S = 20;
+
+  function held(watched: boolean): { field: FakeField; traffic: OpenWorldTraffic; clock: Clock; id: number; walkers: { count: number; x: Float32Array; z: Float32Array } } {
+    const field = quietField();
+    const sight = new WatchedSight(field.ports);
+    sight.watched = watched;
+    const traffic = new OpenWorldTraffic([], field.ports, sight, { movers: 3, kerb: 0, patrol: 0, ambulance: 0 }, null);
+    const car = traffic.spawnDrivenCar(3, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z))!;
+    const walkers = { count: 0, x: new Float32Array(1), z: new Float32Array(1) };
+    traffic.setWalkers(walkers);
+    const clock = new Clock();
+    runSeconds(field, traffic, clock, 6);
+    const body = field.cars[car.index]!;
+    walkers.x[0] = body.group.position.x + detSin(body.yaw) * AHEAD_M;
+    walkers.z[0] = body.group.position.z + detCos(body.yaw) * AHEAD_M;
+    walkers.count = 1;
+    return { field, traffic, clock, id: car.index, walkers };
+  }
+
+  it("when a player's eye is on it for 100 s, then the car is still there, and it drives on when he steps off", () => {
+    const { field, traffic, clock, id, walkers } = held(true);
+    const body = field.cars[id]!;
+    runSeconds(field, traffic, clock, SETTLED_S);
+    const at = { x: body.group.position.x, z: body.group.position.z };
+    runSeconds(field, traffic, clock, HELD_S - SETTLED_S);
+    expect(hypot2(body.group.position.x - at.x, body.group.position.z - at.z), "metres from where it was held: it stayed").toBeLessThan(1);
+    expect(body.speed, "still held").toBeLessThan(0.3);
+    walkers.count = 0;
+    for (let waited = 0; waited < CYCLE_SECONDS && body.speed < 2; waited++) runSeconds(field, traffic, clock, 1);
+    expect(body.speed, "under way again").toBeGreaterThan(2);
+  });
+
+  it("when no eye sees it and no player is near for 100 s, then the car is towed as before", () => {
+    const { field, traffic, clock, id } = held(false);
+    const body = field.cars[id]!;
+    runSeconds(field, traffic, clock, SETTLED_S);
+    const at = { x: body.group.position.x, z: body.group.position.z };
+    runSeconds(field, traffic, clock, HELD_S - SETTLED_S);
+    // Put away, the pool may stand it again at once as another trip's car: it is gone from where it was held either way.
+    expect(hypot2(body.group.position.x - at.x, body.group.position.z - at.z), "metres from where it was held").toBeGreaterThan(AHEAD_M);
+  });
+});
+
+describe("given cars of the traffic held still in view for longer than they are let stand, a player in view of them", () => {
+  const AHEAD_M = 30;
+  const HELD_S = 100;
+  const SETTLED_S = 25;
+  const GAP_S = 3;
+
+  function lane(): { field: FakeField; traffic: OpenWorldTraffic; clock: Clock; first: number; walkers: { count: number; x: Float32Array; z: Float32Array } } {
+    const field = quietField();
+    const sight = new WatchedSight(field.ports);
+    const traffic = new OpenWorldTraffic([], field.ports, sight, { movers: 4, kerb: 0, patrol: 0, ambulance: 0 }, null);
+    const walkers = { count: 0, x: new Float32Array(1), z: new Float32Array(1) };
+    traffic.setWalkers(walkers);
+    const clock = new Clock();
+    const first = traffic.spawnDrivenCar(3, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z))!;
+    runSeconds(field, traffic, clock, 6);
+    return { field, traffic, clock, first: first.index, walkers };
+  }
+
+  /** How far (m) car `id` moved over `seconds`, after `SETTLED_S` of braking. */
+  function movedWhile(run: { field: FakeField; traffic: OpenWorldTraffic; clock: Clock }, ids: number[], seconds: number): number[] {
+    const before = ids.map((id) => ({ x: run.field.cars[id]!.group.position.x, z: run.field.cars[id]!.group.position.z }));
+    runSeconds(run.field, run.traffic, run.clock, seconds);
+    return ids.map((id, at) => hypot2(run.field.cars[id]!.group.position.x - before[at]!.x, run.field.cars[id]!.group.position.z - before[at]!.z));
+  }
+
+  it("when a mover is held 100 s behind a car nobody drives, then it is towed as on the base: a jam that a person does not hold is not waited out in view", () => {
+    const run = lane();
+    const body = run.field.cars[run.first]!;
+    run.field.cars[0]!.stand(body.group.position.x + detSin(body.yaw) * AHEAD_M, body.group.position.z + detCos(body.yaw) * AHEAD_M, body.yaw);
+    runSeconds(run.field, run.traffic, run.clock, SETTLED_S);
+    expect(movedWhile(run, [run.first], 1)[0], "control: it stands behind the parked car").toBeLessThan(0.5);
+    const [moved] = movedWhile(run, [run.first], HELD_S);
+    expect(moved, "metres it moved while held: gone from where it stood").toBeGreaterThan(AHEAD_M / 2);
+  });
+
+  // mutation: sed -i 's/        this.person\[id\] = this.person\[other.id\]!;/        this.person[id] = 0;/' src/game/ai/openworld-traffic/traffic-driver.ts
+  it("when a mover is queued behind a mover a walker holds, then neither is towed in view in 100 s", () => {
+    const run = lane();
+    const lead = run.field.cars[run.first]!;
+    const second = run.traffic.spawnDrivenCar(4, run.traffic.nearestSpot(HOME.x, HOME.z), run.traffic.nearestSpot(WORK.x, WORK.z))!;
+    run.walkers.x[0] = lead.group.position.x + detSin(lead.yaw) * AHEAD_M;
+    run.walkers.z[0] = lead.group.position.z + detCos(lead.yaw) * AHEAD_M;
+    run.walkers.count = 1;
+    runSeconds(run.field, run.traffic, run.clock, SETTLED_S + 3 * GAP_S);
+    const moved = movedWhile(run, [run.first, second.index], HELD_S);
+    expect(moved[0], "the leader stayed").toBeLessThan(1);
+    expect(moved[1], "the car queued behind him stayed").toBeLessThan(1);
+  });
+});
+
 describe("given people on the streets and a car of the traffic on its trip", () => {
   const AHEAD_M = 30;
   const WAIT_S = 8;

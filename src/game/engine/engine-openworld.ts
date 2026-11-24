@@ -1188,6 +1188,7 @@ export class OpenWorldDirector {
     };
     this.traffic = new OpenWorldTraffic(map.places, host, this.sight, phone ? { movers: MOVER_CARS.phone, kerb: KERB_CARS.phone, patrol: PATROL_CARS.phone, ambulance: AMBULANCE_CARS.phone } : { movers: MOVER_CARS.desktop, kerb: KERB_CARS.desktop, patrol: PATROL_CARS.desktop, ambulance: AMBULANCE_CARS.desktop }, this.feed);
     this.traffic.setPeople(this.crowd!.poses);
+    this.traffic.setWalkers(this.crowd!.walkers);
     this.traffic.onAmbulanceLoaded((victim) => this.removeVictim(victim));
     host.setFreeDrivers(this.traffic);
   }

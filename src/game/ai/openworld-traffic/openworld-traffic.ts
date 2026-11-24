@@ -21,7 +21,7 @@ import { EVERYDAY_BODIES, FEED_SECONDS, TRAFFIC_SEED } from "./traffic-constants
 import { TrafficDriver } from "./traffic-driver.ts";
 import { lightPhase } from "./traffic-lights.ts";
 import { CARLESS, heldByHuman, RESIDENT_CAPACITY, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
-import type { CommuterFeed, PeopleField, TrafficSight } from "./traffic-sight.ts";
+import type { CommuterFeed, PeopleField, TrafficSight, WalkerField } from "./traffic-sight.ts";
 
 export type { DrivenCar } from "./mover-fleet.ts";
 
@@ -125,6 +125,11 @@ export class OpenWorldTraffic {
   /** The people on the streets (the crowd's poses): every car stops for one on its way, at a crossing or in the lane; null: none are known. */
   setPeople(people: PeopleField | null): void {
     this.driver.people = people;
+  }
+
+  /** The bodies on foot the crowd steps round (`CivilianCrowd.walkers`: the players, standing or lying, and the foot cops): every car stops for one in its lane as for a person; null: none are known. */
+  setWalkers(walkers: WalkerField | null): void {
+    this.driver.walkers = walkers;
   }
 
   /** The phase and stage junction `junction` shows at crowd time `seconds` (`lightPhase`). */

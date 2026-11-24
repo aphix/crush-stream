@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
@@ -11,6 +11,9 @@ const WALK_AWAY_M = 4;
 /** The most a held car creeps on its brakes while he is out (m). */
 const HELD_CREEP_M = 0.5;
 const FALL_WITHIN_S = 1.5;
+/** He lies this long (s) after the first throw, past the strike cooldown, before the second car comes; the second car's pass takes this long. */
+const LIES_S = 1;
+const SECOND_PASS_S = 1;
 /** Gas on the touch strip short of its Boost cap, held this long (s): he walks at least this far (m) and does not run. */
 const TOUCH_WALK_GAS = 0.95;
 const TOUCH_WALK_S = 2;
@@ -29,6 +32,8 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
 
   beforeAll(async () => {
     rig = await OnFootRig.boot();
+    // The fleet boots with a random scene seed: logged so a red run names it.
+    console.log("fleet scene seed", rig.engine["sceneSeed"]);
     rig.engine["looping"] = false;
     rig.run(FRAME);
   });
@@ -60,6 +65,28 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     const before = own.group.position.z;
     rig.hold("KeyW", 2);
     expect(own.group.position.z - before, `he drove off: ${(own.group.position.z - before).toFixed(1)} m`).toBeGreaterThan(3);
+  });
+
+  it("when a car runs him down and a car reaches him again while he lies, then he is thrown once and the second car does not throw him", () => {
+    const own = rig.cars()[0]!;
+    const start = own.group.position.clone();
+    rig.getOut();
+    rig.walkTo(new THREE.Vector3(start.x + 4, 0, start.z + WALK_AWAY_M), 1.5, 15);
+    const thrown = vi.spyOn(rig.engine["ragdolls"], "knockWalker");
+    try {
+      rig.runDownBy(rig.cars()[1]!, own);
+      for (let t = 0; t < FALL_WITHIN_S && rig.walker().state === "stand"; t += FRAME) rig.run(FRAME);
+      expect(rig.walker().state, "the car knocked him down").not.toBe("stand");
+      expect(thrown, "throws by the first car").toHaveBeenCalledTimes(1);
+      rig.run(LIES_S);
+      expect(rig.walker().state, "he still lies when the second car comes").not.toBe("stand");
+      // Car 2, not car 1: with car 1 sent twice the next row's walk to car 1's door was seen to stop short of it; the cause is not yet found.
+      rig.runDownBy(rig.cars()[2]!, own);
+      rig.run(SECOND_PASS_S);
+      expect(thrown, "throws after the second car reached him").toHaveBeenCalledTimes(1);
+    } finally {
+      thrown.mockRestore();
+    }
   });
 
   it("when he walks to another car's driver door and presses the control, then he is told it is not his and stays out, and his own car's door lets him in", () => {
