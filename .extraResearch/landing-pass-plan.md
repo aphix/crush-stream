@@ -60,7 +60,9 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 
 ## 3. State
 
-- `main` = Windows mount = GitHub = 5989b47a0 (NET 72, REPLAY 249).
+- **Landed 2026-11-25 (about 00:30Z):** `main` = `play/union` (NET 73, REPLAY 254), fast-forwarded from 5989b47a0 after the
+  gate below, and pushed to the Windows mount (`scripts/wsl-push.sh`); the owner pushes to GitHub. What follows in this
+  section is the record of how it got there; sections 4 to 6 hold what is still open.
 - `play/union` (`~/worktrees/land`, NET 73, REPLAY 254). Merged, each reviewed (its later commits too), static checks clean
   and its own test files green on the union: PerfPath, SmallCuts, CopStoops, GuestEdge, BarRoom, ContactRows, DeformSeat,
   ShutPlaces, CarsSeePlayers, Sweep, HubRules, KerbClaims; their worktrees are removed. Under them: ae0007683 (a derby driver
@@ -95,11 +97,22 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
     - Long shards 2, 4, 5: green. 3 and 6: the three accepted race reds (`race-start` rally and razor-shelf, `race-contact`
       breaker-yard), nothing else.
     - Long shard 1: `engine/reel-view-city.ai-long-run.ts`, two rows, one moment: in the staged city clip "Wall hit,
-      63 km/h" the crash cam frames the first impact with a wall or building on the line to it. Green on `main` and up to
-      ffb3e7a27 (no retry in the config: each a single run); red from the at-rest gates (335a1d6fc) on. Lane ReelView is
-      measuring the eye, the impact point and what stands on the line; whether the camera or the simulation is at fault is
-      not known yet. The landing waits for it.
-    - The GL file (`scripts/detail-spec-aa.test.mjs`, `DISPLAY=:0`): green at 9641f9303.
+      63 km/h" the crash cam framed the first impact with a race wall on the line to it. Green on `main` and up to
+      ffb3e7a27 (no retry in the config: each a single run); red from the at-rest gates (335a1d6fc) on. Lane ReelView's
+      measurement: the clip is new (that seeded race now goes another way); the camera tested its sight to the aim, lifted
+      over the road (0.55 m), while the car sat 0.11 m under the road, and the eye it chose cleared the wall's lip by 5 cm for
+      the aim and not for the car. Fixed in the camera (a8f7ad5f1, reviewed: merge, merged): an eye sees a hit only if its
+      line is also clear to the hit's own point under the aim (`aimSink`, `seesHit`, in the pick and in a held cut's later
+      impacts). The three reel-view files and `engine-cine-courses.ai-long-run.ts` green on the landing head.
+      What the fix leaves, introduced or exposed by this landing, for the next lane: a car-to-car hit's aim is the contact's
+      height (0.3 to 0.7 m over the car's origin, which the row judges) and nothing tests the lower point: the same red can
+      wait in another seed; the shot camera's hit check (`engine-highlights.ts` `frameShot`) has no such second point, and
+      the stricter pick falls back to it more often; no row pins `aimSink` and its wiring; the pick's budget does not count
+      the extra `sightLine` and its time was not measured.
+    - The GL file (`scripts/detail-spec-aa.test.mjs`, `DISPLAY=:0`): green at 9641f9303. `build:node`: built on the landing
+      head. Secret scan: clean.
+    - After the gate's tree was cut the only source change is the camera fix (four files under `present/` and `engine/`);
+      their own test files and the four long camera files were run on the landing head.
 - **Tried and taken out again: ed1e8b655** (a solid's top scrapes the body it stops: friction on `standOnTop`). Main's hand
   port was reviewed "merge" and merged, and then turned `scenes/derby-containment-wedge.test.ts` red: the truck driven at the
   north ramp's -x side wedge, 30° off square, ended at 38.03 m, outside the arena wall's inner face at 38 m (it comes down on
