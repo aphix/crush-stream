@@ -75,29 +75,33 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
   revert above; the GL rows green; `engine/prop-height.test.ts` had a row red since the ContactRows merge (the staged
   wreck's settle now ends facing the other way; `place` squares it to the prism's yaw: fixed, 3559cfaf3). `vehicle`,
   `engine` and the rest follow the same way until the worker takes the gate.
-- **Red on the union, owed before the gate** (lane HubRules has both):
-  - `vehicle/barrier.test.ts` "when a monster hits the slab at 48 km/h, then none of its hubs ends inside the slab" (green on
-    `main`; red since the hub-creep picks; hubFL ends at (0.06, 0.14, -1.19)). DeformSeat's probe: `holdHubVelocity`
-    (`deform-solve.ts`) off alone puts the hub outside; the planted hub rides 13 cm into the slab while the frame still
-    pitches at 2 rad/s; gating the seat ride and the frame tilt on the frame's spin made the row green but knife-edge.
+- **The two reds the physics merges left, and what became of them:**
+  - `vehicle/barrier.test.ts` "when a monster hits the slab at 48 km/h, then none of its hubs ends inside the slab": fixed by
+    lane HubRules (335a1d6fc, reviewed: merge, merged). The frame tilt, the planted hubs' seat ride and the hub hold were
+    written for a wreck settling on its wheels and acted on a truck in flight (pitching at 1.8 rad/s, its tail 2.6 m up):
+    the tilt and the ride now need the body's spin under `REST_SPIN` (g/60), the hold every attached hub within
+    `HUB_GROUND_RADII` (3) tyre radii of its floor. The monster's hub states at 38 to 60 km/h equal `main`'s. The creep rows
+    (`compactor.test.ts`: red on `main` at 119 mm against 80) stay green with the gates, so the rules still act where they
+    were written for. Not re-read on the final code: the `HUB_GROUND_RADII` margin (1.5 and 6 held on the lane's earlier
+    per-hub form). The review's "one definition of at rest (the plant itself)" is not done.
   - `scenes/stack-column.test.ts` "when the Police column settles, then each roof's crush is the same within its bar (9 mm)"
-    reads 10.97 mm since DeformSeat joined ContactRows (green on each branch alone).
-  - If the creep rows, the monster row and the column row cannot all hold, the lane reports the smallest set of hub commits
-    to take out and Main decides.
-  - After it: the crash digests (`whole-digest.test.ts` four rows, `car-smooth.test.ts` seven) are re-derived ONCE with the
-    reason per change (hub creep, the seven contact rules, the tilt and the hub ride, HubRules' fix), and
-    REPLAY 254 for HubRules' fix.
+    (10.97 mm): caused by ContactRows' belly-ridge commit 8c29fc177 (HubRules' bisect), which Main took out (ffb3e7a27);
+    `vehicle/belly-ridge.test.ts` stays as two todo rows (the mid rows stand 11 mm into a roof; a second cause at -0.6 m).
+  - Owed: the crash digests (`whole-digest.test.ts` four rows, `car-smooth.test.ts` seven) re-derived ONCE with the reason
+    per change (hub creep, the six contact rules, the tilt and the hub ride, the at-rest gates), and REPLAY 254 for the
+    at-rest gates.
 - Reviews are kept in `~/crash-wt/landing/reviews/<Lane>-review.json`. A lane's commits written after its review get a reviewer
   too, before the gate.
-- Speed measurements owed (the worker, a quiet hour, humm-tauri's yes still awaited): PerfPath, CageWasm, LooseBatch (a
-  browser derby with many torn parts).
+- Speed measurements owed (the worker, a quiet hour): PerfPath, CageWasm, LooseBatch (a browser derby with many torn parts).
+- **The worker.** `~/crash-wt/.worker-off` is set and stays set until humm-tauri answers yes (asked six times since 18:00Z;
+  their mails report their own one cargo slot there and do not answer). Without it the gate runs here, one capped process at
+  a time, folder by folder (hours). The owner can give the go in their place.
 - The box: our session is the `omp` process whose working directory is this repository (`readlink /proc/<pid>/cwd`); it was
   5.1 GB at 19:00Z. (Main read humm-tauri's process as ours for most of the day and reported 7 to 8 GB: wrong.)
 
 |Lane|Goal|State|
 |---|---|---|
-|HubRules|the two reds above, at the rule that is wrong in principle, with margin shown; or the conflict report|working|
-|KerbClaims|a resident's clip drawn where her car stands (it was never drawn while her car stood at a fallback space); a patrol car's start space (measure: leased onto an occupied space, or a cruiser at urgent pace hitting traffic)|working|
+|KerbClaims|a resident's clip drawn where her car stands (16 of 100 clips were refused while her car stood a space away; 1 after); a patrol car never started on a space a car stands in (3 of 45 leases did)|reported (f4e4eec5d, 9c1bdc855); in review. The lane's own doubt: the clip can now appear tens of metres from the door she walked to|
 |LooseBatch|torn car parts in one draw batch, only where the browser has `WEBGL_multi_draw`|reviewed twice, ready (c930818e5); NOT merged: waits for the browser measurement, dropped if no gain|
 |CageWasm|the cage raster and plan field in the Rust kernel, bit-equal to the JS|reviewed, bit-equal by construction (69a0f7d3d); NOT merged: waits for the speed measurement (`bench.mjs strip-crash`, base against head), dropped if not faster. The skin stack (section 5) waits on it|
 
