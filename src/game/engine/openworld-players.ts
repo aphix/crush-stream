@@ -1,7 +1,7 @@
 import { createCrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { CrowdWalkers } from "../ai/civilians/crowd-walkers.ts";
 import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
-import { addBodyRecord, BODY_FLAG, BODY_KIND, BODY_POSTURE, PLAYER_FLAG, type BodyFrame, type BodyMotion, type FootRecord } from "../net/body-codec.ts";
+import { addBodyRecord, BODY_FLAG, BODY_KIND, BODY_POSTURE, packArms, PLAYER_FLAG, SHOT_COUNT_MASK, shotsOfArms, weaponOfArms, type BodyFrame, type BodyMotion, type FootRecord } from "../net/body-codec.ts";
 import { BODIES_SILENT_S, HALF_SEQUENCE } from "../net/net-constants.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { SightPlayer } from "../present/openworld-sight.ts";
@@ -70,6 +70,19 @@ export class OpenWorldPlayers {
   private readonly lookHash = new Int32Array(MAX_CARS);
   /** The calls left in which this machine's player, back in a car, tells the host so. */
   private leftCalls = 0;
+  /** This machine's own player: the weapon slot in his hand, the shots he has fired (a counter that wraps) and the far end of his latest shot (m). The arms byte of his record, and of his `MSG.foot`, is these. */
+  private ownWeapon = 0;
+  private ownShots = 0;
+  private readonly ownFar = new Float32Array(3);
+  /** Host: per guest, the arms byte and the far end of his latest shot (m) as his machine last sent them. */
+  private readonly footArms = new Uint8Array(MAX_CARS);
+  private readonly footFar = new Float32Array(3 * MAX_CARS);
+  /** Every machine: per player on foot in the frame last read (`readArms`) but this machine's own, whether he is in it, the weapon slot in his hand, his shot counter, the far end of his latest shot (m) and where he stands at this machine's crowd second. */
+  readonly armsSeen = new Uint8Array(MAX_CARS);
+  readonly armsWeapon = new Uint8Array(MAX_CARS);
+  readonly armsShots = new Uint8Array(MAX_CARS);
+  readonly armsFar = new Float32Array(3 * MAX_CARS);
+  readonly armsPlace: BodyMotion[] = Array.from({ length: MAX_CARS }, () => ({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 }));
   /** One sight-field player a car: where its walker is drawn. */
   private readonly sights: { group: { position: { x: number; z: number } } }[] = Array.from({ length: MAX_CARS }, () => ({ group: { position: { x: 0, z: 0 } } }));
   private readonly capacity: number;
@@ -103,6 +116,10 @@ export class OpenWorldPlayers {
     m.vz = foot.vz;
     m.heading = foot.heading;
     m.posture = foot.posture;
+    this.footArms[car] = foot.arms;
+    this.footFar[3 * car] = foot.farX;
+    this.footFar[3 * car + 1] = foot.farY;
+    this.footFar[3 * car + 2] = foot.farZ;
     this.crowdTime[car] = foot.crowdTime;
     this.heardAt[car] = now;
     if (this.present[car] === 1) return;
@@ -189,12 +206,12 @@ export class OpenWorldPlayers {
 
   /** Host: the players on foot written into `out`: first the host's own walker (`own`, null while he is in a car), then each other present player: from the body of his a cable holds (roped), else his record moved to the host's clock, struck while a strike's hold runs, staggered (the blow's bearing in the record's activity clock, his own velocity kept) while a lighter blow's does. */
   writeRecords(out: BodyFrame, ownCar: number, own: BodyMotion | null, crowdSeconds: number, bodies: OpenWorldBodies | null): void {
-    if (own !== null) this.copyRecord(out, ownCar, own, own.posture);
+    if (own !== null) this.copyRecord(out, ownCar, own, own.posture, ownCar);
     for (let car = 0; car < MAX_CARS; car++) {
       if (this.present[car] === 0 || car === ownCar) continue;
       const person = personOf(BODY_KIND.player, car, this.capacity);
       if (bodies !== null && bodies.ropedPerson(person) && bodies.motionOf(person, _target)) {
-        this.copyRecord(out, car, _target, _target.posture | BODY_FLAG.roped);
+        this.copyRecord(out, car, _target, _target.posture | BODY_FLAG.roped, ownCar);
         continue;
       }
       this.movedTo(car, crowdSeconds);
@@ -208,15 +225,15 @@ export class OpenWorldPlayers {
         _place.vy = this.launch[3 * car + 1]!;
         _place.vz = this.launch[3 * car + 2]!;
       }
-      const at = this.copyRecord(out, car, _place, state);
+      const at = this.copyRecord(out, car, _place, state, ownCar);
       if (at < 0 || (state & BODY_FLAG.struck) !== 0 || crowdSeconds >= this.staggerUntil[car]!) continue;
       out.state[at] = state | PLAYER_FLAG.staggered;
       out.activityClock[at] = (this.staggerBearing[car]! / (2 * Math.PI)) * BEARING_CLOCK_S;
     }
   }
 
-  /** A player record of car `car` with `state`, its place, velocity and facing from `m`, added to `out`; its index, -1 when the frame is full. */
-  private copyRecord(out: BodyFrame, car: number, m: BodyMotion, state: number): number {
+  /** A player record of car `car` with `state`, its place, velocity and facing from `m`, and his arms (this machine's own for `ownCar`, else the guest's as his machine sent them), added to `out`; its index, -1 when the frame is full. */
+  private copyRecord(out: BodyFrame, car: number, m: BodyMotion, state: number, ownCar: number): number {
     const at = addBodyRecord(out, BODY_KIND.player, car, state);
     if (at < 0) return at;
     out.pos[3 * at] = m.x;
@@ -226,6 +243,9 @@ export class OpenWorldPlayers {
     out.vel[3 * at + 1] = m.vy;
     out.vel[3 * at + 2] = m.vz;
     out.heading[at] = m.heading;
+    const own = car === ownCar;
+    out.arms[at] = own ? packArms(this.ownWeapon, this.ownShots) : this.footArms[car]!;
+    for (let axis = 0; axis < 3; axis++) out.armsFar[3 * at + axis] = own ? this.ownFar[axis]! : this.footFar[3 * car + axis]!;
     return at;
   }
 
@@ -267,13 +287,59 @@ export class OpenWorldPlayers {
     }
   }
 
-  /** The walker to send the host: true while he is on foot (`onFoot`; `out` already holds him), and `LEFT_CALLS` more calls with `out.left` once he is back in a car. */
+  /** This machine's player holds weapon slot `slot` (`WEAPON_ORDER` of the arms) from now on. */
+  setOwnWeapon(slot: number): void {
+    this.ownWeapon = slot;
+  }
+
+  /** This machine's player fired: his shot counter steps (it wraps) and the far end of his tracer is (x, y, z). */
+  noteShot(x: number, y: number, z: number): void {
+    this.ownShots = (this.ownShots + 1) & SHOT_COUNT_MASK;
+    this.ownFar[0] = x;
+    this.ownFar[1] = y;
+    this.ownFar[2] = z;
+  }
+
+  /** Every machine, once a frame: each other player on foot in `frame` (null: none) into the arms table (`armsSeen` and its columns), moved to crowd second `crowdSeconds`; the rest are marked unseen. */
+  readArms(frame: BodyFrame | null, ownCar: number, crowdSeconds: number): void {
+    this.armsSeen.fill(0);
+    if (frame === null) return;
+    for (let at = 0; at < frame.count; at++) {
+      const car = frame.id[at]!;
+      if (frame.kind[at] !== BODY_KIND.player || car === ownCar || car >= MAX_CARS) continue;
+      recordTarget(frame, at, crowdSeconds - frame.crowdTime, this.armsPlace[car]!);
+      this.armsSeen[car] = 1;
+      this.armsWeapon[car] = weaponOfArms(frame.arms[at]!);
+      this.armsShots[car] = shotsOfArms(frame.arms[at]!);
+      for (let axis = 0; axis < 3; axis++) this.armsFar[3 * car + axis] = frame.armsFar[3 * at + axis]!;
+    }
+  }
+
+  /** Guest: the first hook end player `car` holds, as `frame` has it, into `out`; false when his record says he holds none. */
+  holdAt(frame: BodyFrame | null, car: number, out: { x: number; y: number; z: number }): boolean {
+    if (frame === null) return false;
+    for (let at = 0; at < frame.count; at++) {
+      if (frame.kind[at] !== BODY_KIND.player || frame.id[at] !== car) continue;
+      if ((frame.state[at]! & PLAYER_FLAG.holds) === 0) return false;
+      out.x = frame.holdAt[3 * at]!;
+      out.y = frame.holdAt[3 * at + 1]!;
+      out.z = frame.holdAt[3 * at + 2]!;
+      return true;
+    }
+    return false;
+  }
+
+  /** The walker to send the host: true while he is on foot (`onFoot`; `out` already holds him), and `LEFT_CALLS` more calls with `out.left` once he is back in a car. His arms ride it. */
   footOut(out: FootRecord, onFoot: boolean, crowdSeconds: number): boolean {
     if (onFoot) this.leftCalls = LEFT_CALLS;
     else if (this.leftCalls > 0) this.leftCalls--;
     else return false;
     out.left = !onFoot;
     out.crowdTime = crowdSeconds;
+    out.arms = packArms(this.ownWeapon, this.ownShots);
+    out.farX = this.ownFar[0]!;
+    out.farY = this.ownFar[1]!;
+    out.farZ = this.ownFar[2]!;
     return true;
   }
 

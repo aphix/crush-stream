@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED } from "../ai/civilians/civilian-activity.ts";
 import { Reader, Writer } from "./codec.ts";
-import { addBodyRecord, addHidden, BODY_FLAG, BODY_FRAME_MAX, BODY_KIND, BODY_POSTURE, CABLE_END, clearBodyFrame, copyBodyFrame, HIDDEN_MAX, makeBodyFrame, makeFootRecord, PLAYER_FLAG, POSTURE_MASK, readBodyFrame, readFoot, writeBodyFrame, writeFoot, type BodyFrame, type FootRecord } from "./body-codec.ts";
+import { addBodyRecord, addHidden, BODY_FLAG, BODY_FRAME_MAX, BODY_KIND, BODY_POSTURE, CABLE_END, clearBodyFrame, copyBodyFrame, HIDDEN_MAX, makeBodyFrame, makeFootRecord, packArms, PLAYER_FLAG, POSTURE_MASK, readBodyFrame, readFoot, SHOT_COUNT_MASK, shotsOfArms, weaponOfArms, WEAPON_SLOTS, writeBodyFrame, writeFoot, type BodyFrame, type FootRecord } from "./body-codec.ts";
+import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 
 const CIVILIAN = 17;
 const PLAYER_CAR = 3;
@@ -20,11 +21,13 @@ const CROWD_TIME_AT = 3;
 const RECORD_COUNT_AT = 11;
 const FIRST_RECORD_AT = 12;
 const PLAYER_RECORD_AT = 32;
-const MEDIC_RECORD_AT = 52;
-const CABLE_COUNT_AT = 72;
-const CABLE_FIRST_END_AT = 73;
-const HIDDEN_COUNT_AT = 95;
-const FRAME_BYTES = 98;
+const MEDIC_RECORD_AT = 59;
+const CABLE_COUNT_AT = 79;
+const CABLE_FIRST_END_AT = 80;
+const HIDDEN_COUNT_AT = 102;
+const FRAME_BYTES = 105;
+/** Where a player record's arms byte is, in the sample's message. */
+const PLAYER_ARMS_AT = PLAYER_RECORD_AT + 20;
 /** The actor who fired the sample frame's cable. */
 const CABLE_OWNER = 3;
 const STATE_AT = 3;
@@ -44,6 +47,8 @@ function sampleFrame(): BodyFrame {
   place(frame, civilian, 12.34, 0.5, -56.78, 1.2, 0, -0.4, 1);
   const player = addBodyRecord(frame, BODY_KIND.player, PLAYER_CAR, BODY_POSTURE.down | BODY_FLAG.struck);
   place(frame, player, -200.5, 1.25, 88.88, 6, 2, -3, 4);
+  frame.arms[player] = packArms(2, 17);
+  frame.armsFar.set([-190.5, 1.5, 70.25], 3 * player);
   const medic = addBodyRecord(frame, BODY_KIND.medic, MEDIC, BODY_FLAG.pose);
   place(frame, medic, 30, 0, 31.5, 0, 0, 0, 5.9);
   frame.activity[medic] = ACTIVITY.kneel;
@@ -79,7 +84,7 @@ describe("given a frame of a standing pinned civilian, a struck player lying, a 
   it("when it is written and read back and copied, then every person's kind, id, posture, flags and activity read back exactly, each place within 1 cm, each velocity within 1 cm/s, each facing within 1.4 degrees, the cable's ends, its length within 1 cm and its strain within 1/255, and the hidden civilian's index exactly", () => {
     const original = sampleFrame();
     const bytes = sent(original);
-    expect(bytes.length, "message length: 12 + 20 x 3 + 1 + 22 x 1 + 1 + 2 x 1").toBe(FRAME_BYTES);
+    expect(bytes.length, "message length: 12 + 20 x 3 + 7 (the player's arms) + 1 + 22 x 1 + 1 + 2 x 1").toBe(FRAME_BYTES);
     const read = makeBodyFrame();
     expect(readBodyFrame(bytes, new Reader(), read), "the message is taken").toBe(true);
     const copy = makeBodyFrame();
@@ -121,6 +126,28 @@ describe("given a frame of a standing pinned civilian, a struck player lying, a 
     const read = makeBodyFrame();
     expect(readBodyFrame(sent(frame), new Reader(), read), "the message is taken").toBe(true);
     expect(read.state[0], "his state").toBe(state);
+  });
+
+  it("when a player's record carries his arms and a held first end, then it is 7 bytes longer than a civilian's and 13 with the held end, and each reads back: the arms byte exactly, the far end of his shot and the held end within 1 cm; a player not holding one costs 7", () => {
+    const frame = makeBodyFrame();
+    const holder = addBodyRecord(frame, BODY_KIND.player, PLAYER_CAR, BODY_POSTURE.stand | PLAYER_FLAG.holds);
+    frame.arms[holder] = packArms(4, 9);
+    frame.armsFar.set([12.34, 1.5, -56.78], 3 * holder);
+    frame.holdAt.set([-3.21, 0.8, 99.99], 3 * holder);
+    const bare = addBodyRecord(frame, BODY_KIND.player, PLAYER_CAR + 1, BODY_POSTURE.stand);
+    frame.arms[bare] = packArms(1, 31);
+    const bytes = sent(frame);
+    expect(bytes.length, "12 + (20 + 7 + 6) + (20 + 7) + 1 + 1").toBe(12 + 33 + 27 + 2);
+    const read = makeBodyFrame();
+    expect(readBodyFrame(bytes, new Reader(), read), "the message is taken").toBe(true);
+    expect([weaponOfArms(read.arms[holder]!), shotsOfArms(read.arms[holder]!)], "holder's weapon and shots").toEqual([4, 9]);
+    expect([weaponOfArms(read.arms[bare]!), shotsOfArms(read.arms[bare]!)], "the other's weapon and shots").toEqual([1, 31]);
+    for (let axis = 0; axis < 3; axis++) {
+      expect(Math.abs(read.armsFar[3 * holder + axis]! - frame.armsFar[3 * holder + axis]!), `far end ${axis} (m)`).toBeLessThanOrEqual(CENTIMETRE);
+      expect(Math.abs(read.holdAt[3 * holder + axis]! - frame.holdAt[3 * holder + axis]!), `held end ${axis} (m)`).toBeLessThanOrEqual(CENTIMETRE);
+      expect(read.holdAt[3 * bare + axis], `no held end ${axis}`).toBe(0);
+    }
+    expect(read.id[bare], "the record after a 33-byte one is read from the right place").toBe(PLAYER_CAR + 1);
   });
 
   it("when a place 400 m out is written and read, then it reads 327.67 m: held at the edge, not wrapped", () => {
@@ -171,6 +198,8 @@ describe("given a bodies message a peer tampered with", () => {
     { it: "a hidden count of 25", data: withByte(HIDDEN_COUNT_AT, HIDDEN_MAX + 1) },
     { it: "a civilian struck", data: withByte(FIRST_RECORD_AT + STATE_AT, BODY_FLAG.struck) },
     { it: "a player a pose record", data: withByte(PLAYER_RECORD_AT + STATE_AT, BODY_FLAG.pose) },
+    { it: "a player's weapon slot of 5", data: withByte(PLAYER_ARMS_AT, WEAPON_SLOTS) },
+    { it: "a player that holds a first end with no point after his arms", data: withByte(PLAYER_RECORD_AT + STATE_AT, PLAYER_FLAG.holds | BODY_FLAG.struck | BODY_POSTURE.down) },
     { it: "a pose record roped", data: withByte(FIRST_RECORD_AT + STATE_AT, BODY_FLAG.pose | BODY_FLAG.roped) },
     { it: "a thrown record standing", data: withByte(FIRST_RECORD_AT + STATE_AT, BODY_FLAG.thrown | BODY_POSTURE.stand) },
     { it: "a posture of 3", data: withByte(MEDIC_RECORD_AT + STATE_AT, 3) },
@@ -193,7 +222,8 @@ describe("given a bodies message a peer tampered with", () => {
 /** The foot message's layout the tampered rows poke at: the state byte's and the crowd time's offsets. */
 const FOOT_STATE_AT = 11;
 const FOOT_CROWD_TIME_AT = 3;
-const FOOT_LENGTH = 25;
+const FOOT_LENGTH = 32;
+const FOOT_ARMS_AT = 25;
 
 function footSample(): FootRecord {
   const foot = makeFootRecord();
@@ -233,6 +263,27 @@ describe("given a foot message", () => {
     const tampered = [data.subarray(0, FOOT_LENGTH - 1), withFootByte(FOOT_STATE_AT, 3), withFootByte(FOOT_STATE_AT, BODY_POSTURE.stand | BODY_FLAG.roped), footWithNanTime()];
     for (const bad of tampered) expect(readFoot(bad, new Reader(), makeFootRecord()), "a tampered foot message").toBe(false);
   });
+
+  it("when his arms byte and the far end of his latest shot are written and read back, then the weapon slot and shot count read back exactly and the far end within 1 cm, and the shot counter wraps", () => {
+    const foot = footSample();
+    foot.arms = packArms(3, SHOT_COUNT_MASK);
+    foot.farX = -44.44;
+    foot.farY = 1.25;
+    foot.farZ = 120.5;
+    const writer = new Writer(64);
+    writeFoot(writer, foot);
+    const into = makeFootRecord();
+    expect(readFoot(writer.done().slice(), new Reader(), into), "the message is taken").toBe(true);
+    expect(weaponOfArms(into.arms), "weapon slot").toBe(3);
+    expect(shotsOfArms(into.arms), "shot count").toBe(SHOT_COUNT_MASK);
+    for (const axis of ["farX", "farY", "farZ"] as const) expect(Math.abs(into[axis] - foot[axis]), `${axis} (m)`).toBeLessThanOrEqual(CENTIMETRE);
+    expect(shotsOfArms(packArms(3, SHOT_COUNT_MASK + 1)), "one shot past the counter's range").toBe(0);
+  });
+
+  it("when a foot message names weapon slot 5 (past the arms' list), then it is refused", () => {
+    expect(readFoot(withFootByte(FOOT_ARMS_AT, WEAPON_SLOTS), new Reader(), makeFootRecord()), "a weapon slot of 5").toBe(false);
+    expect(readFoot(withFootByte(FOOT_ARMS_AT, WEAPON_SLOTS - 1), new Reader(), makeFootRecord()), "the last weapon slot").toBe(true);
+  });
 });
 
 function withFootByte(at: number, value: number): Uint8Array {
@@ -246,3 +297,83 @@ function footWithNanTime(): Uint8Array {
   new DataView(data.buffer).setFloat64(FOOT_CROWD_TIME_AT, Number.NaN, true);
   return data;
 }
+
+describe("given the people frame and the foot message every machine writes each net frame", () => {
+  /** Messages a loop writes, the bound (bytes) for a loop, and the loops run before the read (cold code boxes every double). The clocks are zero here: handing a message's f64 clock across `Writer.f64` boxes one number, as before the arms. A read makes one `DataView` a message (`Reader.reset`), also as before: reads are not measured. */
+  const MESSAGES = 600;
+  const BOUND_BYTES = 8192;
+  const WARM_LOOPS = 400;
+  /** The sample frame's bytes, the holder's record added to it (20 + 7 + 6) and the foot message's. */
+  const HOLDER_RECORD_BYTES = 33;
+
+  it("when a frame with armed players, one holding a first end, and a foot message are written 600 times, then all of it allocates under 8 KB", () => {
+    const frame = sampleFrame();
+    const holder = addBodyRecord(frame, BODY_KIND.player, PLAYER_CAR + 1, BODY_POSTURE.stand | PLAYER_FLAG.holds);
+    frame.arms[holder] = packArms(4, 9);
+    const foot = footSample();
+    frame.crowdTime = 0;
+    foot.crowdTime = 0;
+    const writer = new Writer(2048);
+    const writeFrames = (): void => {
+      for (let message = 0; message < MESSAGES; message++) {
+        writer.off = 0;
+        writeBodyFrame(writer, frame);
+      }
+    };
+    const writeFeet = (): void => {
+      for (let message = 0; message < MESSAGES; message++) {
+        writer.off = 0;
+        writeFoot(writer, foot);
+      }
+    };
+    for (let warm = 0; warm < WARM_LOOPS; warm++) {
+      writeFrames();
+      writeFeet();
+    }
+    const frameBytes = untilQuiet(() => allocatedBytes(writeFrames), BOUND_BYTES);
+    writer.off = 0;
+    writeBodyFrame(writer, frame);
+    expect(writer.off, "control: the frame was written").toBe(FRAME_BYTES + HOLDER_RECORD_BYTES);
+    const footBytes = untilQuiet(() => allocatedBytes(writeFeet), BOUND_BYTES);
+    expect(frameBytes, "bytes allocated by 600 frames").toBeLessThanOrEqual(BOUND_BYTES);
+    expect(footBytes, "bytes allocated by 600 foot messages").toBeLessThanOrEqual(BOUND_BYTES);
+  });
+});
+
+describe("given the people frame and the foot message every machine reads each net frame", () => {
+  /** Messages of each kind a loop reads, the loops run before a read (cold code boxes every double), and the slack (bytes) over the `DataView` each read makes in `Reader.reset`. */
+  const MESSAGES = 600;
+  const WARM_LOOPS = 400;
+  const SLACK_BYTES = 4096;
+
+  it("when 600 people frames and 600 foot messages are read, then they allocate no more than the DataView each read makes, as measured, plus 4 KB", () => {
+    const frame = sampleFrame();
+    const holder = addBodyRecord(frame, BODY_KIND.player, PLAYER_CAR + 1, BODY_POSTURE.stand | PLAYER_FLAG.holds);
+    frame.arms[holder] = packArms(4, 9);
+    const frameBytes = sent(frame);
+    const footBytes = sentFoot();
+    const reader = new Reader();
+    const into = makeBodyFrame();
+    const intoFoot = makeFootRecord();
+    const resets = (): void => {
+      for (let message = 0; message < MESSAGES; message++) {
+        reader.reset(frameBytes);
+        reader.reset(footBytes);
+      }
+    };
+    const reads = (): void => {
+      for (let message = 0; message < MESSAGES; message++) {
+        readBodyFrame(frameBytes, reader, into);
+        readFoot(footBytes, reader, intoFoot);
+      }
+    };
+    for (let warm = 0; warm < WARM_LOOPS; warm++) {
+      resets();
+      reads();
+    }
+    const bound = allocatedBytes(resets) + SLACK_BYTES;
+    const read = untilQuiet(() => allocatedBytes(reads), bound);
+    expect(into.arms[1], "control: the frame was read").toBe(packArms(2, 17));
+    expect(read, `bytes allocated by ${2 * MESSAGES} reads (the resets alone, plus 4 KB, are ${bound})`).toBeLessThanOrEqual(bound);
+  });
+});

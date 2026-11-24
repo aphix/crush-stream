@@ -23,6 +23,8 @@ export class ShotFx {
   private readonly tracerAge = new Float32Array(TRACERS).fill(Infinity);
   private readonly flashAge: Float32Array;
   private tracerNext = 0;
+  /** The seconds `age` ages the flashes and tracers by. */
+  dt = 0;
   /** Whether a flash or a tracer is still showing: only then are their buffers aged and re-sent. */
   private showing = false;
 
@@ -48,19 +50,40 @@ export class ShotFx {
 
   /** Slot `slot` fires at (x, y, z): its flash lights and a tracer runs from its muzzle. */
   fire(slot: number, x: number, y: number, z: number): void {
+    const k = this.begin(slot);
+    this.tracerAt[k * 6 + 3] = x;
+    this.tracerAt[k * 6 + 4] = y;
+    this.tracerAt[k * 6 + 5] = z;
+  }
+
+  /** `fire` at the point `row[at..at + 3)`: no number crosses the call. */
+  fireFrom(slot: number, row: Float32Array, at: number): void {
+    const k = this.begin(slot);
+    this.tracerAt[k * 6 + 3] = row[at]!;
+    this.tracerAt[k * 6 + 4] = row[at + 1]!;
+    this.tracerAt[k * 6 + 5] = row[at + 2]!;
+  }
+
+  /** Lights slot `slot`'s flash and starts a tracer at its muzzle; the tracer's index. */
+  private begin(slot: number): number {
     this.showing = true;
     this.flashAge[slot] = 0;
     const k = this.tracerNext;
     this.tracerNext = (k + 1) % TRACERS;
     this.tracerAge[k] = 0;
     for (let i = 0; i < 3; i++) this.tracerAt[k * 6 + i] = this.muzzles[slot * 3 + i]!;
-    this.tracerAt[k * 6 + 3] = x;
-    this.tracerAt[k * 6 + 4] = y;
-    this.tracerAt[k * 6 + 5] = z;
+    return k;
   }
 
   /** Ages the flashes and tracers by `dt` s. */
   update(dt: number): void {
+    this.dt = dt;
+    this.age();
+  }
+
+  /** `update` by the seconds in `dt` (a double handed across a call is boxed; a field is read in place). */
+  age(): void {
+    const dt = this.dt;
     if (!this.showing) return;
     let flashing = false;
     for (let s = 0; s < this.flashAge.length; s++) {

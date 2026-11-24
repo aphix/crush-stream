@@ -41,6 +41,8 @@ import { tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { HandGuns } from "./engine-hand-gun.ts";
+import { RemoteGuns } from "./engine-remote-guns.ts";
+import { slotOfWeapon } from "./engine-onfoot-arms.ts";
 import type { CarPick, DollPick } from "./engine-openworld.ts";
 import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -272,6 +274,15 @@ export class CrashEngine extends EngineGarage {
   private readonly handGun = new THREE.Mesh(gunModel("pistol").geometry, tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.3 }), MAT.GUN_STEEL));
   /** The one source of the held gun's mesh and lengths per weapon (`HandGuns`). */
   private readonly handGuns = new HandGuns(this.handGun, this.playerShots.muzzles);
+  /** The guns in the other players' hands, and their shots' flashes and tracers. */
+  private readonly remoteGuns = new RemoteGuns(
+    this.handGun.material,
+    (car, hand, forearm) => this.bodyHand(car, hand, forearm),
+    (car, held) => this.raiseBodyArm(car, held),
+    (weapon) => {
+      if (this.audioOn) this.audio.shot(weapon);
+    },
+  );
   /** A gun was posed in the player's hand this frame: its muzzle is where a shot leaves from. */
   private gunPosed = false;
 
@@ -408,6 +419,7 @@ export class CrashEngine extends EngineGarage {
       actorAfoot: (actor) => this.openWorld.playerPlace(actor, _actorSpot),
       guest: () => this.net.client,
       hostHolds: () => this.openWorld.hookHeld(),
+      hostHoldAt: (out) => this.openWorld.hookHeldAt(out),
       hostCables: () => this.openWorld.hookCount(),
       sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir),
       personMet: (ray, reach, out, remote) => this.openWorld.hookMet(ray, reach, out, remote),
@@ -449,6 +461,7 @@ export class CrashEngine extends EngineGarage {
     this.impactLight = new THREE.PointLight(0xffc27a, 0, 22, 2);
     this.scene.add(this.impactLight);
     this.scene.add(this.playerShots.group, this.handGun);
+    this.scene.add(this.remoteGuns.group);
     this.handGun.visible = false;
     // Four body lamps per car plus at most one lit siren; a phone links the lean pool (`lampPoolFor`). Fixed here, before the programs
     // link: a light-count change relinks every lit shader.
@@ -588,7 +601,7 @@ export class CrashEngine extends EngineGarage {
       playerLook: (car) => this.ragdolls.carDriverLook(car),
       knockWalker: (vx, vy, vz) => this.onFoot.knocked(vx, vy, vz),
       dragWalker: (t) => this.onFoot.dragged(t),
-      hookHolds: (actor) => this.tether.holding(actor),
+      hookHold: (actor, out) => this.tether.heldPoint(actor, out),
       strikeWalker: (dirX, dirZ) => this.strikeOwnWalker(dirX, dirZ),
       staggerWalker: (dirX, dirZ) => this.staggerOwnWalker(dirX, dirZ),
       actorPlace: (actor, out) => this.actorPlace(actor, out),
@@ -970,6 +983,7 @@ export class CrashEngine extends EngineGarage {
     this.lampLights.dispose();
     this.audio.dispose();
     this.playerShots.dispose();
+    this.remoteGuns.dispose();
     this.daylight?.dispose();
     this.envMap?.dispose();
     this.envMap = null;
@@ -1059,8 +1073,26 @@ export class CrashEngine extends EngineGarage {
   /** The player fired along `ray` and its farthest ray went `far` m: the flash, the tracer and the sound (what the shot did is `OpenWorldActs.shootBy`). */
   private shotFired(ray: LookRay, far: number): void {
     this.playerShots.fire(0, ray.eyeX + ray.dirX * far, ray.eyeY + ray.dirY * far, ray.eyeZ + ray.dirZ * far);
+    this.openWorld.shotMade(ray.eyeX + ray.dirX * far, ray.eyeY + ray.dirY * far, ray.eyeZ + ray.dirZ * far);
     const weapon = this.onFoot.arms.weapon;
     if (this.audioOn && weapon !== "fists" && weapon !== "hook") this.audio.shot(weapon);
+  }
+
+  /** Where player `car`'s right hand is, and the way his forearm points (elbow to hand, a unit vector), when a dummy body carries him; false when he is drawn as a figure. */
+  private bodyHand(car: number, hand: THREE.Vector3, forearm: THREE.Vector3): boolean {
+    const slot = this.openWorld.playerSlot(car);
+    if (slot < 0) return false;
+    const mesh = this.ragdolls.pickMesh;
+    mesh.partPoint(slot, 5, _gunRest.set(0.24, 0.79, 0), hand);
+    mesh.partPoint(slot, 5, _gunRest.set(0.24, 1.07, 0), forearm);
+    forearm.subVectors(hand, forearm).normalize();
+    return true;
+  }
+
+  /** The body that carries player `car`, if any, holds his right arm out as the local walker's is while a gun or the hook is in his hand (`Walker.holdGun`), and lets it hang otherwise. */
+  private raiseBodyArm(car: number, held: boolean): void {
+    const slot = this.openWorld.playerSlot(car);
+    if (slot >= 0) this.ragdolls.walkers[slot]?.holdGun(held);
   }
 
   /** The first dummy of the pool the ray meets within `range` m, not the walker of actor `actor` when that is this player (`DummyMesh.nearestHit`: what the raycaster would sort first, with no hit list). */
@@ -1178,6 +1210,7 @@ export class CrashEngine extends EngineGarage {
   /** Once a frame: the gun laid in the player's right hand (part 5, the one the ARM_R / ELBOW_R motors drive) with its barrel at what his aim is on (or on the lay of his last shot while its flash shows), and the tip the tracers start from; hidden with no gun in hand. */
   private poseHandGun(dt: number): void {
     const arms = this.onFoot.arms;
+    this.openWorld.armsHeld(slotOfWeapon(arms.weapon));
     const held = this.onFoot.armed() && arms.heldOut();
     this.gunPosed = held;
     this.handGuns.model(arms.weapon).visible = held;
@@ -1405,6 +1438,10 @@ export class CrashEngine extends EngineGarage {
     this.openWorld.mindsSetting = this.minds;
     this.openWorld.frame(wallDt);
     this.tether.frame(wallDt);
+    this.remoteGuns.dt = wallDt;
+    this.remoteGuns.eyeX = this.camera.position.x;
+    this.remoteGuns.eyeZ = this.camera.position.z;
+    this.remoteGuns.frame(this.openWorld.playerArms);
     this.remoteCables.frame(this.openWorld.cableFrame(), this.live(), this.camera, this.openWorld.peopleShared, this.openWorld.peopleCapacity, this.onFoot.flow.active && this.bodyHost.motion(WALKER_SLOT, _ownMotion) ? _ownMotion : null, this.drivenCar());
     lapPart(PART.scenery);
     this.rumbleFrame(this.playing && !held ? wallDt : 0);

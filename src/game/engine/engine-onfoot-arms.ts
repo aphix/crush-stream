@@ -166,3 +166,13 @@ export function slotOfGun(gun: Gun): number {
   }
   return -1;
 }
+
+/** The weapon slot of `weapon` in `WEAPON_ORDER`: what a player's record carries. */
+export function slotOfWeapon(weapon: WeaponId): number {
+  return WEAPON_ORDER.indexOf(weapon);
+}
+
+/** The weapon in weapon slot `slot`; fists for a slot past the list. */
+export function weaponAt(slot: number): WeaponId {
+  return WEAPON_ORDER[slot] ?? "fists";
+}

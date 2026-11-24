@@ -77,7 +77,7 @@ function room() {
   const dollsOut: number[] = [];
   const ropes = fakeRopes(dollsOut);
   const tethers = new TetherSet();
-  const state = { onFoot: new Set([HOST, GUEST]), guest: false, offered: true, sent: [] as Sent[], cars: [] as DeformableCar[] };
+  const state = { onFoot: new Set([HOST, GUEST]), guest: false, offered: true, sent: [] as Sent[], cars: [] as DeformableCar[], hostHold: null as THREE.Vector3 | null };
   const personMet = (ray: LookRay, reach: number, out: Meeting): Meeting => {
     const there = Math.abs(ray.dirX) < 0.01 && reach > AHEAD;
     return Object.assign(out, { index: there ? PERSON : -1, along: there ? AHEAD : reach });
@@ -103,7 +103,14 @@ function room() {
     actorSlot: (actor) => (state.onFoot.has(actor) ? GUEST_SLOT : -1),
     actorAfoot: (actor) => state.onFoot.has(actor),
     guest: () => state.guest,
-    hostHolds: () => false,
+    hostHolds: () => state.hostHold !== null,
+    hostHoldAt: (out) => {
+      if (state.hostHold === null) return false;
+      out.x = state.hostHold.x;
+      out.y = state.hostHold.y;
+      out.z = state.hostHold.z;
+      return true;
+    },
     hostCables: () => 0,
     sendAct: (kind, arg, eye, dir) => void state.sent.push({ kind, arg, eye: [eye.x, eye.y, eye.z], dir: [dir.x, dir.y, dir.z] }),
     personMet,
@@ -395,5 +402,21 @@ describe("given a guest's machine with the hook in hand", () => {
     expect(state.sent.map((act) => act.kind), "two fires").toHaveLength(2);
     expect(state.sent[0]!.arg, "on a civilian").toBe(1);
     expect(state.sent[1]!.arg, "on a wall").toBe(0);
+  });
+
+  it("when the host says he holds a first end at a point, then his machine draws the hold marker there and the cable to be made; and when the host says he holds none, then no marker", () => {
+    const { state, director, fireAt } = room();
+    state.guest = true;
+    director.frame(FRAME);
+    const marker = director.art["holdMarker"];
+    expect(marker.visible, "control: no marker while the host says he holds none").toBe(false);
+    state.hostHold = new THREE.Vector3(7, 1.5, -20);
+    fireAt(WALL_POINT);
+    expect(marker.visible, "the marker while the host says he holds one").toBe(true);
+    expect(marker.position.distanceTo(state.hostHold), "metres from the host's point to the marker").toBeLessThan(1e-4);
+    expect(director.art["preview"].visible, "the cable to be made, to the point his reticle is on").toBe(true);
+    state.hostHold = null;
+    director.frame(FRAME);
+    expect(marker.visible, "no marker once the host says he holds none").toBe(false);
   });
 });

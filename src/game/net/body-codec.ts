@@ -11,6 +11,28 @@ export const POSTURE_MASK = 3;
 export const BODY_FLAG = { roped: 4, pinned: 8, thrown: 16, struck: 32, pose: 64 } as const;
 /** A player's record alone carries these: a blow staggered him (the blow's bearing rides the record's activity clock, which nothing else reads on a player; the bit is a civilian's `pinned`, which nothing reads on a guest), and he holds a first hook end (the one bit no other kind uses: `thrown` is read on every kind). */
 export const PLAYER_FLAG = { staggered: 8, holds: 128 } as const;
+/** The weapon slots of the arms (fists, pistol, shotgun, rifle, hook: `WEAPON_ORDER` of `engine-onfoot-arms.ts`): a player's record naming a slot past them is refused. */
+export const WEAPON_SLOTS = 5;
+/** A player's arms byte: the weapon in hand in bits 0-2, a shot counter that wraps in bits 3-7 (a peer draws one flash and tracer each time it changes). */
+const WEAPON_MASK = 7;
+const SHOT_SHIFT = 3;
+export const SHOT_COUNT_MASK = 31;
+
+/** The arms byte for weapon slot `weapon` and shot count `shots` (taken modulo the counter's range). */
+export function packArms(weapon: number, shots: number): number {
+  return weapon | ((shots & SHOT_COUNT_MASK) << SHOT_SHIFT);
+}
+
+/** The weapon slot an arms byte names. */
+export function weaponOfArms(arms: number): number {
+  return arms & WEAPON_MASK;
+}
+
+/** The shot count an arms byte carries. */
+export function shotsOfArms(arms: number): number {
+  return arms >> SHOT_SHIFT;
+}
+
 /** A cable nobody fired. */
 export const CABLE_NO_OWNER = 255;
 /** The state bits each kind may carry, by kind: a civilian posture, roped, pinned, thrown, pose; a player posture, roped, staggered, struck, holds; a cop and a medic posture, thrown, pose. */
@@ -22,9 +44,11 @@ export const BODY_FRAME_MAX = 40;
 /** The most hidden civilians a frame carries: 16 held by the hook + 8 in the law's hands, the most that exist at once. */
 export const HIDDEN_MAX = 24;
 
-/** Bytes: the header (type, seq, crowd time, record count), a record, a cable end, a cable (two ends, length, strain, owner) and a hidden entry. */
+/** Bytes: the header (type, seq, crowd time, record count), a record, a cable end, a cable (two ends, length, strain, owner) and a hidden entry. A player's record has `ARMS_BYTES` more (arms byte, the far end of his latest shot) and `HOLD_BYTES` more while he holds a first hook end (where). */
 const HEADER_BYTES = 12;
 const RECORD_BYTES = 20;
+const ARMS_BYTES = 7;
+const HOLD_BYTES = 6;
 const END_BYTES = 9;
 const CABLE_BYTES = 2 * END_BYTES + 4;
 const HIDDEN_BYTES = 2;
@@ -69,6 +93,10 @@ export type BodyFrame = {
   readonly activity: Uint8Array;
   readonly activityClock: Float32Array;
   readonly activityLeft: Float32Array;
+  /** A player's record only: his arms byte (`packArms`), the far end of his latest shot (m) and, while the record's `PLAYER_FLAG.holds` is on, the point of the first hook end he holds (m). */
+  readonly arms: Uint8Array;
+  readonly armsFar: Float32Array;
+  readonly holdAt: Float32Array;
   cables: number;
   readonly endKind: Uint8Array;
   readonly endId: Uint16Array;
@@ -98,6 +126,9 @@ export function makeBodyFrame(): BodyFrame {
     activity: new Uint8Array(BODY_FRAME_MAX),
     activityClock: new Float32Array(BODY_FRAME_MAX),
     activityLeft: new Float32Array(BODY_FRAME_MAX),
+    arms: new Uint8Array(BODY_FRAME_MAX),
+    armsFar: new Float32Array(3 * BODY_FRAME_MAX),
+    holdAt: new Float32Array(3 * BODY_FRAME_MAX),
     cables: 0,
     endKind: new Uint8Array(2 * MAX_TETHERS),
     endId: new Uint16Array(2 * MAX_TETHERS),
@@ -128,7 +159,10 @@ export function addBodyRecord(out: BodyFrame, kind: number, id: number, state: n
   for (let axis = 0; axis < 3; axis++) {
     out.pos[3 * at + axis] = 0;
     out.vel[3 * at + axis] = 0;
+    out.armsFar[3 * at + axis] = 0;
+    out.holdAt[3 * at + axis] = 0;
   }
+  out.arms[at] = 0;
   out.heading[at] = 0;
   out.activity[at] = 0;
   out.activityClock[at] = 0;
@@ -143,7 +177,7 @@ export function addHidden(out: BodyFrame, civilian: number): boolean {
   return true;
 }
 
-/** `f` as a `MSG.bodies` message: 12 + 20 x records + 1 + 22 x cables + 1 + 2 x hidden bytes. */
+/** `f` as a `MSG.bodies` message: 12 + 20 x records (+ 7 a player's, + 6 more while he holds a first end) + 1 + 22 x cables + 1 + 2 x hidden bytes. */
 export function writeBodyFrame(w: Writer, f: BodyFrame): void {
   w.u8(MSG.bodies);
   w.u16(f.seq);
@@ -159,6 +193,11 @@ export function writeBodyFrame(w: Writer, f: BodyFrame): void {
     w.u8(f.activity[at]!);
     w.u8(Math.max(0, Math.min(TIME_BYTE_MAX, Math.round(f.activityClock[at]! * TENTHS))));
     w.u8(f.activityLeft[at]! >= ACTIVITY_OPEN_ENDED ? OPEN_ENDED_BYTE : Math.max(0, Math.min(TIME_BYTE_MAX, Math.round(f.activityLeft[at]! * TENTHS))));
+    if (f.kind[at] === BODY_KIND.player) {
+      w.u8(f.arms[at]!);
+      w.q16s(f.armsFar, 3, CENTIMETRES, 3 * at);
+      if ((f.state[at]! & PLAYER_FLAG.holds) !== 0) w.q16s(f.holdAt, 3, CENTIMETRES, 3 * at);
+    }
   }
   w.u8(f.cables);
   for (let cable = 0; cable < f.cables; cable++) {
@@ -175,13 +214,20 @@ export function writeBodyFrame(w: Writer, f: BodyFrame): void {
   for (let at = 0; at < f.hidden; at++) w.u16(f.hiddenId[at]!);
 }
 
-/** Whether record `at`'s kind, state bits and posture are ones a host writes (the posture is a posture, the bits are the kind's, a pose record is none of thrown, roped, pinned or struck, a thrown one lies). */
+/** Bytes of a record of `kind` in `state`: a player's has his arms and, while he holds a first end, where. */
+function recordBytes(kind: number, state: number): number {
+  if (kind !== BODY_KIND.player) return RECORD_BYTES;
+  return RECORD_BYTES + ARMS_BYTES + ((state & PLAYER_FLAG.holds) !== 0 ? HOLD_BYTES : 0);
+}
+
+/** Whether the record at `base`, whose bytes are all in `data`, has a kind, state bits, posture and (a player's) weapon slot that a host writes (the posture is a posture, the bits are the kind's, a pose record is none of thrown, roped, pinned or struck, a thrown one lies). */
 function recordIsSound(data: Uint8Array, base: number): boolean {
   const kind = data[base]!;
   if (kind > BODY_KIND.medic) return false;
   const state = data[base + RECORD_STATE_AT]!;
   const posture = state & POSTURE_MASK;
   if (posture > BODY_POSTURE.getUp || (state & ~STATE_MASK[kind]!) !== 0) return false;
+  if (kind === BODY_KIND.player && weaponOfArms(data[base + RECORD_BYTES]!) >= WEAPON_SLOTS) return false;
   if ((state & BODY_FLAG.pose) !== 0 && (state & (BODY_FLAG.thrown | BODY_FLAG.roped | BODY_FLAG.pinned | BODY_FLAG.struck)) !== 0) return false;
   return (state & BODY_FLAG.thrown) === 0 || posture === BODY_POSTURE.down;
 }
@@ -191,7 +237,13 @@ export function readBodyFrame(data: Uint8Array, r: Reader, out: BodyFrame): bool
   if (data.length < EMPTY_FRAME_BYTES || data[0] !== MSG.bodies) return false;
   const count = data[COUNT_AT]!;
   if (count > BODY_FRAME_MAX) return false;
-  const cablesAt = HEADER_BYTES + count * RECORD_BYTES;
+  let cablesAt = HEADER_BYTES;
+  for (let at = 0; at < count; at++) {
+    if (cablesAt + RECORD_BYTES > data.length) return false;
+    const size = recordBytes(data[cablesAt]!, data[cablesAt + RECORD_STATE_AT]!);
+    if (cablesAt + size > data.length || !recordIsSound(data, cablesAt)) return false;
+    cablesAt += size;
+  }
   if (data.length < cablesAt + 2) return false;
   const cables = data[cablesAt]!;
   if (cables > MAX_TETHERS) return false;
@@ -203,7 +255,6 @@ export function readBodyFrame(data: Uint8Array, r: Reader, out: BodyFrame): bool
   r.off = CROWD_TIME_AT;
   const crowdTime = r.f64();
   if (!Number.isFinite(crowdTime)) return false;
-  for (let at = 0; at < count; at++) if (!recordIsSound(data, HEADER_BYTES + at * RECORD_BYTES)) return false;
   for (let cable = 0; cable < cables; cable++) {
     const base = cablesAt + 1 + cable * CABLE_BYTES;
     if (data[base]! > CABLE_END_MAX || data[base + END_BYTES]! > CABLE_END_MAX) return false;
@@ -226,6 +277,15 @@ export function readBodyFrame(data: Uint8Array, r: Reader, out: BodyFrame): bool
     out.activityClock[at] = r.u8() / TENTHS;
     const left = r.u8();
     out.activityLeft[at] = left === OPEN_ENDED_BYTE ? ACTIVITY_OPEN_ENDED : left / TENTHS;
+    if (kind === BODY_KIND.player) {
+      out.arms[at] = r.u8();
+      r.q16s(_triple, 3, METRES_PER_STEP);
+      for (let axis = 0; axis < 3; axis++) out.armsFar[3 * at + axis] = _triple[axis]!;
+      if ((out.state[at]! & PLAYER_FLAG.holds) !== 0) {
+        r.q16s(_triple, 3, METRES_PER_STEP);
+        for (let axis = 0; axis < 3; axis++) out.holdAt[3 * at + axis] = _triple[axis]!;
+      }
+    }
   }
   r.off = cablesAt + 1;
   out.cables = cables;
@@ -264,6 +324,11 @@ export function copyBodyFrame(from: BodyFrame, to: BodyFrame): void {
     to.activity[at] = from.activity[at]!;
     to.activityClock[at] = from.activityClock[at]!;
     to.activityLeft[at] = from.activityLeft[at]!;
+    to.arms[at] = from.arms[at]!;
+    for (let axis = 3 * at; axis < 3 * at + 3; axis++) {
+      to.armsFar[axis] = from.armsFar[axis]!;
+      to.holdAt[axis] = from.holdAt[axis]!;
+    }
   }
   for (let end = 0; end < 2 * from.cables; end++) {
     to.endKind[end] = from.endKind[end]!;
@@ -280,20 +345,21 @@ export function copyBodyFrame(from: BodyFrame, to: BodyFrame): void {
 
 /** The state byte's bit that says a guest is back in a car: his walker is gone. */
 const FOOT_LEFT = 128;
-/** The foot message's length: type, seq u16, crowd time f64, state, torso i16x3, velocity i16x3, heading. */
-const FOOT_BYTES = 25;
+/** The foot message's length: type, seq u16, crowd time f64, state, torso i16x3, velocity i16x3, heading, arms byte, the far end of his latest shot i16x3. */
+const FOOT_BYTES = 32;
 const FOOT_STATE_AT = 11;
 const FOOT_TORSO_AT = 12;
 const FOOT_HEADING_AT = 24;
+const FOOT_ARMS_AT = 25;
 
-/** A guest's walker as his own machine has it (`MSG.foot`): where, how fast, which way and how, at his crowd second `crowdTime`; `left`: he is back in a car. */
-export type FootRecord = BodyMotion & { seq: number; crowdTime: number; left: boolean };
+/** A guest's walker as his own machine has it (`MSG.foot`): where, how fast, which way and how, at his crowd second `crowdTime`; `left`: he is back in a car; `arms`: the arms byte (`packArms`) and (`farX`, `farY`, `farZ`) the far end of his latest shot (m). */
+export type FootRecord = BodyMotion & { seq: number; crowdTime: number; left: boolean; arms: number; farX: number; farY: number; farZ: number };
 
 export function makeFootRecord(): FootRecord {
-  return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0, seq: 0, crowdTime: 0, left: false };
+  return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0, seq: 0, crowdTime: 0, left: false, arms: 0, farX: 0, farY: 0, farZ: 0 };
 }
 
-/** `f` as a `MSG.foot` message (25 bytes). */
+/** `f` as a `MSG.foot` message (32 bytes). */
 export function writeFoot(w: Writer, f: FootRecord): void {
   w.u8(MSG.foot);
   w.u16(f.seq);
@@ -308,13 +374,19 @@ export function writeFoot(w: Writer, f: FootRecord): void {
   _triple[2] = f.vz;
   w.q16s(_triple, 3, CENTIMETRES);
   w.u8(Math.round((((f.heading % TWO_PI) + TWO_PI) % TWO_PI) / RADIANS_PER_HEADING_STEP) & (HEADING_STEPS - 1));
+  w.u8(f.arms);
+  _triple[0] = f.farX;
+  _triple[1] = f.farY;
+  _triple[2] = f.farZ;
+  w.q16s(_triple, 3, CENTIMETRES);
 }
 
-/** Reads a `MSG.foot` message into `out`: false, with `out` untouched, for a bad length, type, posture, state bit or crowd time (untrusted: a peer's). */
+/** Reads a `MSG.foot` message into `out`: false, with `out` untouched, for a bad length, type, posture, state bit, weapon slot or crowd time (untrusted: a peer's). */
 export function readFoot(data: Uint8Array, r: Reader, out: FootRecord): boolean {
   if (data.length !== FOOT_BYTES || data[0] !== MSG.foot) return false;
   const state = data[FOOT_STATE_AT]!;
   if ((state & POSTURE_MASK) > BODY_POSTURE.getUp || (state & ~(POSTURE_MASK | FOOT_LEFT)) !== 0) return false;
+  if (weaponOfArms(data[FOOT_ARMS_AT]!) >= WEAPON_SLOTS) return false;
   r.reset(data);
   r.off = 1;
   const seq = r.u16();
@@ -335,5 +407,10 @@ export function readFoot(data: Uint8Array, r: Reader, out: FootRecord): boolean 
   out.vz = _triple[2]!;
   r.off = FOOT_HEADING_AT;
   out.heading = r.u8() * RADIANS_PER_HEADING_STEP;
+  out.arms = r.u8();
+  r.q16s(_triple, 3, METRES_PER_STEP);
+  out.farX = _triple[0]!;
+  out.farY = _triple[1]!;
+  out.farZ = _triple[2]!;
   return true;
 }

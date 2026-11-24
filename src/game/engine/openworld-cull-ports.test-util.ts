@@ -55,7 +55,7 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     playerLook: () => ({ woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false }),
     knockWalker: () => false,
     dragWalker: () => {},
-    hookHolds: () => false,
+    hookHold: () => false,
     tethers: () => IDLE_TETHERS,
     propMet: () => Infinity,
   };
