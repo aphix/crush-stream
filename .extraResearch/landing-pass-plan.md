@@ -61,10 +61,16 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 ## 3. State
 
 - `main` = Windows mount = GitHub = 5989b47a0 (NET 72, REPLAY 249).
-- `play/union` (`~/worktrees/land`, NET 73, REPLAY 253), not yet gated. Merged, each reviewed (its later commits too), static
-  checks clean and its own test files green on the union: PerfPath, SmallCuts, CopStoops, GuestEdge, BarRoom, ContactRows,
-  DeformSeat, ShutPlaces, CarsSeePlayers, Sweep; their worktrees are removed. Under them: ae0007683 (a derby driver that
-  cannot get rolling lifts off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251).
+- `play/union` (`~/worktrees/land`, NET 73, REPLAY 254). Merged, each reviewed (its later commits too), static checks clean
+  and its own test files green on the union: PerfPath, SmallCuts, CopStoops, GuestEdge, BarRoom, ContactRows, DeformSeat,
+  ShutPlaces, CarsSeePlayers, Sweep, HubRules, KerbClaims; their worktrees are removed. Under them: ae0007683 (a derby driver
+  that cannot get rolling lifts off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251). The crash digests
+  were re-derived once (`whole-digest`, `car-smooth`). The three `// mutation:` comments the pass had added are stripped.
+- **The gate runs on this box** (the worker is not ours: see below), on a detached tree `~/worktrees/gate-union` at
+  b66471175: `~/crash-wt/local-gate.sh <tree> <log dir> [first] [last]` runs the worker gate's own 14 shards (8 of parity,
+  app and scripts without the GL file; 6 of the long AI suite), one vitest at a time with two workers under a 4 GB cap;
+  logs and one `GATE` line a shard in `~/crash-wt/landing/gate-b66471175/`. Then: the GL file (`DISPLAY=:0`), `build:node`,
+  the secret scan, the ff-only merge and `wsl-push`. A red in a shard: read the test, its setup and its source first.
 - **Tried and taken out again: ed1e8b655** (a solid's top scrapes the body it stops: friction on `standOnTop`). Main's hand
   port was reviewed "merge" and merged, and then turned `scenes/derby-containment-wedge.test.ts` red: the truck driven at the
   north ramp's -x side wedge, 30° off square, ended at 38.03 m, outside the arena wall's inner face at 38 m (it comes down on
