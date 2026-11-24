@@ -44,6 +44,14 @@ interface OnFootCameraHost {
 const AIM_BOOM = 1.6;
 const AIM_SIDE = 0.45;
 const AIM_UP = 0.15;
+/** The aim's pivot stands this far (m) to the camera's right: the shoulder stop's and the aim's extra. */
+const AIM_ACROSS = SHOULDER_ACROSS + AIM_SIDE;
+/** A gun or the hook in hand in the follow view: the pivot stands this far (m) right and up of his head, so the centre ray clears his shoulders (0.29 m off his middle) by 0.4 m. Right is the top of the 0.45-0.7 m an over-the-shoulder camera stands out; up tuned by feel. */
+const ARMED_ACROSS = 0.7;
+const ARMED_UP = 0.1;
+/** The armed shoulder and the aim ease in and out over this long (s), critically damped, so they never overshoot. Tuned by feel, near the 0.3 s car blend. */
+const ARMED_TIME = 0.25;
+const AIM_TIME = 0.15;
 /** While he climbs into his car the camera draws back by this share of its distance. */
 const ENTER_PULL_BACK = 1.35;
 /** The shown zoom follows the wheel's and a pinch's over this long (s), so a notch glides. Tuned by feel. */
@@ -73,6 +81,9 @@ export class OnFootCamera {
   private readonly walkerView = new WalkerView();
   private readonly sweep: Sweep;
   private readonly shown = new Damped();
+  /** How far the armed shoulder and the held aim are in (0 to 1). */
+  private readonly armedShare = new Damped();
+  private readonly aimShare = new Damped();
   private framed = false;
   /** The view he has chosen: View and the wheel's (or a pinch's) last notch change it, and nothing else does (`keepZoom`). */
   private mode: OnFootView = "follow";
@@ -114,8 +125,8 @@ export class OnFootCamera {
     this.zoomKept = view.orbitRadius;
   }
 
-  /** One frame of the camera on him, his torso at `torso`; `aiming`: the aim's tighter shoulder shot. */
-  aim(wallDt: number, torso: THREE.Vector3, aiming: boolean): void {
+  /** One frame of the camera on him, his torso at `torso`; `aiming`: the aim's tighter shoulder shot; `armed`: a gun or the hook is in hand, so the follow view stands over his right shoulder. */
+  aim(wallDt: number, torso: THREE.Vector3, aiming: boolean, armed: boolean): void {
     const { view, camera, ragdolls, pad } = this.host;
     const walker = ragdolls.walker;
     if (!this.framed) this.begin(torso);
@@ -136,9 +147,23 @@ export class OnFootCamera {
     const level = this.shown.step(view.orbitRadius, ZOOM_TIME, wallDt);
     const yaw = view.orbitAngle;
     const sight = this.walkerView;
-    if (first) sight.first(torso.x, torso.y, torso.z, yaw, pitch, this.sweep, wallDt);
-    else if (aiming) sight.shoulder(torso.x, torso.y, torso.z, point[0]!, point[1]! + AIM_UP, point[2]!, yaw, pitch, AIM_BOOM, SHOULDER_ACROSS + AIM_SIDE, this.sweep, wallDt);
-    else sight.shoulder(torso.x, torso.y, torso.z, point[0]!, point[1]!, point[2]!, yaw, pitch, sprintBoom(boomAt(level, pitch), walker.loco.speed), acrossAt(level), this.sweep, wallDt);
+    if (first) {
+      sight.first(torso.x, torso.y, torso.z, yaw, pitch, this.sweep, wallDt);
+      this.armedShare.step(0, ARMED_TIME, wallDt);
+      this.aimShare.step(0, AIM_TIME, wallDt);
+    } else {
+      const arm = Math.max(0, Math.min(1, this.armedShare.step(armed ? 1 : 0, ARMED_TIME, wallDt)));
+      const aim = Math.max(0, Math.min(1, this.aimShare.step(aiming ? 1 : 0, AIM_TIME, wallDt)));
+      const flat = acrossAt(level);
+      // The follow view only: from the shoulder stop in, his shoulder is already the framing.
+      const follow = 1 - flat / SHOULDER_ACROSS;
+      const armedAcross = flat + (ARMED_ACROSS - flat) * follow * arm;
+      const armedUp = ARMED_UP * follow * arm;
+      const boom = sprintBoom(boomAt(level, pitch), walker.loco.speed);
+      const side = armedAcross + (AIM_ACROSS - armedAcross) * aim;
+      const up = armedUp + (AIM_UP - armedUp) * aim;
+      sight.shoulder(torso.x, torso.y, torso.z, point[0]!, point[1]! + up, point[2]!, yaw, pitch, boom + (AIM_BOOM - boom) * aim, side, this.sweep, wallDt);
+    }
     camera.position.set(sight.eye[0]!, sight.eye[1]!, sight.eye[2]!);
     _aim.set(sight.eye[0]! + sight.ahead[0]! * LOOK_AHEAD, sight.eye[1]! + sight.ahead[1]! * LOOK_AHEAD, sight.eye[2]! + sight.ahead[2]! * LOOK_AHEAD);
     view.look.copy(_aim);
@@ -202,6 +227,8 @@ export class OnFootCamera {
     this.baseNear = camera.near;
     this.follow.seed(torso.x, torso.y, torso.z);
     this.walkerView.reset();
+    this.armedShare.snap(0);
+    this.aimShare.snap(0);
     _blendEye.copy(camera.position);
     camera.getWorldDirection(_forward);
     _blendAim.copy(camera.position).addScaledVector(_forward, LOOK_AHEAD);
