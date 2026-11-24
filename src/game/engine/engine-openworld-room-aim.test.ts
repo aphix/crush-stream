@@ -659,26 +659,29 @@ function pistolAlong(r: Room, torso: BodyMotion, along: { x: number; z: number }
   return fired.mock.calls.length;
 }
 
-/** A guest sprints at 7 m/s through the street door of an office and out, turns along the sidewalk once he is `outM` m past the face, and fires `after` s later; how many shots the host carried out, over the slowed link. */
-function doorwayShot(after: number, outM: number): number {
+/** A guest stands inside an office, `DOOR_RUN_UP_M` m from where the line he sprints at 7 m/s along meets the door, `angle` rad off the door's axis toward +across; he sprints out through the door, turns along the sidewalk (toward `turn` along the face) once he is `outM` m past the face, and fires `after` s later; how many shots the host carried out, over the slowed link. */
+function doorwayShot(after: number, outM: number, angle: number, turn: 1 | -1): number {
   return withOfficeDoor((place, world, door) => {
     const r = started(false);
     const cos = Math.cos(place.yaw);
     const sin = Math.sin(place.yaw);
-    const start = world(place.depth / 2 - DOOR_RUN_UP_M, door);
-    r.guest.walk.path = { x0: start.x, z0: start.z, vx: SPRINT_MPS * cos, vz: -SPRINT_MPS * sin, t0: r.guest.director.crowdTime() };
+    const start = world(place.depth / 2 - DOOR_RUN_UP_M * Math.cos(angle), door - DOOR_RUN_UP_M * Math.sin(angle));
+    r.guest.walk.path = { x0: start.x, z0: start.z, vx: 0, vz: 0, t0: r.guest.director.crowdTime() };
     for (const side of [r.host, r.guest]) {
       side.eye.x = place.x;
       side.eye.z = place.z;
     }
     r.step(HEAR_FRAMES);
+    // His exit line in the plan's frame (x out through the face, z along it), then in the world's.
+    const exit = { x: SPRINT_MPS * Math.cos(angle), z: SPRINT_MPS * Math.sin(angle) };
+    r.guest.walk.path = { x0: start.x, z0: start.z, vx: exit.x * cos + exit.z * sin, vz: -exit.x * sin + exit.z * cos, t0: r.guest.director.crowdTime() };
     const torso: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
     while (walkerAt(r.guest.walk.path, r.guest.director.crowdTime(), torso) && (torso.x - place.x) * cos - (torso.z - place.z) * sin < place.depth / 2 + outM) r.step(1);
-    r.guest.walk.path = { x0: torso.x, z0: torso.z, vx: SPRINT_MPS * sin, vz: SPRINT_MPS * cos, t0: r.guest.director.crowdTime() };
+    r.guest.walk.path = { x0: torso.x, z0: torso.z, vx: turn * SPRINT_MPS * sin, vz: turn * SPRINT_MPS * cos, t0: r.guest.director.crowdTime() };
     const turned = r.guest.director.crowdTime();
     while (r.guest.director.crowdTime() - turned < after) r.step(1);
     walkerAt(r.guest.walk.path, r.guest.director.crowdTime(), torso);
-    return pistolAlong(r, torso, { x: sin, z: cos });
+    return pistolAlong(r, torso, { x: turn * sin, z: turn * cos });
   });
 }
 
@@ -702,14 +705,18 @@ function insideShot(): number {
 }
 
 /** The doorway rows: the run-up inside the office (m), how far inside its face the still guest stands (m), and where the turn and the shot come (m past the face, s after the turn). */
-const DOOR_RUN_UP_M = 8;
+const DOOR_RUN_UP_M = 3;
 const DOOR_INSIDE_M = 0.5;
 const TURNS_OUT_M = [0.05, 1] as const;
+/** The angles (rad off the door's axis) he leaves at: straight out, 30 and 45 degrees. */
+const EXIT_ANGLES = [0, Math.PI / 6, Math.PI / 4] as const;
 const SHOTS_AFTER_S = [0.1, 0.2, 0.3] as const;
 
 describe("given a guest in a room over the slowed link, an office's street face with its door beside him", () => {
-  it("when he sprints out through the door at 7 m/s, turns along the sidewalk 0.05 or 1 m out and fires 0.1, 0.2 or 0.3 s later, then the host carries every shot out", () => {
-    for (const outM of TURNS_OUT_M) for (const after of SHOTS_AFTER_S) expect(doorwayShot(after, outM), `shots carried out, turned ${outM} m out, fired ${after} s later`).toBe(1);
+  it("when he sprints out through the door at 7 m/s straight out, at 30 or at 45 degrees, turns along the sidewalk either way 0.05 or 1 m out and fires 0.1, 0.2 or 0.3 s later, then the host carries every shot out", () => {
+    for (const angle of EXIT_ANGLES) for (const turn of [1, -1] as const) for (const outM of TURNS_OUT_M) for (const after of SHOTS_AFTER_S) {
+      expect(doorwayShot(after, outM, angle, turn), `shots carried out, exit ${Math.round((angle * 180) / Math.PI)} degrees, turned ${turn > 0 ? "away from" : "back toward"} the door ${outM} m out, fired ${after} s later`).toBe(1);
+    }
   });
 
   it("when he stands still inside the face, away from the door, and fires out along it from a tip outside it, then the host refuses the shot: the wall is solid", () => {
