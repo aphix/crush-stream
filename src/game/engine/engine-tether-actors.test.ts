@@ -77,7 +77,7 @@ function room() {
   const dollsOut: number[] = [];
   const ropes = fakeRopes(dollsOut);
   const tethers = new TetherSet();
-  const state = { onFoot: new Set([HOST, GUEST]), guest: false, offered: true, sent: [] as Sent[], cars: [] as DeformableCar[] };
+  const state = { onFoot: new Set([HOST, GUEST]), guest: false, offered: true, sent: [] as Sent[], lit: [] as number[], cars: [] as DeformableCar[] };
   const personMet = (ray: LookRay, reach: number, out: Meeting): Meeting => {
     const there = Math.abs(ray.dirX) < 0.01 && reach > AHEAD;
     return Object.assign(out, { index: there ? PERSON : -1, along: there ? AHEAD : reach });
@@ -109,6 +109,7 @@ function room() {
     personMet,
     standPerson,
     holdDoll: () => {},
+    nameHook: (civilian) => void state.lit.push(civilian),
   });
   const aimAt = (point: THREE.Vector3): void => {
     camera.lookAt(point);
@@ -386,14 +387,15 @@ describe("given a second actor whose ray passes a civilian 10 m ahead with a wal
 });
 
 describe("given a guest's machine with the hook in hand", () => {
-  it("when he fires with his reticle on a civilian, then the act's argument byte is 1; with it on a wall, 0", () => {
+  it("when he fires with his reticle on a civilian, then the act names her and its argument byte is 0; with it on a wall, the act names no one", () => {
     const { state, fireAt, director } = room();
     state.guest = true;
     fireAt(PERSON_POINT);
     director.frame(FRAME);
     fireAt(WALL_POINT);
     expect(state.sent.map((act) => act.kind), "two fires").toHaveLength(2);
-    expect(state.sent[0]!.arg, "on a civilian").toBe(1);
-    expect(state.sent[1]!.arg, "on a wall").toBe(0);
+    expect(state.sent[0]!.arg, "its argument byte").toBe(0);
+    expect(state.lit[0], "the civilian named on the first fire").toBe(PERSON);
+    expect(state.lit[1], "the civilian named on the second fire").toBe(-1);
   });
 });

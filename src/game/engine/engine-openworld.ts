@@ -62,6 +62,8 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import { KILL_HITS_MIN, KILL_HITS_SPREAD } from "../scenes/lawn-guard.ts";
 import { STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
 import { PlayerBlows } from "./engine-openworld-acts.ts";
+import { NamedThings } from "./engine-openworld-named.ts";
+import { NAMED, type Named } from "../net/act-codec.ts";
 import { activeGround } from "../world/ground.ts";
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 
@@ -337,6 +339,8 @@ export class OpenWorldDirector {
   private readonly walkerStrike = new WalkerStrike();
   /** Punches on other players. */
   private readonly blows: PlayerBlows;
+  /** What a guest's aim ray met, and where the host finds it now. */
+  private readonly named: NamedThings;
   /** The Auto camera: wanted (`setAuto`) across crowd rebuilds, made with each crowd. */
   private autoWanted = false;
   private auto: OpenWorldAuto | null = null;
@@ -346,6 +350,20 @@ export class OpenWorldDirector {
     this.culling = new OpenWorldCulling(ports.cull);
     this.carLook = new CarLook({ cars: () => ports.cars(), playerCars: () => ports.cull.playerCars(), own: () => ports.ownCar(), followed: () => (ports.foot(this.lookFoot) ? null : ports.cull.followed()), traffic: () => this.traffic });
     this.blows = new PlayerBlows(ports);
+    this.named = new NamedThings({
+      crowd: () => this.crowd?.poses ?? null,
+      cops: () => this.law?.copPoses ?? null,
+      bodies: () => this.bodies,
+      shared: () => this.shared,
+      ownCar: () => ports.ownCarIndex(),
+      ownFoot: (out) => ports.foot(out),
+      playerPlace: (actor, out) => this.playerPlace(actor, out),
+      cars: () => ports.cars(),
+      doll: this.pickedDoll,
+      car: this.pickedCar,
+      person: this.personMet,
+      cop: this.copShot,
+    });
   }
 
   /** The map the crowd lives on; the crowd is made from it on the next frame in the open world. */
@@ -898,10 +916,23 @@ export class OpenWorldDirector {
   }
 
   /** How far (m) along `ray`, within `range`, the nearest wall, the ground, a drawn person, a foot cop, a dummy, a car or a knockable prop is, or `range` when there is none (nothing is struck, so a player's aim can be looked along before he fires). */
-  meet(actor: number, ray: LookRay, range: number): number {
+  meet(actor: number, ray: LookRay, range: number, name: Named | null = null): number {
+    if (name !== null) name.kind = NAMED.nothing;
     if (this.crowd === null || this.map === null) return range;
     const nearest = this.lookAlong(actor, ray, range);
-    return Math.min(nearest, this.ports.propMet(ray, nearest));
+    const prop = this.ports.propMet(ray, nearest);
+    if (name !== null) this.named.name(prop < nearest ? this.lookReach : nearest, this.lookReach, ray, name);
+    return Math.min(nearest, prop);
+  }
+
+  /** The world point of named thing (`kind`, `id`) with its offset, as this machine has it now: into `out`; false when it is not there (`NamedThings.place`). */
+  placeNamed(kind: number, id: number, ox: number, oy: number, oz: number, out: { x: number; y: number; z: number }): boolean {
+    return this.named.place(kind, id, ox, oy, oz, out);
+  }
+
+  /** The person the hook's reticle lit, as a guest names her in the fire: civilian `civilian` or the dummy in pool slot `slot`, hit at (x, y, z) (`NamedThings.nameHook`). */
+  nameHook(civilian: number, slot: number, x: number, y: number, z: number, out: Named): void {
+    this.named.nameHook(civilian, slot, x, y, z, out);
   }
 
   /**

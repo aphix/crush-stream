@@ -1,4 +1,4 @@
-import { Act, packAct, readAct } from "./act-codec.ts";
+import { Act, NAMED, type Named, packAct, readAct } from "./act-codec.ts";
 
 /** A sequence number is newer than `last` when it is ahead of it by less than half the u16 range (wrapping). */
 const HALF_SEQ = 0x8000;
@@ -8,8 +8,8 @@ export class ActOutbox {
   private seq = 0;
   private readonly act = new Act();
 
-  /** The next `MSG.act` for `kind` from `eye` along `dir` (unit); null when a value is not finite or out of range (nothing is sent, the number is not spent). */
-  pack(kind: number, arg: number, eye: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }): Uint8Array<ArrayBuffer> | null {
+  /** The next `MSG.act` for `kind` from `eye` along `dir` (unit), a shot's or a hook fire's with `name`, what its own ray first met (null: nothing); null when a value is not finite or out of range (nothing is sent, the number is not spent). */
+  pack(kind: number, arg: number, eye: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }, name: Named | null = null): Uint8Array<ArrayBuffer> | null {
     const act = this.act;
     act.seq = this.seq;
     act.kind = kind;
@@ -20,6 +20,12 @@ export class ActOutbox {
     act.dirX = dir.x;
     act.dirY = dir.y;
     act.dirZ = dir.z;
+    const named = act.named;
+    named.kind = name === null ? NAMED.nothing : name.kind;
+    named.id = name === null ? 0 : name.id;
+    named.x = name === null ? 0 : name.x;
+    named.y = name === null ? 0 : name.y;
+    named.z = name === null ? 0 : name.z;
     const data = packAct(act);
     if (data !== null) this.seq = (this.seq + 1) & 0xffff;
     return data;

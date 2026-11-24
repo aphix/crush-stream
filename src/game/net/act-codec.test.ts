@@ -3,7 +3,7 @@ import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { frame, makeWorld } from "../world/race-world.test-util.ts";
-import { ACT, Act, packAct, readAct } from "./act-codec.ts";
+import { ACT, Act, NAMED, packAct, readAct } from "./act-codec.ts";
 import { ActInbox } from "./act-link.ts";
 import { MSG } from "./codec.ts";
 import { FRAME_MS, Hub } from "./net-hub.test-util.ts";
@@ -11,8 +11,9 @@ import { NetPlay } from "./net-play.ts";
 import { worldGame } from "./net-world-game.test-util.ts";
 
 const EYE_STEP = 0.01;
-/** The contract's size of an act on the wire (bytes). */
+/** The contract's size of an act on the wire (bytes), and what a shot's or a hook fire's name adds. */
 const ACT_BYTES = 17;
+const NAMED_BYTES = 9;
 const DIR_STEP = 1 / 32767;
 
 /** An act of `kind` from (1.25, 2, -3.5) along the unit (0.6, 0, 0.8). */
@@ -38,11 +39,11 @@ function packed(kind: number, seq = 7): Uint8Array<ArrayBuffer> {
 }
 
 describe("given a guest's act on foot", () => {
-  it("when an act of each kind is packed and read, then the host reads its kind, argument, eye to a centimetre and direction to 1/32767, in 17 bytes", () => {
+  it("when an act of each kind is packed and read, then the host reads its kind, argument, eye to a centimetre and direction to 1/32767, in 17 bytes (26 for a shot and a hook fire, which carry a name)", () => {
     for (const kind of Object.values(ACT)) {
       const data = packed(kind);
       const read = new Act();
-      expect(data.length, `kind ${kind}: bytes`).toBe(ACT_BYTES);
+      expect(data.length, `kind ${kind}: bytes`).toBe(kind === ACT.shot || kind === ACT.hookFire ? ACT_BYTES + NAMED_BYTES : ACT_BYTES);
       expect(data[0], `kind ${kind}: type byte`).toBe(MSG.act);
       expect(readAct(data, read), `kind ${kind}: read`).toBe(true);
       expect(read.kind, `kind ${kind}: kind`).toBe(kind);
@@ -85,6 +86,50 @@ describe("given a guest's act on foot", () => {
     expect(readAct(oneLong, out), "one byte long").toBe(false);
     expect(readAct(wrongType, out), "another type").toBe(false);
     expect(readAct(unknownKind, out), "an unknown kind").toBe(false);
+  });
+});
+
+/** A shot that names car 3, hit at (-1.25, 0.5, 2) in the car's own frame. */
+function namedShot(): Act {
+  const act = actOf(ACT.shot);
+  act.named.kind = NAMED.car;
+  act.named.id = 3;
+  act.named.x = -1.25;
+  act.named.y = 0.5;
+  act.named.z = 2;
+  return act;
+}
+
+describe("given a shot or a hook fire that names what the guest's own ray first met", () => {
+  it("when it is packed and read, then the host reads the kind, the index and the hit offset to a centimetre; and an act that carries no name reads as naming nothing", () => {
+    for (const kind of [ACT.shot, ACT.hookFire]) {
+      const act = namedShot();
+      act.kind = kind;
+      const read = new Act();
+      read.named.kind = NAMED.player;
+      expect(readAct(packAct(act)!, read), `kind ${kind}: read`).toBe(true);
+      expect(firstMismatch([read.named.kind, read.named.id, read.named.x, read.named.y, read.named.z], [NAMED.car, 3, -1.25, 0.5, 2], EYE_STEP), `kind ${kind}: the name`).toBeUndefined();
+    }
+    const read = new Act();
+    read.named.kind = NAMED.player;
+    expect(readAct(packed(ACT.punch), read), "a punch reads").toBe(true);
+    expect(read.named.kind, "a punch names nothing").toBe(NAMED.nothing);
+  });
+
+  it("when the name is no kind of ours, or its offset or index does not fit, then a name with an unknown kind on the wire refuses the act and one that cannot be packed is sent as nothing", () => {
+    const good = packAct(namedShot())!;
+    const unknown = good.slice();
+    unknown[ACT_BYTES] = NAMED.car + 1;
+    expect(readAct(unknown, new Act()), "an unknown named kind on the wire").toBe(false);
+    expect(readAct(good.subarray(0, ACT_BYTES), new Act()), "a shot with no name bytes").toBe(false);
+    expect(readAct(good.subarray(0, ACT_BYTES + NAMED_BYTES - 1), new Act()), "a shot one byte short").toBe(false);
+    for (const field of ["kind", "id", "x", "y"] as const) {
+      const act = namedShot();
+      act.named[field] = field === "kind" ? NAMED.car + 1 : field === "id" ? 70000 : field === "x" ? NaN : 400;
+      const read = new Act();
+      expect(readAct(packAct(act)!, read), `${field}: the act itself still goes`).toBe(true);
+      expect(read.named.kind, `${field}: named as nothing`).toBe(NAMED.nothing);
+    }
   });
 });
 

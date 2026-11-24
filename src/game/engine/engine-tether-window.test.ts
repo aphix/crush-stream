@@ -81,7 +81,7 @@ function bodiesStoodFor(across: number, y: number): number {
     stood.push(PERSON_SLOT);
     return PERSON_SLOT;
   };
-  const director = new TetherDirector({ tethers: new TetherSet(), camera, scene, ropes, cars: () => [], movers: () => [], playerCar: () => -1, offered: () => true, chase: () => false, afoot: () => true, self: () => -1, actor: () => 0, actorSlot: () => -1, actorAfoot: () => false, guest: () => false, hostHolds: () => false, hostCables: () => 0, sendAct: () => {}, personMet, standPerson, holdDoll: () => {} });
+  const director = new TetherDirector({ tethers: new TetherSet(), camera, scene, ropes, cars: () => [], movers: () => [], playerCar: () => -1, offered: () => true, chase: () => false, afoot: () => true, self: () => -1, actor: () => 0, actorSlot: () => -1, actorAfoot: () => false, guest: () => false, hostHolds: () => false, hostCables: () => 0, sendAct: () => {}, nameHook: () => {}, personMet, standPerson, holdDoll: () => {} });
   director.fire();
   director.frame(FRAME);
   expect(plan.panes.length, "control: the shop has windows").toBeGreaterThan(0);
