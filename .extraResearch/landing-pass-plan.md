@@ -65,7 +65,7 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
   and its own test files green on the union: PerfPath, SmallCuts, CopStoops, GuestEdge, BarRoom, ContactRows, DeformSeat,
   ShutPlaces, CarsSeePlayers, Sweep, HubRules, KerbClaims; their worktrees are removed. Under them: ae0007683 (a derby driver
   that cannot get rolling lifts off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251). The crash digests
-  were re-derived once (`whole-digest`, `car-smooth`). The three `// mutation:` comments the pass had added are stripped.
+  were re-derived once (`whole-digest`, `car-smooth`). The six `// mutation:` comments the pass had added are stripped.
 - **The gate runs on this box** (the worker is not ours: see below), on a detached tree `~/worktrees/gate-union` at
   b66471175: `~/crash-wt/local-gate.sh <tree> <log dir> [first] [last]` runs the worker gate's own 14 shards (8 of parity,
   app and scripts without the GL file; 6 of the long AI suite), one vitest at a time with two workers under a 4 GB cap;
@@ -93,21 +93,20 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
   - `scenes/stack-column.test.ts` "when the Police column settles, then each roof's crush is the same within its bar (9 mm)"
     (10.97 mm): caused by ContactRows' belly-ridge commit 8c29fc177 (HubRules' bisect), which Main took out (ffb3e7a27);
     `vehicle/belly-ridge.test.ts` stays as two todo rows (the mid rows stand 11 mm into a roof; a second cause at -0.6 m).
-  - Owed: the crash digests (`whole-digest.test.ts` four rows, `car-smooth.test.ts` seven) re-derived ONCE with the reason
-    per change (hub creep, the six contact rules, the tilt and the hub ride, the at-rest gates), and REPLAY 254 for the
-    at-rest gates.
+  - Done after it: the crash digests (`whole-digest.test.ts` four rows, `car-smooth.test.ts` seven) re-derived once, with the
+    reason per change in each table's history line, and REPLAY 254 for the at-rest gates (905be0811). The stepped-drop row
+    this pass added reads the hatchback's third drop at 47.6 mm against 40.9 at most without the ridge lines (the same at
+    the union's head, with the gates): a todoRow in `stack-column.test.ts`; the SUV and the truck keep the row.
 - Reviews are kept in `~/crash-wt/landing/reviews/<Lane>-review.json`. A lane's commits written after its review get a reviewer
   too, before the gate.
 - Speed measurements owed (the worker, a quiet hour): PerfPath, CageWasm, LooseBatch (a browser derby with many torn parts).
-- **The worker.** `~/crash-wt/.worker-off` is set and stays set until humm-tauri answers yes (asked six times since 18:00Z;
-  their mails report their own one cargo slot there and do not answer). Without it the gate runs here, one capped process at
-  a time, folder by folder (hours). The owner can give the go in their place.
+- **The worker.** `~/crash-wt/.worker-off` is set. humm-tauri asked at 20:56Z to keep heavy runs off it until their done
+  mail (a timing run of theirs, about 70 minutes). After it: mail first, one job at a time, silence is no.
 - The box: our session is the `omp` process whose working directory is this repository (`readlink /proc/<pid>/cwd`); it was
   5.1 GB at 19:00Z. (Main read humm-tauri's process as ours for most of the day and reported 7 to 8 GB: wrong.)
 
 |Lane|Goal|State|
 |---|---|---|
-|KerbClaims|a resident's clip drawn where her car stands (16 of 100 clips were refused while her car stood a space away; 1 after); a patrol car never started on a space a car stands in (3 of 45 leases did)|reported (f4e4eec5d, 9c1bdc855); in review. The lane's own doubt: the clip can now appear tens of metres from the door she walked to|
 |LooseBatch|torn car parts in one draw batch, only where the browser has `WEBGL_multi_draw`|reviewed twice, ready (c930818e5); NOT merged: waits for the browser measurement, dropped if no gain|
 |CageWasm|the cage raster and plan field in the Rust kernel, bit-equal to the JS|reviewed, bit-equal by construction (69a0f7d3d); NOT merged: waits for the speed measurement (`bench.mjs strip-crash`, base against head), dropped if not faster. The skin stack (section 5) waits on it|
 
