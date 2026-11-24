@@ -5,8 +5,6 @@ import type { OpenWorldTraffic } from "../ai/openworld-traffic/openworld-traffic
 import { PERSON_GAP } from "../ai/openworld-traffic/traffic-constants.ts";
 import { FakeField, STEP_SECONDS, HOLD } from "../ai/openworld-traffic/traffic-world.test-util.ts";
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
-import { knocksDown } from "../scenes/figure-strike.ts";
-import { classStats } from "../vehicle/vehicle-classes.ts";
 import { BODY_POSTURE, makeFootRecord } from "../net/body-codec.ts";
 import { OpenWorldDirector, type OpenWorldPorts } from "./engine-openworld.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
@@ -112,7 +110,7 @@ describe("given a car of the traffic under way on its lane and a player on foot 
     });
   }
 
-  it("when the host's walker steps out 3 m ahead of the car at cruise, then the car cannot stop: its nose reaches him at a speed that knocks him down (what `runsDown` asks)", () => {
+  it("when the host's walker steps out 3 m ahead of the car at cruise, then the car cannot stop: its nose reaches him faster than the run-down rows' 5 m/s throw needs", () => {
     const { body, walker, run, ahead } = laneWorld();
     run(UNDER_WAY_S);
     walker.at = ahead(STEPS_OUT_M);
@@ -122,7 +120,6 @@ describe("given a car of the traffic under way on its lane and a player on foot 
       if (hypot2(walker.at.x - body.group.position.x, walker.at.z - body.group.position.z) <= NOSE_REACH_M) speedAtNose = body.speed;
     }
     expect(speedAtNose, "the car's nose reached him").toBeGreaterThan(0);
-    expect(speedAtNose, "its speed there (m/s): over the throw speed").toBeGreaterThan(4);
-    expect(knocksDown(classStats("sedan").mass, speedAtNose), "it knocks a standing man down at that speed").toBe(true);
+    expect(speedAtNose, "its speed there (m/s): over the run-down rows' throw speed").toBeGreaterThan(5);
   });
 });
