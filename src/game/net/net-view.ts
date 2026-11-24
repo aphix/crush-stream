@@ -98,6 +98,7 @@ export function drawSnapshots(
     if (w >= 0 && !car.falling && !car.vaporized) {
       const f = ring[w]!.cars[i]!;
       car.writeNetState(f.deform, f.parts);
+      car.deform.adoptHubPlaces();
       applied[i] = ringOrder[w]!;
     }
     if (!car.falling && !car.vaporized) car.netFrame(wallDt);
