@@ -43,6 +43,21 @@ export const SEGS: Int16Array = (() => {
   }
   return pairs.slice(0, m);
 })();
+/** The rocker lines' |x| (m, platform): the belly's outermost points. */
+const ROCKER_X = Math.max(...PLATFORM.belly.map(([x]) => Math.abs(x)));
+/**
+ * Per `SEGS` line, 1 where it rests on a car top's ridge between its points (`ridgeCross`): the pan's, the mid rows' and the keel's
+ * crossings to them. Not the keel's own line (resting on it alone, a car on another's roof rolled 11° either way) nor a rocker's.
+ */
+export const RIDGED: Uint8Array = (() => {
+  const ridged = new Uint8Array(SEGS.length / 2);
+  for (let s = 0; s < SEGS.length; s += 2) {
+    const xa = PLATFORM.belly[SEGS[s]!]![0];
+    const xb = PLATFORM.belly[SEGS[s + 1]!]![0];
+    ridged[s / 2] = (xa !== 0 || xb !== 0) && Math.abs(xa) < ROCKER_X && Math.abs(xb) < ROCKER_X ? 1 : 0;
+  }
+  return ridged;
+})();
 /**
  * How far apart (m) a tyre's side-face samples (`readTyreSides`) lie along its length: no further than the thinnest solid the world places is
  * across, so a solid never stands between two of them while the tyre straddles it (a wall thinner than the tyre is long stood between its
