@@ -162,7 +162,7 @@ const HOT = {
   "src/game/ai/openworld-crime/foot-cops.ts": ["step", "patrol", "run", "replanIfAimMoved", "nearestFree", "isFree", "nearestOfCase", "nextCorner", "isRecent", "remember"],
   "src/game/ai/openworld-crime/foot-walkers.ts": ["advance", "plan", "moveToward", "nearestNode", "nearestSeenNode", "straightClear", "snapshot", "drawnX", "drawnZ", "drawnYaw", "drawnStride", "carry"],
   "src/game/ai/openworld-crime/flight.ts": ["plan", "fillDanger", "hideAhead", "farCorner", "corner", "copGap"],
-  "src/game/ai/openworld-crime/crime-scene.ts": ["step", "findCopHits", "applyDueCopDowns", "applyDueSpared", "applyDueFootEvents", "liftHeard"],
+  "src/game/ai/openworld-crime/crime-scene.ts": ["step", "findCopHits", "applyDueCopDowns", "applyDueSpared", "applyDueFootEvents", "liftHeard", "markHeardCops"],
   "src/game/engine/engine-openworld-law.ts": ["feedCops", "hearCopDowns", "hearSpared", "hearFootEvents", "feedFoot", "hearShoves", "shoverOf", "hearRides", "writePoses"],
   "src/game/engine/engine-openworld-medics.ts": ["writePoses"],
   "src/game/engine/engine-openworld-arrest-rides.ts": ["hear"],

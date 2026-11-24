@@ -139,6 +139,7 @@ export class OpenWorldLaw {
         const dt = Math.max(0, crowdSeconds - this.lastOverlay);
         shared.poseRows(shared.frame, BODY_KIND.civilian, poses, false, crowdSeconds, dt);
         shared.poseRows(shared.frame, BODY_KIND.cop, this.scene.copPoses, true, crowdSeconds, dt);
+        this.scene.markHeardCops();
         shared.hide(shared.frame, poses);
         this.scene.liftHeard(poses);
       }

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { PREFABS } from "./catalog.ts";
-import { PREFAB, SCENERY_ARM, TRACK_ID } from "./constants.ts";
+import { BIOME_IDS, PREFAB, SCENERY_ARM, TRACK_ID, type BiomeId } from "./constants.ts";
 import { placeCourse, type Placed } from "./placements.ts";
 import { addedDrawGroups, drawGroupOf, thinScenery } from "./scenery.ts";
-import { CLUSTER_LOOK, CLUSTERS } from "./scenery-biome.ts";
+import { CLUSTER_LOOK, CLUSTERS, zonesOf } from "./scenery-biome.ts";
 import type * as FieldModule from "./scenery-field.ts";
-import { buildFarField } from "./scenery-field.ts";
+import { buildFarField, buildField } from "./scenery-field.ts";
 import { COURSE_JSON, REACH, REACH_SLACK, dress, dressUncached, nearOpening } from "./scenery.test-util.ts";
 import { parseTrack } from "./track-schema.ts";
 import { Track } from "./track.ts";
@@ -148,13 +148,22 @@ describe("given the far clusters of a park course and a dirt course", () => {
     for (const [biome, spec] of Object.entries(CLUSTERS)) for (const [kind] of spec.kinds) expect(CLUSTER_LOOK[kind], `${biome} ${kind}`).toBeDefined();
   });
 
-  it("when every far member of every course is read back, then they fall in at most one draw group a far kind, and a group is a kind the biome tables list", () => {
-    const kinds = new Set(Object.values(CLUSTERS).flatMap((spec) => spec.kinds.map(([kind]) => `${kind}:far`)));
+  it("when every far member of every course is read back, then they fall in at most one draw group a far kind, and a group is a kind a biome of that course lists", () => {
+    const every = new Set(Object.values(CLUSTERS).flatMap((spec) => spec.kinds.map(([kind]) => `${kind}:far`)));
     const bad: string[] = [];
+    let narrower = 0;
     for (const j of COURSE_JSON) {
       const d = dress(j, {}, true);
-      for (const p of d.drawn) if (p.far && !kinds.has(drawGroupOf(p))) bad.push(`${d.track.id} ${drawGroupOf(p)}`);
+      // The biomes this course is dressed in: its zones', and its blanket biome or else each stretch's own.
+      const biomes = new Set<BiomeId>(zonesOf(d.track).map((zone) => zone.biome));
+      const blanket = d.track.json.scenery?.biome ?? null;
+      if (blanket !== null) biomes.add(blanket);
+      else for (const id of buildField(d.track).biome) biomes.add(BIOME_IDS[id]!);
+      const own = new Set([...biomes].flatMap((biome) => CLUSTERS[biome]?.kinds.map(([kind]) => `${kind}:far`) ?? []));
+      if (own.size < every.size) narrower++;
+      for (const p of d.drawn) if (p.far && !own.has(drawGroupOf(p))) bad.push(`${d.track.id} ${drawGroupOf(p)}`);
     }
-    expect(bad).toEqual([]);
+    expect(bad, "far groups outside their own course's biome tables").toEqual([]);
+    expect(narrower, "courses whose own tables are narrower than every biome's: the row can tell a desert's flowers from a park's").toBeGreaterThan(0);
   });
 });

@@ -558,7 +558,7 @@ ground can stand on at some pitch.
   column (more than `VERTICAL_CLEAR` of height, or no plan contact). Pairs tilted less (a car pitched 27° on a tier) read as before, bit
   for bit. `sat-pose.test.ts` reads the rolled rows against an oracle that counts a node only where its column shares more than
   `VERTICAL_CLEAR` with the other's cell column (65°-75° within 0.04 m, was 0.253 m at 70°); the pitched rows keep the graze-counting
-  oracle and record the outline's old graze over-read (27°, 1 m up, 3.6 m back: 0.750 m) as a todo.
+  oracle and record the outline's old graze over-read (27°, 1 m up, 3.6 m back: 0.750 m, 0.500 m since `bandGrazes`) as a todo.
 - **An outline node's band counts only where its own columns meet the other's** (`sat.ts` `bandGrazes`): a banded node whose band shares more than
   `VERTICAL_CLEAR` is dropped when some column of its part within the band's window stands over or under a column of the other car taller than
   that and none of them shares more than `VERTICAL_CLEAR` there; a node with no such pair (a hood's lip whose bonnet is not yet in) keeps its band, and an

@@ -47,6 +47,8 @@ export class CrimeScene {
   private authority = false;
   /** A guest has the host's cops and suspects in a fresh frame of people: it draws those (`OpenWorldShared.poseRows`) and not its own law's poses. The law itself still steps. */
   heardPoses = false;
+  /** Per foot cop: 1 once his row in `copPoses` was written from a host's record (`markHeardCops`) or by this law's own fill; else the row is the zeros `createCrowdPoses` made, not a place. */
+  private readonly copHeard = new Uint8Array(FOOT_COP_COUNT);
   /** The rowhomes' stoops, which lift the cops and the suspects the law draws to the step under them: none (the street's height) until the engine gives the crowd's. */
   stoops: Stoops | null = null;
   /** Per car: the civilians it ran down in the current minute and when that minute began. */
@@ -112,6 +114,7 @@ export class CrimeScene {
     if (!this.heardPoses || authority) {
       overlaySuspects(this.law, crowdPoses, this.drawShare, this.stoops);
       fillCopPoses(this.law, this.copPoses, this.drawShare, this.stoops);
+      this.copHeard.fill(1);
     }
     if (authority) this.findCopHits(cars, crowdSeconds);
   }
@@ -119,6 +122,12 @@ export class CrimeScene {
   /** A guest drew the host's poses over `crowdPoses` and `copPoses` (`heardPoses`): the law's people stand at the height of the stoop under them as on the host. */
   liftHeard(crowdPoses: CrowdPoses): void {
     liftHeard(this.law, crowdPoses, this.copPoses, this.stoops);
+  }
+
+  /** A guest wrote the host's pose records into `copPoses` (`OpenWorldShared.poseRows`): each cop it shows has a row that is a place. */
+  markHeardCops(): void {
+    const { shown } = this.copPoses;
+    for (let cop = 0; cop < FOOT_COP_COUNT; cop++) if (shown[cop] === 1) this.copHeard[cop] = 1;
   }
 
   /** The height of foot cop `cop`'s feet where he is drawn, where a throw of him starts: `feetY` is a world height (the stoop's step), the ground's where it is higher, as the bodies read it. */
@@ -288,10 +297,10 @@ export class CrimeScene {
     }
   }
 
-  /** A guest's throw of the cop the host's knock named: from where he is drawn (the host's record, lifted by `liftHeard`: the host throws him from there too). With the host's frames heard the host's last record stands in `copPoses` even after a frame without him (it hides him as it raises the knock, before this clock reaches it); else from where the law has him. */
+  /** A guest's throw of the cop the host's knock named: from where he is drawn (the host's record, lifted by `liftHeard`: the host throws him from there too). With the host's frames heard the host's last record stands in `copPoses` even after a frame without him (it hides him as it raises the knock, before this clock reaches it); a cop no record or fill ever wrote (`copHeard`) is thrown from where the law has him, never from the zeros of an unwritten row. */
   private throwFromNearest(cop: number, cars: readonly DeformableCar[]): void {
     const { walkers } = this.law;
-    const drawn = this.heardPoses || this.copPoses.shown[cop] === 1;
+    const drawn = this.copHeard[cop] === 1 && (this.heardPoses || this.copPoses.shown[cop] === 1);
     const x = drawn ? this.copPoses.x[cop]! : walkers.x[cop]!;
     const z = drawn ? this.copPoses.z[cop]! : walkers.z[cop]!;
     let nearest = -1;

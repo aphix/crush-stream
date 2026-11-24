@@ -66,6 +66,7 @@ describe("given a guest with the host's frames whose last one hid the cop on the
     cops.shown[0] = 1;
     cops.x[0] = DOOR_X;
     cops.z[0] = 0;
+    run.scene.markHeardCops();
     run.scene.liftHeard(run.poses);
     cops.shown[0] = 0;
     run.scene.foot.walkers.place(0, 0, 0);
@@ -76,6 +77,24 @@ describe("given a guest with the host's frames whose last one hid the cop on the
     expect(strikes.length, "one throw").toBe(1);
     expect(strikes[0]!.x, "from where the host drew him (m)").toBeCloseTo(DOOR_X, 1);
     expect(strikes[0]!.y, "where the thrown cop starts (m)").toBeCloseTo(STOOP.sill, 2);
+  });
+});
+
+describe("given a guest with the host's frames that has heard no record for a cop", () => {
+  it("when his knock comes due, then he is thrown from the law walker's spot, not from the origin", () => {
+    const run = harness([DOOR_X, DOOR_X + 3, DOOR_X], { authority: false });
+    const car = pooledCar(0);
+    car.group.position.set(DOOR_X + 20, 0, 0);
+    run.cars.push(car);
+    run.scene.heardPoses = true;
+    run.scene.foot.walkers.place(0, DOOR_X + 1, 0);
+    runFor(run, 2 * STEP_SECONDS);
+    run.scene.hearCopDown(0, run.now);
+    runFor(run, 2 * STEP_SECONDS);
+    const strikes = run.scene.takeCopStrikes();
+    expect(strikes.length, "one throw").toBe(1);
+    expect(strikes[0]!.x, "from the law walker's spot, x (m)").toBeCloseTo(DOOR_X + 1, 0);
+    expect(strikes[0]!.z, "from the law walker's spot, z (m)").toBeCloseTo(0, 0);
   });
 });
 

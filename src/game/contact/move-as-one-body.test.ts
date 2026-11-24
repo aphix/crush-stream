@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { launch, makeCar } from "./crash-scenarios.test-util.ts";
 import { carRow, makeBox, moveAsOneBody, solidFace, strikeCar } from "./external-contact.ts";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import { resolveCarPair } from "./pair-contact.ts";
 import { outlineOf, OUTLINE_REACH } from "./cage-outline.ts";
 import { BODY_SIZE, BODY_VX, BODY_W } from "./body-contact.ts";
@@ -81,14 +82,15 @@ describe("given a sedan wreck at a graze, its nose masses still running on into 
   });
 });
 
-/** A sedan wreck leaning `lean` rad about its length, every mass at the rigid motion of `spin` about the masses' centroid; the row `carRow` reads off it at a face along +x. */
-function tumblingWreck(lean: number, spin: THREE.Vector3): { car: DeformableCar; centre: THREE.Vector3; rows: Float64Array } {
+/** A sedan wreck leaning `lean` rad about its length (`axis` z) or nose up (`axis` x) and moving at `speed` m/s along +z, every mass at the rigid motion of `spin` about the masses' centroid; the row `carRow` reads off it at a face along +x. */
+function tumblingWreck(lean: number, spin: THREE.Vector3, speed = 0, axis: "x" | "z" = "z"): { car: DeformableCar; centre: THREE.Vector3; rows: Float64Array } {
   const car = makeCar();
   launch(car, 0, 0, 0, 0, 0);
-  car.group.rotation.z = lean;
+  car.group.rotation[axis] = lean;
   car.group.updateMatrixWorld(true);
   car.deform.armMasses(car.group, car.velocity, car.angular);
   car.crashed = true;
+  car.velocity.set(0, 0, speed);
   car.angular.copy(spin);
   const masses = car.deform.masses.filter((m) => m.dynamic);
   const centre = masses.reduce((s, m) => s.addScaledVector(m.world, m.mass), new THREE.Vector3()).divideScalar(masses.reduce((s, m) => s + m.mass, 0));
@@ -126,7 +128,7 @@ describe("given a sedan wreck tumbling in roll and pitch as one rigid body", () 
     expect(Math.abs(rows[BODY_VX]! - closing), `the row closes at ${rows[BODY_VX]!.toFixed(3)} m/s, its ${driving.length} driving masses at ${closing.toFixed(3)}`).toBeLessThanOrEqual(RIGID);
   });
 
-  it("when a leaning wreck pitched, yawing and rolling at 1 rad/s is read as one body and left one body, then its linear and angular momentum on all three axes and its kinetic energy are kept", () => {
+  it("when a leaning wreck pitched, yawing and rolling at 1 rad/s is read and written back as one body with no exchange between, then its linear and angular momentum on all three axes and its kinetic energy are kept", () => {
     const { car, centre, rows } = tumblingWreck(LEAN, new THREE.Vector3(1, 1, 1));
     const masses = car.deform.masses.filter((m) => m.dynamic);
     const read = (): { p: THREE.Vector3; l: THREE.Vector3; ke: number } => {
@@ -148,4 +150,36 @@ describe("given a sedan wreck tumbling in roll and pitch as one rigid body", () 
     expect(after.l.distanceTo(before.l), `angular momentum about the centroid moved (${moved(after.l, before.l)}) N·m·s`).toBeLessThanOrEqual(KEPT);
     expect(after.ke - before.ke, `the masses' kinetic energy changed by ${(after.ke - before.ke).toFixed(3)} J`).toBeLessThanOrEqual(KEPT);
   });
+});
+
+describe("given a sedan wreck leaning and rolling as one body that meets a fixed face off centre", () => {
+  /** The wreck's translational kinetic energy (J) over its dynamic masses. */
+  const energy = (car: DeformableCar): number => car.deform.masses.filter((m) => m.dynamic).reduce((s, m) => s + 0.5 * m.mass * m.vel.lengthSq(), 0);
+
+  todoRow(
+    "when a rigid strike changes its yaw, then its kinetic energy is at most what it was: a fixed face adds none",
+    "a law question for the owner: through strikeCar's rigid exchange a wreck pitched 45 or 75 degrees nose up and rolling at 3 rad/s against a fixed face at 0.3 or 0.5 m/s gains 1.7 to 36.3 J of kinetic energy in 6 of 192 cases probed (45 degrees: 2223 to 2247 J at 0.3 m/s, 2291 to 2296 J at 0.5 m/s; 75 degrees: 3562 to 3598 J at 0.3 m/s, 3631 to 3667 J at 0.5 m/s; its yaw changed 0.06 to 0.18 rad/s): the yaw spin changes while roll and pitch stay, and on a tilted body that adds energy on top of the kernel's own non-positive change (+/-585 J against the planar rows at 3 m/s)",
+    () => {
+      const rises: string[] = [];
+      for (const axis of ["z", "x"] as const) {
+        for (const lean of [15, 45, 75]) {
+          for (const roll of [1, 3]) {
+            for (const speed of [0.3, 0.5, 3]) {
+              for (const side of [-0.8, 0.8]) {
+                const { car } = tumblingWreck((lean * Math.PI) / 180, new THREE.Vector3(0, 0, roll), speed, axis);
+                car.deform.beginSlice(H);
+                const nose = Math.max(...car.deform.masses.map((m) => m.world.z));
+                const face = solidFace(makeBox(), 0, -1, side, nose - NOSE_IN, side, 0, 0.5, 0.5);
+                const before = energy(car);
+                strikeCar(car, face, H, true, false, true);
+                const gained = energy(car) - before;
+                if (gained > KEPT) rises.push(`lean ${axis}${lean} roll ${roll} at ${speed} m/s, face at x ${side}: +${gained.toFixed(1)} J`);
+              }
+            }
+          }
+        }
+      }
+      expect(rises.length, `cases that gain kinetic energy against a fixed face: ${rises.join("; ")}`).toBe(0);
+    },
+  );
 });
