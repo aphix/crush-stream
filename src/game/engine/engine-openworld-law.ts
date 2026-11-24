@@ -133,12 +133,14 @@ export class OpenWorldLaw {
       const shared = ports.shared();
       const heard = !authority && shared !== null && shared.fresh(ports.now());
       this.scene.heardPoses = heard;
+      this.scene.stoops = crowd.stoops;
       this.scene.step(crowdSeconds, authority, poses, ports.cars());
       if (heard) {
         const dt = Math.max(0, crowdSeconds - this.lastOverlay);
         shared.poseRows(shared.frame, BODY_KIND.civilian, poses, false, crowdSeconds, dt);
         shared.poseRows(shared.frame, BODY_KIND.cop, this.scene.copPoses, true, crowdSeconds, dt);
         shared.hide(shared.frame, poses);
+        this.scene.liftHeard(poses);
       }
       this.lastOverlay = crowdSeconds;
     };

@@ -231,14 +231,14 @@ export class CivilianCrowd {
     } else this.throwHeardKnocks(cars);
   }
 
-  /** The residents the overlay moved off the spot `separate` drew (the law's suspects, running or led) are kept out of the stoops like the lane's walkers: the rest still stand where `separate` left them and are not touched. */
+  /** The residents the overlay moved off the spot `separate` drew (the law's suspects, running or led) are kept out of the stoops like the lane's walkers, unless the overlay marked them `onSpur` (the law's walkers, on the graph: lifted, not moved): the rest still stand where `separate` left them and are not touched. */
   private keepOverlaidOut(): void {
     const stoops = this.stoops;
     if (stoops === null) return;
-    const { x, z, shown } = this.poses;
+    const { x, z, shown, onSpur } = this.poses;
     const { drawX, drawZ } = this.separation;
     for (let resident = 0; resident < this.separation.capacity; resident++) {
-      if (shown[resident] === 0 || (x[resident] === drawX[resident] && z[resident] === drawZ[resident])) continue;
+      if (shown[resident] === 0 || onSpur[resident] === 1 || (x[resident] === drawX[resident] && z[resident] === drawZ[resident])) continue;
       stoops.keepOut(x, z, resident);
     }
   }
@@ -619,12 +619,17 @@ export class CivilianCrowd {
     this.postBatch();
   }
 
+  /** Where a throw of `resident` starts at (x, z): the stoop step she was last drawn on (`feetY`, a world height), the ground's where it is higher, as the bodies read it, so she is not thrown from inside the steps. */
+  private groundUnder(resident: number, x: number, z: number): number {
+    return Math.max(activeGround().heightAt(x, z), this.poses.feetY[resident]!);
+  }
+
   /** The player's blow fells `resident` (a knock-out): hidden, thrown along (dirX, dirZ), the knock in the log. */
   knockOut(resident: number, seconds: number, dirX: number, dirZ: number): void {
     if (!this.authority || this.poses.shown[resident] === 0) return;
     const x = this.poses.x[resident]!;
     const z = this.poses.z[resident]!;
-    this.knockDown(resident, seconds, felled(resident, x, activeGround().heightAt(x, z), z, dirX, dirZ, blankStrike()));
+    this.knockDown(resident, seconds, felled(resident, x, this.groundUnder(resident, x, z), z, dirX, dirZ, blankStrike()));
     // A punch lands between steps: posted now, the brain hides her before the next step's poses (as `noteWallHit` posts), not a frame after.
     this.postBatch();
   }
@@ -634,7 +639,7 @@ export class CivilianCrowd {
     if (!this.authority || this.poses.shown[resident] === 0) return;
     const x = this.poses.x[resident]!;
     const z = this.poses.z[resident]!;
-    const strike = felled(resident, x, activeGround().heightAt(x, z), z, dirX, dirZ, blankStrike());
+    const strike = felled(resident, x, this.groundUnder(resident, x, z), z, dirX, dirZ, blankStrike());
     strike.vx = Math.fround(dirX * speed);
     strike.vz = Math.fround(dirZ * speed);
     this.knockDown(resident, seconds, strike);
@@ -710,7 +715,7 @@ export class CivilianCrowd {
     const dx = x[victim]! - x[striker]!;
     const dz = z[victim]! - z[striker]!;
     const far = hypot2(dx, dz);
-    return felled(victim, x[victim]!, activeGround().heightAt(x[victim]!, z[victim]!), z[victim]!, far > 0 ? dx / far : 0, far > 0 ? dz / far : 1, out);
+    return felled(victim, x[victim]!, this.groundUnder(victim, x[victim]!, z[victim]!), z[victim]!, far > 0 ? dx / far : 0, far > 0 ? dz / far : 1, out);
   }
 
   /** Car `carIndex` (velocity (vx, vz), `carSpeed`) coming at the civilian (toX, toZ from it) is noted for `raiseDangers` (`comingAt`: a car driving down the street is not). */
@@ -806,7 +811,7 @@ export class CivilianCrowd {
         nearest = carIndex;
       }
       if (nearest < 0) continue;
-      this.struck.push(fell(cars[nearest]!, nearest, resident, this.pose.x, activeGround().heightAt(this.pose.x, this.pose.z), this.pose.z, this.pose.dirX, this.pose.dirZ, blankStrike()));
+      this.struck.push(fell(cars[nearest]!, nearest, resident, this.pose.x, this.groundUnder(resident, this.pose.x, this.pose.z), this.pose.z, this.pose.dirX, this.pose.dirZ, blankStrike()));
     }
     this.heardKnocks = waiting;
   }

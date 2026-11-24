@@ -3,9 +3,10 @@ import { detAtan2, detCos, detSin } from "../../kernel/physics-core.js";
 import { DOOR, type Frontage, STOOP, stoopStepRange } from "../../world/openworld/openworld-facade-solids.ts";
 import { Stoops } from "../../world/openworld/openworld-stoops.ts";
 import { ACTIVITY } from "./civilian-activity.ts";
-import { LATERAL_MAX, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE } from "./civilian-constants.ts";
+import { pooledCar } from "../../contact/crash-scenarios.test-util.ts";
+import { EVENT_KIND, LATERAL_MAX, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE } from "./civilian-constants.ts";
 import { PACE, people, sendAlong, streetEdge } from "./civilian-crowd-contact.test-util.ts";
-import { newCrowd } from "./civilian-crowd.test-util.ts";
+import { FRAME_SECONDS, newCrowd } from "./civilian-crowd.test-util.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { readActivity } from "./society-activity.ts";
@@ -144,21 +145,77 @@ describe("given a rowhome whose stoop runs out across the sidewalk a resident wa
 });
 
 /** Her drawn distance out from HOUSE's facade after one step in which the law's overlay draws her at the middle of its stoop. */
-function outAfterOverlayOnStoop(stoops: Stoops | null): number {
+function outAfterOverlayOnStoop(stoops: Stoops | null, marked = false): { out: number; lift: number } {
   const { crowd, person } = leaving(stoops);
   const out = STOOP.run / 2;
   crowd.overlay = (poses) => {
     poses.x[person] = HOUSE.x + detCos(HOUSE.yaw) * out + detSin(HOUSE.yaw) * DOOR.across;
     poses.z[person] = HOUSE.z - detSin(HOUSE.yaw) * out + detCos(HOUSE.yaw) * DOOR.across;
+    poses.onSpur[person] = marked ? 1 : 0;
   };
   crowd.step(1, [], true);
   expect(crowd.poses.shown[person], "she is drawn").toBe(1);
-  return (crowd.poses.x[person]! - HOUSE.x) * detCos(HOUSE.yaw) - (crowd.poses.z[person]! - HOUSE.z) * detSin(HOUSE.yaw);
+  return { out: (crowd.poses.x[person]! - HOUSE.x) * detCos(HOUSE.yaw) - (crowd.poses.z[person]! - HOUSE.z) * detSin(HOUSE.yaw), lift: crowd.poses.feetY[person]! };
 }
 
 describe("given a resident the law's overlay draws at the middle of a rowhome's stoop", () => {
   // mutation: sed -i '/^      this.keepOverlaidOut();/d' src/game/ai/civilians/civilian-crowd.ts
   it("when the crowd takes the overlay, then she is drawn the stoop's run and 0.6 m out from the facade", () => {
-    expect(outAfterOverlayOnStoop(new Stoops([HOUSE]))).toBeCloseTo(STOOP.run + 0.6, 3);
+    expect(outAfterOverlayOnStoop(new Stoops([HOUSE])).out).toBeCloseTo(STOOP.run + 0.6, 3);
+  });
+
+  it("when the overlay marks her on the spur (the law's walker on the graph), then she stays where it drew her, on the step under her", () => {
+    const drawn = outAfterOverlayOnStoop(new Stoops([HOUSE]), true);
+    expect(drawn.out, "out from the facade (m)").toBeCloseTo(STOOP.run / 2, 3);
+    expect(drawn.lift, "her height (m)").toBeGreaterThan(0);
+  });
+});
+
+/** A crowd whose overlay draws her `out` m out from HOUSE's facade on the door's line, marked on the spur as the law's suspects are, stepped once (she is drawn). */
+function drawnAt(out: number): { crowd: CivilianCrowd; person: number } {
+  const { crowd, person } = leaving(new Stoops([HOUSE]));
+  crowd.overlay = (poses) => {
+    poses.x[person] = HOUSE.x + detCos(HOUSE.yaw) * out + detSin(HOUSE.yaw) * DOOR.across;
+    poses.z[person] = HOUSE.z - detSin(HOUSE.yaw) * out + detCos(HOUSE.yaw) * DOOR.across;
+    poses.onSpur[person] = 1;
+  };
+  crowd.step(1, [], true);
+  expect(crowd.poses.shown[person], "she is drawn").toBe(1);
+  return { crowd, person };
+}
+
+describe("given a resident the law draws on a rowhome's landing or on the sidewalk in front of it", () => {
+  it("when a punch knocks her out on the landing, then her throw starts at the sill's height; on the sidewalk, at the street's", () => {
+    for (const [out, height] of [[0.2, STOOP.sill], [STOOP.run + 2, 0]] as const) {
+      const { crowd, person } = drawnAt(out);
+      crowd.takeStrikes();
+      crowd.knockOut(person, 1, 1, 0);
+      const strikes = crowd.takeStrikes();
+      expect(strikes.length, `one throw at ${out} m`).toBe(1);
+      expect(strikes[0]!.y, `where she starts at ${out} m out (m)`).toBeCloseTo(height, 2);
+    }
+  });
+
+  it("when a bullet takes her on the landing, then her throw starts at the sill's height", () => {
+    const { crowd, person } = drawnAt(0.2);
+    crowd.takeStrikes();
+    crowd.shoot(person, 1, 1, 0, 9);
+    expect(crowd.takeStrikes()[0]!.y, "where she starts (m)").toBeCloseTo(STOOP.sill, 2);
+  });
+});
+
+describe("given a client that hears a knock of a resident walking out of a rowhome's door", () => {
+  it("when it throws her from the car nearest, then she starts at the height she was drawn at on the landing", () => {
+    const { crowd, person } = leaving(new Stoops([HOUSE], [EDGE.from]));
+    const at = 0.1 / PACE;
+    crowd.step(at, [], false);
+    expect(crowd.poses.feetY[person], "control: she is on the landing (m)").toBeCloseTo(STOOP.sill, 2);
+    const car = pooledCar(0);
+    car.group.position.set(START.x + 10, 0, START.z);
+    crowd.hear(Float64Array.of(EVENT_KIND.knock, person, at, EVENT_KIND.push, person, at));
+    crowd.step(at + FRAME_SECONDS, [car], false);
+    const strikes = crowd.takeStrikes();
+    expect(strikes.length, "one throw").toBe(1);
+    expect(strikes[0]!.y, "where she starts (m)").toBeCloseTo(STOOP.sill, 2);
   });
 });
