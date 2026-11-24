@@ -476,7 +476,7 @@ export abstract class RaceField {
         this.putAway(id, car);
         continue;
       }
-      const slot = sv ? { ...humanSlot(sv.start, human++), y: 0 } : tr.gridSlot(k);
+      const slot = sv ? { ...humanSlot(sv.start, human++, sv.seats), y: 0 } : tr.gridSlot(k);
       this.place(car, slot.x, slot.z, slot.yaw, slot.y);
       this.brain!.setAggression(id, this.entrants[id]!.aggression);
       this.brain!.setDifficulty(id, this.rules.aiDifficulty);
@@ -609,7 +609,7 @@ export abstract class RaceField {
   /** Where car `k` stands in the lobby: abreast on the course's start anchor like a hosted Survival run's humans (a course without one: its grid). */
   private lobbySlot(k: number): { x: number; z: number; yaw: number; y: number } {
     const tr = this.track!;
-    return tr.survival ? { ...humanSlot(tr.survival.start, k), y: 0 } : tr.gridSlot(k);
+    return tr.survival ? { ...humanSlot(tr.survival.start, k, tr.survival.seats), y: 0 } : tr.gridSlot(k);
   }
 
   /** Lobby: car `id` back at its spawn, repaired (`place` dresses it afresh), upright and at rest. */

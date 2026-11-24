@@ -193,8 +193,8 @@ const guards = z.object({
   count: z.number().int().min(1).max(12),
 });
 
-/** Survival mode: where the player starts and the cop formation slots behind that start (tight and staggered). */
-const survival = z.object({ start: anchor, formation: z.array(anchor).min(4).max(6) });
+/** Survival mode: where the player starts, the cop formation slots behind that start (tight and staggered), and optionally one anchor per seat a room holds (the abreast rule seats whoever it names no anchor for). */
+const survival = z.object({ start: anchor, formation: z.array(anchor).min(4).max(6), seats: z.array(anchor).min(1).max(12).optional() });
 
 export const TrackSchema = z
   .object({

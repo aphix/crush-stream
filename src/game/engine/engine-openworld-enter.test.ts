@@ -16,6 +16,8 @@ const HELD_CREEP_M = 0.5;
 const MINUTE_S = 60;
 const DRIVE_S = 2;
 const DROVE_OFF_M = 3;
+/** How far (m) behind his own car the traffic's car on a trip stands in the row that holds Enter. */
+const TRIP_CAR_BEHIND_M = 5.5;
 
 describe("given the real engine in the open world, its player out of his car with a kerb car near", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -72,6 +74,9 @@ describe("given the real engine in the open world, its player out of his car wit
     const from = traffic.nearestSpot(rig.cars()[target]!.group.position.x, rig.cars()[target]!.group.position.z);
     const held = traffic.spawnDrivenCar(-1, from, traffic.nearestSpot(rig.cars()[0]!.group.position.x + 80, rig.cars()[0]!.group.position.z), { urgent: false })!;
     held.driver = () => ({ ...idleDrive(), brake: 1 });
+    // The start formation keeps the spaces by the start empty, so the nearest free one is a block away: the car on a trip stands where a walk reaches it, behind his own.
+    const own = rig.cars()[0]!.group.position;
+    rig.place(held.index, own.x - TRIP_CAR_BEHIND_M, own.z);
     rig.getOut();
     rig.walkToDoor(rig.cars()[held.index]!);
     rig.press("Enter");

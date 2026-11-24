@@ -234,10 +234,10 @@ export class KerbCars {
     return this.wantedSpot;
   }
 
-  /** Space `spot` (for resident `resident`, -1 for none) is the wanted one if it is empty, nearer a player than the best so far, and unseen (unless it is the first passes). */
+  /** Space `spot` (for resident `resident`, -1 for none) is the wanted one if it is empty (and, for a car that stands for good, not held by the start formation's mask: `taken` is 1 there), nearer a player than the best so far, and unseen (unless it is the first passes). */
   private consider(spot: number, resident: number, prime: boolean): void {
-    const { spots, standing } = this.context;
-    if (spot < 0 || standing[spot] !== STANDING.none) return;
+    const { spots, standing, taken } = this.context;
+    if (spot < 0 || standing[spot] !== STANDING.none || (resident < 0 && taken[spot] === 1)) return;
     const distance = this.distanceToEyes(spots.x[spot]!, spots.z[spot]!);
     if (distance >= this.wantedDistance || (!prime && !spotUnseen(this.context, spot))) return;
     this.wantedDistance = distance;

@@ -18,13 +18,12 @@ import {
   SPAWN_FORMATION_BACK,
   SPAWN_FORMATION_COUNT,
   SPAWN_FORMATION_LATERAL,
-  SPAWN_BEHIND_CENTRE,
   SPAWN_FORMATION_STEP,
-  SPAWN_LATERAL_SHIFT,
   WALL_HEIGHT,
   WALL_PIECE_LENGTH,
   WALL_THICKNESS,
 } from "./openworld-constants.ts";
+import { spawnSeats } from "./openworld-spawn.ts";
 import { facadeSolidProps } from "./openworld-facade-solids.ts";
 import { QUARTER_TURN } from "./openworld-fabric-constants.ts";
 import { fabricProps } from "./openworld-fabric.ts";
@@ -162,16 +161,16 @@ function paintOf(lots: Lots): NonNullable<NonNullable<TrackInput["environment"]>
   }));
 }
 
-/** Spawn: across the first interior intersection, heading east; the cops queue behind. */
+/** Spawn: rows of two abreast back along the first interior east-west street from its first intersection, heading east; the cops queue behind the last row. */
 function spawnOf(geometry: Geometry): NonNullable<TrackInput["survival"]> {
-  const z = geometry.streetZ[1]! + SPAWN_LATERAL_SHIFT;
-  const startX = geometry.streetX[1]! - SPAWN_BEHIND_CENTRE;
+  const seats = spawnSeats(geometry);
+  const { x: startX, z } = seats[0]!;
   const formation = Array.from({ length: SPAWN_FORMATION_COUNT }, (_, index) => ({
     x: startX - SPAWN_FORMATION_BACK - index * SPAWN_FORMATION_STEP,
     z: z + (index % 2 === 0 ? -SPAWN_FORMATION_LATERAL : SPAWN_FORMATION_LATERAL),
     yaw: QUARTER_TURN,
   }));
-  return { start: { x: startX, z, yaw: QUARTER_TURN }, formation };
+  return { start: seats[0]!, seats, formation };
 }
 
 /** The open world as a course (`TrackSchema` input): the perimeter street as the road loop, the interior streets as car-free routes, a building per lot, lamps and trees, the street fabric (crossings, manholes, hydrants, furniture), the park's dressing and an invisible wall round the play area. */

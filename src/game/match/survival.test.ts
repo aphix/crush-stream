@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { Track } from "../world/track.ts";
+import { parseTrack } from "../world/track-schema.ts";
 import { HAVANA } from "../world/tracks/havana.ts";
+import havana from "../world/tracks/havana.json" with { type: "json" };
 import { BUST } from "../ai/constants.ts";
 import { RaceSession } from "./session.ts";
-import { SURVIVAL, settleRun } from "./survival.ts";
+import { SURVIVAL, humanSlot, settleRun } from "./survival.ts";
 import type { CarPose, Entrant } from "./types.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 
 const track = new Track(HAVANA);
@@ -105,5 +108,51 @@ describe("given a survival run's recorded best time", () => {
       expect(run.best, `${testCase.name}: best`).toBe(testCase.expectedBest);
       expect(run.isNew, `${testCase.name}: isNew`).toBe(testCase.expectedIsNew);
     }
+  });
+});
+
+/** `humanSlot(start, k)` of Havana's start for seats 0 to 11 as it answered before a course could name its seats: x, z, yaw per seat. */
+const ABREAST_BEFORE = [
+  0, 426, 3.1416, -3.9999999998920606, 426.0000293856408, 3.1416, 3.9999999998920606, 425.9999706143592, 3.1416, -7.999999999784121, 426.00005877128166, 3.1416,
+  -0.0000587712816531487, 418.0000000002159, 3.1416, -4.0000587711737134, 418.0000293858567, 3.1416, 3.9999412286104072, 417.9999706145751, 3.1416, -8.000058771065774, 418.00005877149755, 3.1416,
+  -0.0001175425633062974, 410.0000000004318, 3.1416, -4.000117542455367, 410.0000293860726, 3.1416, 3.9998824573287544, 409.999970614791, 3.1416, -8.000117542347427, 410.00005877171344, 3.1416,
+];
+const SEAT_TOLERANCE = 1e-9;
+const NAMED_SEATS = [
+  { x: 1, z: 2, yaw: 0.5 },
+  { x: 3, z: 4, yaw: 0.5 },
+];
+
+describe("given a Survival course that names no seats", () => {
+  it("when twelve seats are asked for, then they are where four abreast and a row 8 m ahead put them, with the list absent or null", () => {
+    const seats = Array.from({ length: 12 }, (_, k) => humanSlot(havana.survival.start, k));
+    expect(firstMismatch(seats.flatMap((seat) => [seat.x, seat.z, seat.yaw]), ABREAST_BEFORE, SEAT_TOLERANCE), "first seat value that moved").toBeUndefined();
+    const undef = Array.from({ length: 12 }, (_, k) => humanSlot(havana.survival.start, k, undefined));
+    expect(firstMismatch(undef.map((seat) => seat.z), seats.map((seat) => seat.z)), "an absent list").toBeUndefined();
+    const none = Array.from({ length: 12 }, (_, k) => humanSlot(havana.survival.start, k, null));
+    expect(firstMismatch(none.map((seat) => seat.x), seats.map((seat) => seat.x)), "a null list").toBeUndefined();
+  });
+
+  it("when the course is loaded as a track, then it has no seats", () => {
+    const spec = new Track(HAVANA).survival;
+    must(spec, "Havana has survival anchors");
+    expect(spec.seats, "seats").toBeUndefined();
+  });
+});
+
+describe("given a course that names two seats", () => {
+  it("when seats 0 to 3 are asked for, then the named seats come first and the seats past the list fall back to the abreast rule", () => {
+    const start = havana.survival.start;
+    expect(humanSlot(start, 0, NAMED_SEATS).x, "seat 0").toBe(1);
+    expect(humanSlot(start, 1, NAMED_SEATS).z, "seat 1").toBe(4);
+    expect(humanSlot(start, 2, NAMED_SEATS).x, "seat 2 as the abreast rule has it").toBe(humanSlot(start, 2).x);
+    expect(humanSlot(start, 3, NAMED_SEATS).z, "seat 3 as the abreast rule has it").toBe(humanSlot(start, 3).z);
+  });
+
+  it("when a course lists none or more than a room's twelve seats, then it is refused as an invalid track, and two are kept", () => {
+    const course = (seats: unknown[]): unknown => ({ ...havana, survival: { ...havana.survival, seats } });
+    expect(() => parseTrack(course([])), "no seats").toThrow(/seats/);
+    expect(() => parseTrack(course(Array.from({ length: 13 }, () => NAMED_SEATS[0]))), "thirteen seats").toThrow(/seats/);
+    expect(parseTrack(course(NAMED_SEATS)).survival?.seats?.length, "two seats").toBe(2);
   });
 });

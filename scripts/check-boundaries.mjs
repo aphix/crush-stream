@@ -174,7 +174,7 @@ const HOT = {
   "src/game/ai/openworld-traffic/openworld-traffic.ts": ["step", "drive", "inputOf", "refreshSnaps", "watchSignals", "carForClip", "holderOf", "claimMovable", "moveClaim"],
   "src/game/ai/openworld-traffic/red-light-watch.ts": ["observe", "nearestJunction"],
   "src/game/ai/openworld-traffic/ambulance.ts": ["step"],
-  "src/game/ai/openworld-traffic/kerb-cars.ts": ["step", "tend", "findEyes", "nearestWanted", "distanceToEyes", "evictFarthest", "bring", "farthestSpare"],
+  "src/game/ai/openworld-traffic/kerb-cars.ts": ["step", "tend", "findEyes", "nearestWanted", "consider", "distanceToEyes", "evictFarthest", "bring", "farthestSpare"],
   "src/game/ai/openworld-traffic/trip-route.ts": ["projectOnRoute", "pointAtArc"],
   "src/game/present/traffic-lights.ts": ["update", "paint"],
   "src/game/ai/civilians/society-activity.ts": ["readActivity", "readWalk", "hasDoor", "readOutdoor", "readIndoors", "readSitting", "readFight", "standAtDoor", "companionIsHere", "readFlinch", "standAt", "readWatcher", "faceHazard", "stepBack", "bearingYaw", "swingLandingIn", "findWalkerStrike", "readRoom", "walkRoom", "aimWalk", "readBuying", "placeAt", "spotOf", "readLeaving"],
