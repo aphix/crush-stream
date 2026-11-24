@@ -13,7 +13,7 @@ import { BodyFit } from "./body-fit.ts";
 import { detSin, detCos, detAtan2, sinCosAt } from "../kernel/physics-core.js";
 import { CONTACT_REF_SLICE, MIN_IMPACT_ZONE, MIN_INERTIA, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { seatTilt, TILT_SEAT_QUIET, TILT_SEAT_TIME } from "./frame-tilt.ts";
+import { AT_REST_SPIN, seatTilt, TILT_SEAT_QUIET, TILT_SEAT_TIME } from "./frame-tilt.ts";
 import { rideCage } from "./hub-ride.ts";
 import { EPICENTER } from "./epicenter.ts";
 
@@ -303,7 +303,7 @@ export abstract class DeformContact extends DeformState {
       _toLocal.copy(group.matrixWorld).invert();
     }
     this.readLocals();
-    if (dt > 0 && this.quietTime() > TILT_SEAT_QUIET && this.quietTime() < PLANT_QUIET && seatTilt(this.masses, group, Math.min(1, dt / TILT_SEAT_TIME))) {
+    if (dt > 0 && this.quietTime() > TILT_SEAT_QUIET && this.quietTime() < PLANT_QUIET && seatTilt(this.masses, group, Math.min(1, dt / TILT_SEAT_TIME), angularOut)) {
       _toLocal.copy(group.matrixWorld).invert();
       this.readLocals();
     }
@@ -683,7 +683,7 @@ export abstract class DeformContact extends DeformState {
 
   /** The planted hubs' world is their own, and the frame's seat step (`followGroup`) carries them (`moveWhole` leaves them to it: moved by both they walked off their pins by the whole hold). */
   private hubsRideSeat(): boolean {
-    return !this.bidirectional && this.quietTime() > PLANT_QUIET;
+    return !this.bidirectional && this.quietTime() > PLANT_QUIET && this.bodyW.lengthSq() <= AT_REST_SPIN * AT_REST_SPIN;
   }
 
   /** A face held the settled wreck out by (`dx`, `dz`): every dynamic mass moves with it (hubs too), the car-frame places stay; a mass-by-mass push would crush the nose a little more each slice a driver leans on the wall. */
