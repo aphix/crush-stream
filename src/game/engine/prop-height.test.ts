@@ -19,6 +19,8 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { assertSameDigest, assertSameNumbers, massCentroid } from "../vehicle/test-support.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
+import { hypot2 } from "../kernel/physics-core.js";
+import { MU_BODY } from "../vehicle/car-air-body.ts";
 
 /**
  * A prop touches a car only while the car's lowest point is under the prop's top (`propContact`): the same rule for a
@@ -337,6 +339,30 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
       expect(hit.massVy, `its masses still fall at ${hit.massVy.toFixed(2)} m/s: the next slice reads that as crush through the top`).toBeGreaterThanOrEqual(-1e-9);
     });
   }
+
+  // A top scrapes the body it stops as a side does (`wallBounce`): a monster whose keel dipped a centimetre under the oval's wall top slid on it,
+  // its fall stopped every slice and its speed along the top kept, so it never pitched down and came off the wall faster than off a lower slab.
+  it("when it comes down on the K-rail 66 (1.8 m) at 5.7 m/s with 16 m/s along, then the top's friction takes MU_BODY of the stopped fall from its slide, its masses' with the body's", () => {
+    const v = [8.46, -5.72, 13.22] as const;
+    const { slice, wreck } = place(66, -1, 1.4, -0.009, [...v]);
+    const massSlide = (): number => {
+      let x = 0;
+      let z = 0;
+      let mass = 0;
+      for (const m of wreck.deform.masses) {
+        x += m.vel.x * m.mass;
+        z += m.vel.z * m.mass;
+        mass += m.mass;
+      }
+      return hypot2(x, z) / mass;
+    };
+    const body = hypot2(wreck.velocity.x, wreck.velocity.z);
+    const masses = massSlide();
+    slice(0.0021);
+    const lost = MU_BODY * -v[1];
+    expect(body - hypot2(wreck.velocity.x, wreck.velocity.z), "the speed along the top the body lost (m/s): MU_BODY of its stopped fall").toBeCloseTo(lost, 2);
+    expect(masses - massSlide(), "the speed along the top the masses lost (m/s): what the body lost").toBeCloseTo(lost, 2);
+  });
 
   // Standing or sliding on a top a few mm to 3 cm under it (a wall hit crushed the wreck 3 cm in one slice, vy -0.07 m/s): the side path's
   // push-out cleared the whole 0.6-0.8 m of plan overlap at once (seed 1 t=10.84 0.77 m, t=28.38 0.55 m, seed 6 t=40.75 0.08 m).

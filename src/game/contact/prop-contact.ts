@@ -7,7 +7,7 @@ import { C_ARG, C_DEPTH, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, P_STRIDE, pointConta
 import { type ContactBox, makeBox, partContact, solidFace } from "./external-contact.ts";
 import { PUSH_SPEED } from "../deform/push-budget.ts";
 import { HIT_AHEAD, impulseCar, markApproach, wallBounce } from "./pair-contact.ts";
-import { BELLY_ABSENT, POINT_X, POINT_Y, POINT_Z, WALL_CRUSH } from "../vehicle/car-air-body.ts";
+import { BELLY_ABSENT, MU_BODY, POINT_X, POINT_Y, POINT_Z, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { loadPoints } from "../vehicle/car-air-points.ts";
 import { cageLift, centreY } from "../vehicle/car-cage-rig.ts";
 import type { CageFields } from "../vehicle/car-cage.ts";
@@ -277,17 +277,26 @@ function prismBox(out: ContactBox, s: Surface, i: number): ContactBox {
  * `car` came down onto a solid's top `under` m deep: the fall stops (a wreck's masses with it: a body velocity alone leaves them falling
  * through it, and the next rigid step reads that as crush: 12 mm a slice) and the body rises out of it by what the slice could have sunk
  * it by (its fall) and the solver's push-out speed (`PUSH_SPEED`), the rest of a deeper sink the next slices'. A wreck's masses rise
- * with it, and `_span` stands where the body now does for the prisms after this one.
+ * with it, and `_span` stands where the body now does for the prisms after this one. The body scrapes the top as it does a side
+ * (`wallBounce`): its friction takes at most `MU_BODY` of the stop from its plan speed over the top (`rvx`, `rvz`, the solid's own taken off).
  */
-function standOnTop(car: DeformableCar, under: number, dt: number): void {
+function standOnTop(car: DeformableCar, under: number, rvx: number, rvz: number, dt: number): void {
   const rise = Math.min(under, (Math.max(0, -_span.fall) + PUSH_SPEED) * dt);
-  const stop = Math.max(0, -car.velocity.y);
-  car.velocity.y += stop;
+  const v = car.velocity;
+  const stop = Math.max(0, -v.y);
+  const slide = hypot2(rvx, rvz);
+  const k = slide > 0 ? Math.min(slide, MU_BODY * stop) / slide : 0;
+  v.y += stop;
+  v.x -= rvx * k;
+  v.z -= rvz * k;
   car.group.position.y += rise;
   if (car.deform.massActive) {
     for (const m of car.deform.masses) {
       m.world.y += rise;
-      if (m.dynamic) m.vel.y += stop;
+      if (!m.dynamic) continue;
+      m.vel.y += stop;
+      m.vel.x -= rvx * k;
+      m.vel.z -= rvz * k;
     }
   }
   _span.low += rise;
@@ -333,7 +342,7 @@ function solidContact(car: DeformableCar, i: number, s: Surface, k: number, knoc
     const under = P[o + PR_TOP]! - _span.low;
     // Crossed within a step (`ENTRY_WINDOW`), as a side must have been: a body deep in a wall's plan over its 12 m is under no top.
     if (under <= Math.max(0, -_span.fall) * ENTRY_WINDOW && cameThroughTop(rvx * rvx + _span.fall * _span.fall + rvz * rvz > SOLID_AT_REST * SOLID_AT_REST, _span.fall, under, pen, sideTime)) {
-      standOnTop(car, under, dt);
+      standOnTop(car, under, rvx, rvz, dt);
       return;
     }
   }
