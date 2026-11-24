@@ -102,8 +102,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 69: `MSG.bodies` carries the foot cops, the people in their hands and the medics as pose records and the people drawn by nobody, which a guest draws in place of its own law's, so a peer on 68 that joined late would draw its own arrests.
 70: `MSG.bodies` carries everyone lying, getting up or thrown, so a peer on 69 would leave its own ragdolls where they fell and keep them after the host's are gone.
 71: a guest's punches, shots, hook, and getting in and out of cars go to the host as `MSG.act` (16) and the host answers who sits where in `MSG.seats` (17); a cable in `MSG.bodies` names who fired it (22 bytes) and a player's record says a blow staggered him or that he holds a first hook end; the log gains `footChase` and `footArrest` naming the player. A peer on 70 would read the cables wrong and never see a guest act.
+72: a shot's and a hook fire's `MSG.act` names what the guest's aim met (26 bytes: kind, index and the hit's offset from that thing), and the host re-aims at where it is now; a get-out act's `arg` names the door he climbs out by, which the host swings or refuses; a player's record in `MSG.bodies` and `MSG.foot` carries the weapon in his hand, his shot count and his shot's far end (7 bytes more), and the point of a held first hook end (6 more while he holds one); the open world's eight start places are two abreast back down the first street. A peer on 71 would read every frame of people and every on-foot message as malformed, send acts the host refuses for their length, and start its car where another's stands.
 */
-export const NET_VERSION = 71;
+export const NET_VERSION = 72;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
