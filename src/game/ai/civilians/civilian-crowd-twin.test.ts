@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { hypot2 } from "../../kernel/physics-core.js";
 import { PageWorker } from "../../engine/page-worker.test-util.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
-import { EVENT_KIND, FLAG, NEVER_TICK, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
+import { isDwelling, isFreePerson } from "./society-reactions.ts";
+import { isOutdoorPurpose } from "./society-venues.ts";
+import { ALARM_SIGHT, EVENT_KIND, FLAG, NEVER_TICK, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { historyLines } from "./civilian-mood.ts";
@@ -18,8 +21,28 @@ import { CROWD_RESIDENTS, CROWD_SEED, newCrowd, posesDigest, shownResident } fro
 
 const map = buildFixtureMap();
 const bodega = placeNamed(map, PLACE_NAMES.bodega);
-/** Where the host hears of a danger: the node at the bodega's door. */
-const DANGER_NODE = map.places[bodega]!.doorNode;
+/** The walk-graph node nearest (x, z): where the host hears of a danger, beside a person who is out, so someone sees it. */
+function nodeNear(x: number, z: number): number {
+  const { nodeX, nodeZ } = map.graph;
+  let best = 0;
+  for (let node = 1; node < nodeX.length; node++) if (hypot2(nodeX[node]! - x, nodeZ[node]! - z) < hypot2(nodeX[best]! - x, nodeZ[best]! - z)) best = node;
+  return best;
+}
+
+/** The shown person nearest the door of someone standing out at it (within half the street's sight, so a call for an ambulance has a caller), else the first shown: the one the host's knock runs down. */
+function victimInSight(crowd: CivilianCrowd, tick: number): number {
+  const { state, poses } = crowd;
+  for (let out = 0; out < state.capacity; out++) {
+    const base = out * RESIDENT_INT_STRIDE;
+    if (!isFreePerson(state, out) || !isDwelling(state, out, tick) || !isOutdoorPurpose(state.ints[base + RESIDENT_INT.legPurpose]!)) continue;
+    const door = map.places[state.ints[base + RESIDENT_INT.place]!]!;
+    for (let resident = 0; resident < poses.count; resident++) {
+      if (resident !== out && poses.shown[resident] === 1 && isFreePerson(state, resident) && hypot2(poses.x[resident]! - door.doorX, poses.z[resident]! - door.doorZ) < ALARM_SIGHT / 2) return resident;
+    }
+  }
+  return shownResident(crowd);
+}
+
 /** Frames of a sixteenth of a crowd second (a power of two: the clock sums exactly), five minutes of them; the host's knock and wreck land at these. */
 const FRAME_SECONDS = 1 / 16;
 const FRAMES = 300 * 16;
@@ -107,21 +130,21 @@ function openRun(label: string, worker?: typeof CountingWorker | typeof LateWork
   return { label, crowd: newCrowd(map, CROWD_RESIDENTS, CROWD_SEED, remote), remote };
 }
 
-/** The host's log as it was heard by `frame`: a danger at a node, an ambulance call for the one run down, a fight with the player, a jaywalk arrest, the knock, a fight of two residents and the bust of one of them, each from its own frame on, with the wreck the first of all. */
-function logAt(frame: number, knocked: number, fighters: readonly number[], dangerNode: number): Float64Array {
+/** The host's log as it was heard by `frame`: the wreck, a fight with the player, a jaywalk arrest, a danger at a node, the knock, an ambulance call for the one run down, a fight of two residents and the bust of one of them, each from its own frame on and in the order of those frames, as the host's log grows: `CivilianCrowd.hear` takes only what follows the last triple it has, so an event listed before one logged earlier would be inserted, never heard. */
+function logAt(frame: number, knocked: number, fighters: readonly number[], dangerNode: number, skip = -1): Float64Array {
   const fightSeconds = FIGHT_FRAME * FRAME_SECONDS;
   const playerFightSeconds = PLAYER_FIGHT_FRAME * FRAME_SECONDS;
   const heard: readonly { from: number; triples: readonly number[] }[] = [
     { from: WRECK_FRAME, triples: [EVENT_KIND.wreck, bodega, WRECK_FRAME * FRAME_SECONDS] },
-    { from: DANGER_FRAME, triples: [EVENT_KIND.danger, dangerNode, DANGER_FRAME * FRAME_SECONDS] },
-    { from: AMBULANCE_FRAME, triples: [EVENT_KIND.ambulance, knocked, AMBULANCE_FRAME * FRAME_SECONDS] },
     { from: PLAYER_FIGHT_FRAME, triples: [EVENT_KIND.fight, fighters[2]!, playerFightSeconds, EVENT_KIND.walker, EAST, playerFightSeconds] },
     { from: JAYWALK_FRAME, triples: [EVENT_KIND.jaywalk, fighters[3]!, JAYWALK_FRAME * FRAME_SECONDS] },
+    { from: DANGER_FRAME, triples: [EVENT_KIND.danger, dangerNode, DANGER_FRAME * FRAME_SECONDS] },
     { from: KNOCK_FRAME, triples: [EVENT_KIND.knock, knocked, KNOCK_FRAME * FRAME_SECONDS] },
+    { from: AMBULANCE_FRAME, triples: [EVENT_KIND.ambulance, knocked, AMBULANCE_FRAME * FRAME_SECONDS] },
     { from: FIGHT_FRAME, triples: [EVENT_KIND.fight, fighters[0]!, fightSeconds, EVENT_KIND.alongside, fighters[1]!, fightSeconds] },
     { from: BUST_FRAME, triples: [EVENT_KIND.bust, fighters[0]!, BUST_FRAME * FRAME_SECONDS] },
   ];
-  return Float64Array.from(heard.filter((event) => frame >= event.from).flatMap((event) => event.triples));
+  return Float64Array.from(heard.filter((event) => frame >= event.from && event.triples[0] !== skip).flatMap((event) => event.triples));
 }
 
 /** What a run shows and holds at this frame: its poses and its society's rows. */
@@ -130,20 +153,30 @@ function look(run: Run): string {
 }
 
 /** Every frame's step of all runs in lockstep, as a client's: the real worker's answers awaited by count before the tick that needs them, the late worker's said after the step. Returns the frames at which a run differed from the first. */
-async function runAll(runs: readonly Run[], plain: Run, knocked: { resident: number }, fighters: readonly number[], inBodega: { resident: number; before: number; after: number }): Promise<string[]> {
+async function runAll(runs: readonly Run[], plain: Run, without: readonly { run: Run; skip: number; apart: number }[], knocked: { resident: number; node: number }, fighters: readonly number[], inBodega: { resident: number; before: number; after: number }): Promise<string[]> {
   const apart: string[] = [];
   let lastTick = -1;
   for (let frame = 1; frame <= FRAMES; frame++) {
     const seconds = frame * FRAME_SECONDS;
     const tick = tickAt(seconds);
-    if (frame === KNOCK_FRAME) knocked.resident = shownResident(runs[0]!.crowd);
+    if (frame === DANGER_FRAME) {
+      const crowd = runs[0]!.crowd;
+      const near = shownResident(crowd);
+      knocked.node = nodeNear(crowd.poses.x[near]!, crowd.poses.z[near]!);
+    }
+    if (frame === KNOCK_FRAME) knocked.resident = victimInSight(runs[0]!.crowd, tick);
     if (lastTick >= 0 && tick > lastTick) await CountingWorker.last.whenAnswered(tick + 1);
     for (const run of runs) {
-      run.crowd.hear(logAt(frame, knocked.resident, fighters, DANGER_NODE));
+      run.crowd.hear(logAt(frame, knocked.resident, fighters, knocked.node));
       run.crowd.step(seconds, [], false);
     }
     plain.crowd.step(seconds, [], false);
+    for (const { run, skip } of without) {
+      run.crowd.hear(logAt(frame, knocked.resident, fighters, knocked.node, skip));
+      run.crowd.step(seconds, [], false);
+    }
     LateWorker.last.say(tick);
+    for (const w of without) if (w.apart < 0 && look(w.run) !== look(runs[0]!)) w.apart = frame;
     const lone = runs[0]!.crowd.state;
     if (frame === BEFORE_HOUR_FRAME) {
       for (let resident = 0; resident < lone.capacity; resident++) if (lone.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.place] === bodega && inBodega.resident < 0) inBodega.resident = resident;
@@ -160,16 +193,20 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, "Worker");
 });
 
-describe("given the same crowd stepped five minutes with the real worker, with none, and with a worker whose answers come late, a player's fight, a jaywalk arrest, a knock, a fight, a bust and a wreck heard at fixed frames", () => {
+describe("given the same crowd stepped five minutes with the real worker, with none, and with a worker whose answers come late, a player's fight, a jaywalk arrest, a danger, a knock, an ambulance call, a fight, a bust and a wreck heard at fixed frames", () => {
   it("when every frame's poses and society rows are compared, then the three are bit for bit the same, and the events changed the crowd", async () => {
     const alone = openRun("alone");
     const threaded = openRun("worker", CountingWorker);
     const late = openRun("late worker", LateWorker);
     const plain = openRun("no events");
-    const knocked = { resident: -1 };
+    const knocked = { resident: -1, node: -1 };
     const fighters = [...FIGHTER_OFFSETS, PLAYER_FIGHTER_OFFSET, JAYWALKER_OFFSET].map((offset) => alone.crowd.state.cast.length + offset);
     const inBodega = { resident: -1, before: -1, after: -1 };
-    const apart = await runAll([alone, threaded, late], plain, knocked, fighters, inBodega);
+    const noDanger = { run: openRun("no danger"), skip: EVENT_KIND.danger, apart: -1 };
+    const noAmbulance = { run: openRun("no ambulance"), skip: EVENT_KIND.ambulance, apart: -1 };
+    const apart = await runAll([alone, threaded, late], plain, [noDanger, noAmbulance], knocked, fighters, inBodega);
+    expect(noDanger.apart, "the frame at which the crowd that never heard the danger first differed from the one that did").toBeGreaterThanOrEqual(DANGER_FRAME);
+    expect(noAmbulance.apart, "the frame at which the crowd that never heard the ambulance call first differed from the one that did").toBeGreaterThanOrEqual(AMBULANCE_FRAME);
     expect(apart.slice(0, 5), "frames at which a run differed from the main thread's own").toEqual([]);
     expect(inBodega.resident, "control: a resident is inside the bodega a few ticks before the wreck's hour tick").toBeGreaterThanOrEqual(0);
     expect(inBodega.before, "where she is before the hour tick").toBe(bodega);
