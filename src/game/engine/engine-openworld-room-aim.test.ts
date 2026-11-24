@@ -545,6 +545,26 @@ describe("given a guest 15 m from the open ground the host's player sprints acro
   });
 });
 
+/** A civilian standing still, shown on both machines, with an eye 15 m from her that nothing blocks (the guest stands there and the host has heard it). */
+function standingCivilianInSight(r: Room): { c: number; eye: Point } {
+  const poses = r.host.director["crowd"]!.poses;
+  const guest = r.guest.director["crowd"]!;
+  for (let frames = 0; frames < MAX_SEARCH_FRAMES; frames++, r.step(1)) {
+    for (let c = 0; c < poses.count; c++) {
+      const idle = poses.shown[c] === 1 && guest.poses.shown[c] === 1 && poses.speed[c] === 0 && poses.activity[c] === ACTIVITY.none;
+      const eye = idle && guest.state.ints[c * RESIDENT_INT_STRIDE + RESIDENT_INT.species] === SPECIES.person ? eyeAcross(r, c) : null;
+      if (eye === null) continue;
+      standAt(r, "guest", eye.x, eye.z);
+      if (poses.shown[c] === 1 && poses.speed[c] === 0) return { c, eye };
+    }
+  }
+  throw new Error("no standing civilian in sight");
+}
+
+/** The range cap's person row: the named point is this far (m) beside the civilian's axis, outside her 0.35 m chest radius, and a person stands this far (m) past the point. */
+const BESIDE_AXIS_M = 0.48;
+const BEHIND_PERSON_M = 2;
+
 describe("given a guest 15 m from civilians walking across at 1.3 to 1.6 m/s, over the slowed link", () => {
   it("when he fires 30 pistol shots, one at each civilian where his crowd draws her, then none hit when his act names nothing, and nearly all hit when it names her (a civilian stepping in front takes the rest), as the host's own do", () => {
     const r = started(false, MORNING_FRAMES);
@@ -556,6 +576,30 @@ describe("given a guest 15 m from civilians walking across at 1.3 to 1.6 m/s, ov
     expect(hostOwn.hits, "the host's own shots that hit").toBeGreaterThanOrEqual(SHOTS - 1);
     expect(unnamed.hits, "shots that hit, the act naming nothing").toBeLessThanOrEqual(MOST_MISS);
     expect(named.hits, "shots that hit, the act naming her").toBeGreaterThanOrEqual(SHOTS - 3);
+  });
+
+  it("when a modified client names a standing civilian with a point 0.48 m beside her axis, outside her chest, on the line to a person 2 m past that point, then the shot flies no farther than the point and the person behind is not hit; the same line naming nothing hits the person behind", () => {
+    const r = started(false, MORNING_FRAMES);
+    const taken = takenCivilians(r);
+    const { c, eye } = standingCivilianInSight(r);
+    const poses = r.host.director["crowd"]!.poses;
+    const her = { x: poses.x[c]!, z: poses.z[c]! };
+    const chest = poses.feetY[c]! + CHEST_HEIGHT;
+    const along = hypot2(her.x - eye.x, her.z - eye.z);
+    const side = { x: (-(her.z - eye.z) / along) * BESIDE_AXIS_M, z: ((her.x - eye.x) / along) * BESIDE_AXIS_M };
+    const point = { x: her.x + side.x, y: chest, z: her.z + side.z };
+    const aim = rayTo(eye, point);
+    const reach = hypot3(point.x - eye.x, point.y - eye.y, point.z - eye.z) + BEHIND_PERSON_M;
+    r.host.walk.path = { x0: eye.x + aim.dirX * reach, z0: eye.z + aim.dirZ * reach, vx: 0, vz: 0, t0: r.host.director.crowdTime() };
+    r.step(HEAR_FRAMES);
+    const name = Object.assign(new Named(), { kind: NAMED.civilian, id: c, x: side.x, y: chest - activeGround().heightAt(her.x, her.z), z: side.z });
+    r.nets[1]!.sendAct(ACT.shot, PISTOL_SLOT, eye, { x: aim.dirX, y: aim.dirY, z: aim.dirZ }, name);
+    r.step(SHOT_GAP_FRAMES);
+    expect(r.host.struck.length, "hits on the person behind, the act naming her").toBe(0);
+    expect(taken.includes(c), "she is hit, the point being outside her chest").toBe(false);
+    r.nets[1]!.sendAct(ACT.shot, PISTOL_SLOT, eye, { x: aim.dirX, y: aim.dirY, z: aim.dirZ }, null);
+    r.step(SHOT_GAP_FRAMES);
+    expect(r.host.struck.length, "hits on the person behind, the act naming nothing").toBe(1);
   });
 });
 
