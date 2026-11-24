@@ -68,7 +68,6 @@ describe("given a slice whose contact corrections (pair pushes, structure step, 
   // Derby seed 161 (main) and o6 (17491eb) zipped in one 6.9 ms slice: the pair pushes took the whole cap (44 mm), and
   // the structure step (12.2 mm), the re-fit (8.6 mm) and the bowl clip (14.9 mm) came after them, each debited to the
   // NEXT slice's budget, so the wreck's centroid moved 66 mm against a zip bound of 3·v·h + 5 cm = 61 mm.
-  // mutation: sed -i 's/^    this.clampLocal(group);$/    this.driftFrom();\n    this.clampLocal(group);/' src/game/deform/deform-contact.ts  (the drift pass starts after the seat step again: slice 0 reads 45.2 mm against the 45.0 mm cap)
   it("when four slices each push, restore and clip a settled wreck, then its centroid moves no further than the pushes' cap allows, whatever the bowl's clip", () => {
     const wreck = plantedWreck();
     restoreAlongPush(wreck);
