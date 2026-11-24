@@ -130,7 +130,7 @@ const HOT = {
   "src/game/engine/engine-remote-guns.ts": ["frame", "placeHand"],
   "src/game/engine/engine-tether.ts": ["heldPoint", "heldPlace"],
   "src/game/engine/openworld-cables.ts": ["writeCables", "frame"],
-  "src/game/engine/engine-openworld-acts.ts": ["hear", "hearGetIn", "hearHookFire", "admit", "punchBy", "shootBy", "wallAcrossShot", "punchLanded", "shootLocal", "draw", "scatter", "punch", "aimFromMuzzle", "faceTarget", "nearestToTorso", "apartFromTorso", "namedPoint", "lay"],
+  "src/game/engine/engine-openworld-acts.ts": ["hear", "hearGetIn", "hearHookFire", "admit", "punchBy", "shootBy", "punchLanded", "shootLocal", "draw", "scatter", "punch", "aimFromMuzzle", "faceTarget", "nearestToTorso", "apartFromTorso", "namedPoint", "lay"],
   "src/game/engine/engine-openworld-named.ts": ["namedFits", "namedReach", "personAt", "playerAt", "namePerson", "name", "nameCar", "nameHook", "place"],
   "src/game/net/act-codec.ts": ["readNamed"],
   "src/game/net/seats-codec.ts": ["exitDoorArg", "exitDoorOf"],

@@ -19,6 +19,8 @@ import { fixtureLots } from "../world/openworld/openworld-lots.test-util.ts";
 import { buildOpenWorldMap } from "../world/openworld/openworld-map.ts";
 import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { OFF_MENU } from "../world/tracks/index.ts";
+import { BAY_WIDTH, SHOPFRONT } from "../world/openworld/interior-kinds.ts";
+import type { Place } from "../world/openworld/walk-graph.ts";
 import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { TORSO_ABOVE_FEET } from "./body-follow.ts";
 import { WEAPONS } from "./engine-onfoot-arms.ts";
@@ -630,5 +632,87 @@ describe("given a guest sprinting at 7 m/s with the hook in hand, his camera ove
     const far = sprintingHookFire(HOOK_BEHIND_M + HOOK_RAY_REACH_M);
     expect(far.gap, "control: this ray passes farther than the hook's bound").toBeGreaterThan(HOOK_RAY_REACH_M);
     expect(far.fires, "hook fires the host made").toBe(0);
+  });
+});
+
+/** The fixture's places have no rooms, so no street doorways: one gets an office's (a 1.5 m door at the middle of its street face) for `body`, and is a plain wall again after. */
+function withOfficeDoor<T>(body: (place: Place, world: (lx: number, lz: number) => { x: number; z: number }, door: number) => T): T {
+  const place = map.places.find((p) => p.doorNode >= 0)!;
+  place.interior = "office";
+  try {
+    const cos = Math.cos(place.yaw);
+    const sin = Math.sin(place.yaw);
+    const bays = Math.max(1, Math.round(place.width / BAY_WIDTH));
+    const door = SHOPFRONT.office[0].centre - ((bays - 1) / 2) * BAY_WIDTH;
+    return body(place, (lx, lz) => ({ x: place.x + lx * cos + lz * sin, z: place.z - lx * sin + lz * cos }), door);
+  } finally {
+    place.interior = undefined;
+  }
+}
+
+/** The room's guest fires a pistol along the sidewalk (`along`, a unit vector) from a tip 0.7 m ahead of his torso; how many shots the host carried out after the act crossed the slowed link. */
+function pistolAlong(r: Room, torso: BodyMotion, along: { x: number; z: number }): number {
+  const fired = vi.spyOn(r.host.director, "shotFired");
+  const eye = { x: torso.x + 0.7 * along.x, y: torso.y + EYE_UP_M, z: torso.z + 0.7 * along.z };
+  r.nets[1]!.sendAct(ACT.shot, PISTOL_SLOT, eye, { x: along.x, y: 0, z: along.z }, null);
+  r.step(SHOT_GAP_FRAMES);
+  return fired.mock.calls.length;
+}
+
+/** A guest sprints at 7 m/s through the street door of an office and out, turns along the sidewalk once he is `outM` m past the face, and fires `after` s later; how many shots the host carried out, over the slowed link. */
+function doorwayShot(after: number, outM: number): number {
+  return withOfficeDoor((place, world, door) => {
+    const r = started(false);
+    const cos = Math.cos(place.yaw);
+    const sin = Math.sin(place.yaw);
+    const start = world(place.depth / 2 - DOOR_RUN_UP_M, door);
+    r.guest.walk.path = { x0: start.x, z0: start.z, vx: SPRINT_MPS * cos, vz: -SPRINT_MPS * sin, t0: r.guest.director.crowdTime() };
+    for (const side of [r.host, r.guest]) {
+      side.eye.x = place.x;
+      side.eye.z = place.z;
+    }
+    r.step(HEAR_FRAMES);
+    const torso: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
+    while (walkerAt(r.guest.walk.path, r.guest.director.crowdTime(), torso) && (torso.x - place.x) * cos - (torso.z - place.z) * sin < place.depth / 2 + outM) r.step(1);
+    r.guest.walk.path = { x0: torso.x, z0: torso.z, vx: SPRINT_MPS * sin, vz: SPRINT_MPS * cos, t0: r.guest.director.crowdTime() };
+    const turned = r.guest.director.crowdTime();
+    while (r.guest.director.crowdTime() - turned < after) r.step(1);
+    walkerAt(r.guest.walk.path, r.guest.director.crowdTime(), torso);
+    return pistolAlong(r, torso, { x: sin, z: cos });
+  });
+}
+
+/** A guest standing still `DOOR_INSIDE_M` m inside an office's street face, 2 m along it from the door, fires out along the face from a tip that is outside it; how many shots the host carried out. */
+function insideShot(): number {
+  return withOfficeDoor((place, world, door) => {
+    const r = started(false);
+    const sin = Math.sin(place.yaw);
+    const cos = Math.cos(place.yaw);
+    const spot = world(place.depth / 2 - DOOR_INSIDE_M, door + 2);
+    r.guest.walk.path = { x0: spot.x, z0: spot.z, vx: 0, vz: 0, t0: r.guest.director.crowdTime() };
+    for (const side of [r.host, r.guest]) {
+      side.eye.x = place.x;
+      side.eye.z = place.z;
+    }
+    r.step(HEAR_FRAMES);
+    const torso: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
+    walkerAt(r.guest.walk.path, r.guest.director.crowdTime(), torso);
+    return pistolAlong(r, torso, { x: cos, z: -sin });
+  });
+}
+
+/** The doorway rows: the run-up inside the office (m), how far inside its face the still guest stands (m), and where the turn and the shot come (m past the face, s after the turn). */
+const DOOR_RUN_UP_M = 8;
+const DOOR_INSIDE_M = 0.5;
+const TURNS_OUT_M = [0.05, 1] as const;
+const SHOTS_AFTER_S = [0.1, 0.2, 0.3] as const;
+
+describe("given a guest in a room over the slowed link, an office's street face with its door beside him", () => {
+  it("when he sprints out through the door at 7 m/s, turns along the sidewalk 0.05 or 1 m out and fires 0.1, 0.2 or 0.3 s later, then the host carries every shot out", () => {
+    for (const outM of TURNS_OUT_M) for (const after of SHOTS_AFTER_S) expect(doorwayShot(after, outM), `shots carried out, turned ${outM} m out, fired ${after} s later`).toBe(1);
+  });
+
+  it("when he stands still inside the face, away from the door, and fires out along it from a tip outside it, then the host refuses the shot: the wall is solid", () => {
+    expect(insideShot(), "shots carried out through the wall").toBe(0);
   });
 });

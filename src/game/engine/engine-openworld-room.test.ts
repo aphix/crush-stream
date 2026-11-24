@@ -732,7 +732,7 @@ describe("given a host and a guest in a room of the open world, a foot cop on th
 });
 
 describe("given a host and a guest in a room of the open world, a civilian 6 m east of the guest on foot, and a host with no body to stand for her", () => {
-  it("when the guest's hook act names her, then the host stands no body for her and the law is not told; the same act with a body free stands one", () => {
+  it("when the guest's hook act names her, then the host's hook meets nobody and stands no body for her and the law is not told; the same act with a body free stands one (that the fire is then a miss, holding nothing, is `fireFor`'s, pinned in engine-tether-actors.test.ts)", () => {
     const { r, civilian, from, poses } = hookRoom();
     const bodies = r.host.director["bodies"]!;
     const hostScene = r.host.director["law"]!["scene"];

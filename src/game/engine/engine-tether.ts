@@ -141,11 +141,17 @@ export class TetherDirector {
 
   /**
    * `actor` fires the hook along `ray`: the first fire holds what the ray meets, the second ties it to what the ray then meets. `sawPerson`: whether the actor's own reticle lit a person, which only he can know
-   * (his machine has the walls and windows of his own eyes); the act names her. Another actor's fire meets no person when it is false; this machine's own player is not judged by it. False where nothing was held or tied: the actor is not on foot, the ray meets nothing in reach, or no body can be stood for the person it meets. A guest holds no cable and does nothing.
+   * (his machine has the walls and windows of his own eyes); the act names her. Another actor's fire meets no person when it is false; this machine's own player is not judged by it. When it is true for another actor and the ray
+   * meets no person here (no body can be stood for a civilian, she has moved off the line, a wall), the fire is a miss: it does not hold the wall behind her. This machine's own player's reticle never lights such a person, so his fire holds
+   * the surface as it always has. False where nothing was held or tied: the actor is not on foot, the ray meets nothing in reach, no body can be stood for the person it meets, or he saw a person it does not meet. A guest holds no cable and does nothing.
    */
   fireFor(actor: number, ray: LookRay, sawPerson: boolean): boolean {
     if (this.host.guest() || actor < 0 || actor >= MAX_CARS || !this.onFoot(actor)) return false;
-    this.aimFrom(actor, ray, this.theirs, sawPerson || actor === this.host.actor());
+    const local = actor === this.host.actor();
+    this.aimFrom(actor, ray, this.theirs, sawPerson || local);
+    // A person met is a drawn civilian, cop or medic (`person`), or one already out as a dummy of the dummies' world.
+    const met = this.theirs.person >= 0 || (this.theirs.car === RAPIER && thingKind(this.theirs.thing) === THING.doll);
+    if (sawPerson && !local && !met) return false;
     return this.attachFor(actor, this.theirs);
   }
 
