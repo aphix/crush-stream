@@ -832,6 +832,11 @@ export class StreamedDeformation extends DeformSolve {
       m.popped = (src.popped & (1 << i)) !== 0;
       m.world.copy(m.local).applyMatrix4(group.matrixWorld);
       m.vel.set(0, 0, 0);
+      // The host holds an unpopped hub's local at rest + its shove (a deep crush records its travel as the shove), so the place a crush left it is in the net state without a field of its own.
+      if (m.hub && !m.popped) {
+        m.shoveX = m.local.x - m.rest.x;
+        m.shoveZ = m.local.z - m.rest.z;
+      }
     }
   }
 }

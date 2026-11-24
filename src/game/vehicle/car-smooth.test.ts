@@ -1666,28 +1666,28 @@ const SIM_DIGEST_BY_STYLE = [
   // All but the police again for the cage refitting when a cluster map or a cage corner moves a vertex past 1 cm, not only a mass (`movedSince`):
   // sedan 55a67ffc... -> 10279639..., hatchback f57f8543... -> 31c04538..., wagon 0757e5fb... -> 6f3ba7a4..., coupe 682c9d6e... -> 83d923ad...,
   // pickup 8903cd6d... -> ad4ee1fa..., monster e46fb1c5... -> d43fea4a....
-  { id: "sedan", digest: "1ca1f7ca86386f4a0631b68512078fb61ebe1016c2c0834932040752e4d03f46" },
+  { id: "sedan", digest: "3cc0998d6b948ea576b04c52674235a4c781d126dbe075b54d7ce23ae2305605" },
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's boot foot.
   // The hatchback's again when the cage kept the underside a body rests on, over its vertex budget (CarRig rig-lip): d1b0dbd0... ->
   // ace6af8c...; the other six unchanged.
   // The hatchback's again for its roof rolling round into its side glass (`roofSection` .4/.9, as the coupe's): the panes' tops and roof cage follow it: ace6af8c... -> b1cfea45....
   // Again for the cage's refit tolerance on a panel's pose (REPLAY 163): the hatch's swinging tailgate no longer refits the cage on every bit: ebe36deb... -> f57f8543...; the other six unchanged.
-  { id: "hatchback", digest: "4e2f13ce14c6efc14df0bd9a5f94d1a2dfd8cf4e46e0c224808f6f50e82caa84" },
-  { id: "wagon", digest: "db69f413f2fbfb26ebe9182609c094892fbc64a397854572d92def805c117615" },
+  { id: "hatchback", digest: "b17977d01427c5ebae1723a95ce8df96e9d2d5e1ba321bf6dad8635764faf982" },
+  { id: "wagon", digest: "af540006662a56e318b8af2fa6647a5dd682a2b5109be6fe2014c0d46f55ee5a" },
   // The coupe re-pinned for its nose deck lowered 0.5-2.8 cm over z 1.76-1.945 to the reference's side line.
-  { id: "coupe", digest: "6ee4b024bd54f8821aee210636da0dcdfb523f1e87e63dd9641a480dc264d3ee" },
+  { id: "coupe", digest: "f4de17329333fc05bfe104be18ef61debe10d07bb4f296dde28ab95503415c7b" },
   // The pickup re-pinned for its hood wrapping the nose (`hood.z1` 1.86 -> 1.92): its hood's cage reaches the nose the wall meets.
   // Its cab roof narrowed to the top plate's (profile cabinHw) brings the wall hit back to the same crush as before its mid-cab roof rose.
   // Again for a settled wreck held whole by the wall and a capped mass stopped at its cap (REPLAY 223): the pickup's nose no longer creeps in after the hit
   // (463.8 -> 407.6 mm at 1.5 s in the lane's probe); 80460be4... -> b398bec7...; the sedan, hatchback, wagon, coupe and police unchanged.
-  { id: "pickup", digest: "b398bec7ce9500e21c4779151b029732b3e76c97976f2a1b2056c861bf95c801" },
+  { id: "pickup", digest: "8eb716f2388c0d5135bc58c77c8c1a14e73bf5f8610b2b372211891521f9a2b9" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
   // Again for its push bar's box in the cage and the wall's hold on its bumper's particles a bar's reach back (`noseReach`): 2691a219... -> 30a73a14...; the other six unchanged.
   // Again for its push bar folding onto its bumper as the bumper crushes, in the cage and in what the wall holds (`barReach`, no `noseReach`): d36c7cb0... -> 11db57b4...; the other six unchanged.
-  { id: "police", digest: "c0adeac8600a54d7679efe2f04e0d1b73d02748c25a0ebdc5c2f9c9bced06f7d" },
+  { id: "police", digest: "135e04b03230230d017ebdabcc6b48b40850a97c1488e99425288057394ad995" },
   // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
   // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): the other six unchanged.
   // Again when a point of a body at rest inside a solid left by the side its body stands on, not the nearest (CarRig rig-entry): the monster's front
@@ -1697,10 +1697,11 @@ const SIM_DIGEST_BY_STYLE = [
   // crush, its push off the slab cut to what the nose carries; now the nose holds and its masses after the hit differ (d43fea4a... -> 350367f4...); the other six unchanged.
   // Again when a cluster's turn is clamped about the cloud's own turn, not the world's axes (REPLAY 218): the monster's masses after the wall hit moved; the other six unchanged (71f30dab... -> 9727579f...).
   // Again for the same REPLAY 223 rules (a settled wreck held whole, a capped mass stopped): the monster's masses after the wall hit moved (9727579f... -> c8deb0c9...).
-  { id: "monster", digest: "c8deb0c9b60ec580b03be3c67f049febc435ed2c8925613b9a26c61cb8a6dfb2" },
+  { id: "monster", digest: "efa55229b41e43196bab8a29cab858dbfa764d6709d404094a15b35b2e9d1aa5" },
   // Every style re-pinned with its bumpers in the cage (`CageSource.apart`), each a window of its own (`CageFields.part`): the cage's nose and tail meet the drawn bumper faces.
   // Again for each bumper's bottom corner held in its decimation (`bumperCorner`) and `frame.hullUnder`'s bumper rows standing on it: sedan 32ce12d9 -> 18748cc4, hatchback 05034364 -> 3a8ae274, wagon 14004d19 -> 8c803d8e, coupe a8bbcc35 -> 2f4d595f, pickup 87ed8880 -> 6506a0dd, police 30a73a14 -> b9cb6cec, monster 1417aa98 -> 0227b53d.
   // The coupe and the pickup again for the hood's fold (`HingeSpec.fold`: a crushed hood buckles into a ridge, no rigid turn of the whole lid): their noses' wall hit; the other five styles are byte-identical.
+  // Every style again after two sim changes, the pins above being the values before the planted hubs' pins and seat ride of lane-hub-creep4 (REPLAY 251; probe: with the ride, the shove pin and the held hub speed off, every old pin held), and then the frame taking its masses' tilt in the quiet window (`seatTilt`, 0.045 s past the last contact: the first step that differs from the same run without it is at quiet 0.046-0.047 s in every style, 84-103 fixed steps in): sedan 1ca1f7ca -> 3cc0998d, hatchback 4e2f13ce -> b17977d0, wagon db69f413 -> af540006, coupe 6ee4b024 -> f4de1732, pickup b398bec7 -> 8eb716f2, police c0adeac8 -> 135e04b0, monster c8deb0c9 -> efa55229.
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style crashed into the wall at 48 km/h by the engine's own step", () => {

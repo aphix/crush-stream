@@ -367,7 +367,11 @@ export abstract class DeformSolve extends DeformFreeze {
       // The sticky `deep` is the shape limits' only: read here, a hub of a car pressed once ran free of its shove in every later hit.
       const yielding = this.deepCrush;
       if (!m.popped && (yielding ? hypot2(dx, dz) : hypot2(m.shoveX, m.shoveZ)) > 2 * this.rig.tyre.r) this.popHub(m);
-      if (!m.popped && !yielding) {
+      // Where a deep crush carries a hub is its place once the crush is over, as a face's shove is: pinned there, not snapped back to its rest seat.
+      if (!m.popped && yielding) {
+        m.shoveX = dx;
+        m.shoveZ = dz;
+      } else if (!m.popped) {
         this.holdHubVelocity(m, group, dx, dz, m.shoveX, m.shoveZ);
         dx = m.shoveX;
         dz = m.shoveZ;

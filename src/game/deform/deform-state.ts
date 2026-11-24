@@ -83,7 +83,7 @@ export abstract class DeformState extends DeformHit {
   protected abstract skin(geometry: THREE.BufferGeometry): void;
   protected abstract solveCages(): void;
   /** Per mass (by `MassNode.index`), the beams that end on it, in beam order: rest-only, like `skinRest`. */
-  private readonly massBeams = this.masses.map((_, mi) => this.beams.flatMap((b, bi) => (b.a === mi || b.b === mi ? [bi] : [])));
+  protected readonly massBeams = this.masses.map((_, mi) => this.beams.flatMap((b, bi) => (b.a === mi || b.b === mi ? [bi] : [])));
 
   kickNearest(worldPoint: THREE.Vector3, nx: number, ny: number, nz: number, j: number): void {
     if (!this.massActive || j === 0) return;

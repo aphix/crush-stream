@@ -669,3 +669,26 @@ describe("given every style's cabin as its glass shows it", () => {
     });
   }
 });
+
+/** How far (m) a crush carried a pickup wreck's front-right hub inboard: its tyre's inner face then stands where the bay's side rested. */
+const HUB_CARRIED_IN_M = 0.3;
+
+describe("given a pickup wreck whose front-right hub a crush carried 0.3 m inboard", () => {
+  test("when its engine bay and front crash bar are fitted, then neither stands past that wheel's inner face where the wheel is drawn", () => {
+    const car = new Probe(paint(), new THREE.Scene(), null, "pickup");
+    const hub = car.deform.masses.find((m) => m.name === "hubFR");
+    must(hub, "fixture: the front-right hub");
+    hub.shoveX = -HUB_CARRIED_IN_M;
+    car.deform.massActive = true;
+    car.cabin.fit(car.deform);
+    const face = car.frame.wheels[1]![0] - HUB_CARRIED_IN_M - car.frame.rig.tyre.halfW;
+    const seats = car.partSeats.filter((s) => s.kind === PART_KIND.engineBay || (s.kind === PART_KIND.crashBar && s.position.z > 0));
+    let reach = -Infinity;
+    for (const seat of seats) {
+      const pos = seat.geometry.getAttribute("position");
+      for (let i = 0; i < pos.count; i++) reach = Math.max(reach, new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(seat.matrix).x);
+    }
+    expect(seats.length, "fixture: the bay and the front bar").toBe(2);
+    expect(reach, `a bay or bar reaches ${((reach - face) * 1000).toFixed(0)} mm past the wheel's inner face`).toBeLessThanOrEqual(face + 1e-6);
+  });
+});
