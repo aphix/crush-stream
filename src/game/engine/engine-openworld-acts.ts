@@ -25,6 +25,9 @@ const SHOT_RAY_REACH = 2.9;
 const HOOK_RAY_REACH = 4.1;
 /** The point of a shot's line the rays start at (the eye, or the line's point nearest his torso when the eye is behind him) must be within this (m) of his torso: the farthest tip (the shotgun's, 0.7 m past a hand held 0.7 m out: 1.4 m) plus a sprint's lag at the oldest view of him (7 m/s x 0.32 s = 2.24 m) plus 0.3 m of margin, so no eye far along his line fires from there. */
 const SHOT_ORIGIN_REACH = 4;
+/** The host's view of a guest is up to this old (s) when his shot arrives (the interpolation delay 0.1 s, a 15 Hz foot message's 0.067 s and 0.05 to 0.15 s of latency, to the oldest 0.32 s), and the most (m) it can trail a sprint by: 7 m/s x 0.32 s, the lag `SHOT_ORIGIN_REACH` already allows. His body is where the host has him, or this far along his reported velocity from there. */
+const SHOT_LAG_S = 0.32;
+const SHOT_LAG_M = 2.24;
 /** Network jitter bunches honest acts, so an actor's acts of one kind may run this far (s) ahead of the gun's own rate, and no further: a faster stream than the gun's is refused. */
 const ACT_BACKLOG_S = 0.5;
 /** A punch has no backlog to absorb jitter, so it spends this share of its cooldown: a little under the rate, so honest timing noise is not refused. A gun spends its whole cooldown: the backlog absorbs the noise and the long-run rate is the gun's. */
@@ -267,7 +270,7 @@ export class OpenWorldActs {
   shootBy(actor: number, aim: LookRay, gun: Gun, at: Placed | null = null): number {
     if (!this.ports.actorPlace(actor, _place)) return 0;
     if (this.nearestToTorso(aim) > SHOT_RAY_REACH || this.apartFromTorso(_near) > SHOT_ORIGIN_REACH) return 0;
-    if (this.resolver.wallBetween(_place.x, _place.y, _place.z, _near.eyeX, _near.eyeY, _near.eyeZ)) return 0;
+    if (this.wallAcrossShot(actor, _near)) return 0;
     const toPoint = at === null ? Infinity : hypot3(at.x - _near.eyeX, at.y - _near.eyeY, at.z - _near.eyeZ);
     const aimedAtPoint = at !== null && toPoint <= gun.range && !this.resolver.wallBetween(_near.eyeX, _near.eyeY, _near.eyeZ, at.x, at.y, at.z);
     if (aimedAtPoint) this.lay(_near, at);
@@ -279,6 +282,16 @@ export class OpenWorldActs {
     }
     this.resolver.shotFired(actor);
     return hypot3(_near.eyeX - aim.eyeX, _near.eyeY - aim.eyeY, _near.eyeZ - aim.eyeZ) + far;
+  }
+
+  /** Whether a wall of a place stands between actor `actor` and the shot's start `near` (`_place` is his torso as the host has him). Another player's own machine has him up to `SHOT_LAG_M` farther along his run than the host does (sprinting out of a door, on the street side of a wall the host's view of him still stands behind): his shot is refused only when the wall is across the line from the host's view and from that point too. A man at rest has one point, so his wall stays solid; the host's own player is exact and has one. */
+  private wallAcrossShot(actor: number, near: LookRay): boolean {
+    const { x, y, z, velocityX, velocityZ } = _place;
+    if (!this.resolver.wallBetween(x, y, z, near.eyeX, near.eyeY, near.eyeZ)) return false;
+    const speed = hypot2(velocityX, velocityZ);
+    if (speed === 0 || actor === this.ports.self()) return true;
+    const lag = Math.min(speed * SHOT_LAG_S, SHOT_LAG_M) / speed;
+    return this.resolver.wallBetween(x + velocityX * lag, y, z + velocityZ * lag, near.eyeX, near.eyeY, near.eyeZ);
   }
 
   /** How far (m) the point (`ray`'s eye) is from the torso in `_place`. */

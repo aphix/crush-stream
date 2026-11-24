@@ -652,3 +652,38 @@ describe("given a guest's shot act whose line runs through the body the host see
     expect(open.shots.length, "rays from the same start with no wall").toBe(1);
   });
 });
+
+describe("given a guest sprinting out through a street face along +z, whom the host still sees inside it, at (10, 1, 20) with the wall at z 21", () => {
+  /** A rig with the guest at the host's view of him moving `speed` m/s along +z, the street face at z `wallZ`, and his pistol shot along +x from a tip `ahead` m ahead of that view (the sidewalk's line). */
+  const sprintShot = (speed: number, wallZ: number, ahead: number) => {
+    const r = rig();
+    r.places.set(GUEST, { ...GUEST_AT, velocityZ: speed });
+    r.wallsAtZ.push(wallZ);
+    const act = actAt(ACT.shot, PISTOL_SLOT, 0, { x: 1, y: 0, z: 0 });
+    act.eyeY = 1.3;
+    act.eyeZ = GUEST_AT.z + ahead;
+    r.acts.hear(GUEST, act);
+    return r;
+  };
+
+  it("when he fires along the sidewalk from a tip 1.7 m ahead of the host's view, past the wall, at 7 m/s, then the host carries it out", () => {
+    expect(sprintShot(7, 21, 1.7).shots.length, "rays fired").toBe(1);
+  });
+
+  it("when the same shot is fired by a man at rest, then nothing is fired: the wall stays solid", () => {
+    expect(sprintShot(0, 21, 1.7).shots.length, "rays fired").toBe(0);
+  });
+
+  it("when the wall is 2.5 m ahead of the host's view and the tip 2.7 m, then nothing is fired though he sprints: his run (2.24 m) does not reach it", () => {
+    expect(sprintShot(7, 22.5, 2.7).shots.length, "rays fired").toBe(0);
+  });
+
+  it("when the host's own player sprints at the wall and fires from past it, then nothing is fired: his place is exact and gets no allowance", () => {
+    const r = rig();
+    r.places.set(HOST, { ...GUEST_AT, velocityZ: 7 });
+    r.wallsAtZ.push(21);
+    const aim = Object.assign(new LookRay(), { eyeX: GUEST_AT.x, eyeY: 1.3, eyeZ: GUEST_AT.z + 1.7, dirX: 1, dirY: 0, dirZ: 0 });
+    expect(r.acts.shootBy(HOST, aim, WEAPONS.pistol), "metres the ray went").toBe(0);
+    expect(r.shots.length, "rays fired").toBe(0);
+  });
+});
