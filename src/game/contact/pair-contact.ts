@@ -479,10 +479,13 @@ function crushForce(d: DeformableCar["deform"]): number {
  * impulse at most `maxJ`. Each car's change of speed and spin goes onto every mass (or onto the car of a body that is no wreck), as
  * the rigs' strike does (`takeRow`). A rigid contact (`maxJ` infinite: the crush is spent, packed, or too slow to crush) leaves each
  * car one body: every mass at the rigid motion of its car, as a spent structure is, so no internal speed is left to crush the
- * structure further (200 km/h head-on: clamped masses at ±8 m/s that a quiet wreck let go 0.2 s later).
+ * structure further (200 km/h head-on: clamped masses at ±8 m/s that a quiet wreck let go 0.2 s later). Its rows are the whole bodies
+ * (`carRow` at an infinite face speed): read off the masses still closing, the carry wrote their speed onto the whole car.
  */
 function exchangePair(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, p: THREE.Vector3, maxJ: number): void {
-  loadPair(carA, carB, n, p, faces[0]!, faces[1]!, maxJ);
+  const faceA = maxJ === Infinity ? Infinity : faces[0]!;
+  const faceB = maxJ === Infinity ? Infinity : faces[1]!;
+  loadPair(carA, carB, n, p, faceA, faceB, maxJ);
   const axv = pairRows[BODY_VX]!;
   const azv = pairRows[BODY_VZ]!;
   const aw = pairRows[BODY_W]!;
@@ -490,8 +493,8 @@ function exchangePair(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3
   const bzv = pairRows[BODY_SIZE + BODY_VZ]!;
   const bw = pairRows[BODY_SIZE + BODY_W]!;
   if (bodyContact(pairRows, 0, BODY_SIZE, pairContact, pairResult) === 0) return;
-  takeRow(carA, pairRows, 0, axv, azv, aw, n.x, n.z, faces[0]!);
-  takeRow(carB, pairRows, BODY_SIZE, bxv, bzv, bw, -n.x, -n.z, faces[1]!);
+  takeRow(carA, pairRows, 0, axv, azv, aw, n.x, n.z, faceA);
+  takeRow(carB, pairRows, BODY_SIZE, bxv, bzv, bw, -n.x, -n.z, faceB);
   if (maxJ === Infinity) {
     moveAsOneBody(carA, pairRows, 0);
     moveAsOneBody(carB, pairRows, BODY_SIZE);

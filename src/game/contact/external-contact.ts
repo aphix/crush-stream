@@ -279,6 +279,7 @@ const result = new Float64Array(OUT_SIZE);
  * the face is the structure still driving into it (a nose held on it is at rest, out of the face's impulse's reach): the row's velocity
  * is the mean of the masses moving into the face faster than `faceVn` along the normal, referred back to the centre by the body's spin
  * (else a spinning rigid wreck closes on its partner by its own turn every slice). With none driving, or no wreck, it is every mass.
+ * The body's own roll and pitch are taken out of the masses' motion first: on a leaning wreck they have a plan part a yaw fit reads as spin.
  */
 export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: number, nz: number, faceVn: number): void {
   const masses = car.deform.masses;
@@ -288,6 +289,7 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
   let cz = 0;
   let px = 0;
   let pz = 0;
+  let cy = 0;
   let drivingMass = 0;
   let drivingPX = 0;
   let drivingPZ = 0;
@@ -299,6 +301,7 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
     mass += m.mass;
     cx += m.mass * m.world.x;
     cz += m.mass * m.world.z;
+    cy += m.mass * m.world.y;
     px += m.mass * m.vel.x;
     pz += m.mass * m.vel.z;
     if (m.vel.x * nx + m.vel.z * nz < faceVn) {
@@ -311,6 +314,9 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
   }
   cx /= mass;
   cz /= mass;
+  cy /= mass;
+  const wx = live ? car.angular.x : 0;
+  const wz = live ? car.angular.z : 0;
   const meanX = live ? px / mass : car.velocity.x;
   const meanZ = live ? pz / mass : car.velocity.z;
   let inertia = 0;
@@ -320,8 +326,9 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
     if (live && !m.dynamic) continue;
     const rx = m.world.x - cx;
     const rz = m.world.z - cz;
+    const ry = m.world.y - cy;
     inertia += m.mass * (rx * rx + rz * rz);
-    spin += m.mass * (rz * (m.vel.x - meanX) - rx * (m.vel.z - meanZ));
+    spin += m.mass * (rz * (m.vel.x - meanX + wz * ry) - rx * (m.vel.z - meanZ - wx * ry));
   }
   const driving = live && drivingMass > 0;
   out[o + BODY_M] = mass;
@@ -329,7 +336,7 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
   out[o + BODY_X] = cx;
   out[o + BODY_Z] = cz;
   const w = live ? spin / inertia : car.angular.y;
-  // The driving masses' mean velocity is the body's at their centroid: referred to the centre, a rigid spinning wreck presents no closing of its own.
+  // The driving masses' mean velocity is the body's at their centroid, referred to the centre by the yaw spin the kernel adds back at its lever. Their roll and pitch speed stays: the kernel has no lever for it.
   const lever = driving ? drivingMass : 1;
   out[o + BODY_VX] = driving ? drivingX / drivingMass - w * (drivingPZ / lever - cz) : meanX;
   out[o + BODY_VZ] = driving ? drivingZ / drivingMass + w * (drivingPX / lever - cx) : meanZ;
@@ -353,7 +360,11 @@ export function takeRow(car: DeformableCar, rows: Float64Array, o: number, vx: n
   return (dvx * nx + dvz * nz) * rows[o + BODY_M]!;
 }
 
-/** Every dynamic mass of `car` takes the rigid motion of the row at `o` of `rows` (its velocity and spin about its centre): momentum and angular momentum kept, the internal motion gone. */
+/**
+ * Every dynamic mass of `car` takes the rigid motion of the row at `o` of `rows` (its velocity and spin about its centre) and the body's own roll and pitch
+ * about their centroid: momentum and angular momentum kept, the internal motion gone. The carry turns the masses with the body's whole spin, so a mass
+ * left without its roll and pitch part spun against the body and its drift was frozen as crush.
+ */
 export function moveAsOneBody(car: DeformableCar, rows: Float64Array, o: number): void {
   if (!car.deform.massActive) return;
   const vx = rows[o + BODY_VX]!;
@@ -364,10 +375,24 @@ export function moveAsOneBody(car: DeformableCar, rows: Float64Array, o: number)
   car.velocity.x = vx;
   car.velocity.z = vz;
   car.angular.y = w;
-  for (const q of car.deform.masses) {
+  const wx = car.angular.x;
+  const wz = car.angular.z;
+  const masses = car.deform.masses;
+  let heights = 0;
+  let weight = 0;
+  for (let i = 0; i < masses.length; i++) {
+    const q = masses[i]!;
     if (!q.dynamic) continue;
-    q.vel.x = vx + w * (q.world.z - cz);
-    q.vel.z = vz - w * (q.world.x - cx);
+    heights += q.mass * q.world.y;
+    weight += q.mass;
+  }
+  const cy = heights / weight;
+  for (let i = 0; i < masses.length; i++) {
+    const q = masses[i]!;
+    if (!q.dynamic) continue;
+    const ry = q.world.y - cy;
+    q.vel.x = vx + w * (q.world.z - cz) - wz * ry;
+    q.vel.z = vz - w * (q.world.x - cx) + wx * ry;
   }
 }
 
@@ -386,10 +411,12 @@ function strikerRow(box: ContactBox): void {
 /**
  * The one momentum exchange of a striker and a car at the face's deepest hull point (`_p`, normal `_n` into the car), at the most
  * `maxJ` of normal impulse (the crush force over the slice; 0 only reads the equivalent barrier speed). Plastic: the rebound of a
- * light touch is `wallBounce`'s. Returns the momentum the striker gave back to the caller.
+ * light touch is `wallBounce`'s. A rigid exchange (`maxJ` infinite) reads the whole body (every mass), as the pair's does. Returns the
+ * momentum the striker gave back to the caller.
  */
 function exchange(car: DeformableCar, box: ContactBox, depth: number, maxJ: number): number {
-  carRow(rows, 0, car, _n.x, _n.z, box.vx * _n.x + box.vz * _n.z);
+  const faceVn = maxJ === Infinity ? Infinity : box.vx * _n.x + box.vz * _n.z;
+  carRow(rows, 0, car, _n.x, _n.z, faceVn);
   strikerRow(box);
   contact[CT_X] = pressure.x;
   contact[CT_Z] = pressure.z;
@@ -404,7 +431,7 @@ function exchange(car: DeformableCar, box: ContactBox, depth: number, maxJ: numb
   const w = rows[BODY_W]!;
   const j = bodyContact(rows, 0, STRIKER, contact, result);
   if (j === 0) return 0;
-  const taken = takeRow(car, rows, 0, vx, vz, w, _n.x, _n.z, box.vx * _n.x + box.vz * _n.z);
+  const taken = takeRow(car, rows, 0, vx, vz, w, _n.x, _n.z, faceVn);
   if (maxJ === Infinity) moveAsOneBody(car, rows, 0);
   return car.deform.massActive ? taken : j;
 }

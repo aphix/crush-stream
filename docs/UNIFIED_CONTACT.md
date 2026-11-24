@@ -557,6 +557,10 @@ ground can stand on at some pitch.
   for bit. `sat-pose.test.ts` reads the rolled rows against an oracle that counts a node only where its column shares more than
   `VERTICAL_CLEAR` with the other's cell column (65°-75° within 0.04 m, was 0.253 m at 70°); the pitched rows keep the graze-counting
   oracle and record the outline's old graze over-read (27°, 1 m up, 3.6 m back: 0.750 m) as a todo.
+- **An outline node's band counts only where its own columns meet the other's** (`sat.ts` `bandGrazes`): a banded node whose band shares more than
+  `VERTICAL_CLEAR` is dropped when some column of its part within the band's window stands over or under a column of the other car taller than
+  that and none of them shares more than `VERTICAL_CLEAR` there; a node with no such pair (a hood's lip whose bonnet is not yet in) keeps its band, and an
+  unbanded node has none to discount. A car standing on a wagon's roof beside its shoulder read 0.75 m of plan contact at 6 cm into it.
 - **Rolled-pair cost** (worker, shadow pile: 9 cars, 14 pairs tilted past 30°, identical trajectories, only the rolled read added): 17.2 → 20.9 ms
   a frame (+21 %); a touching pair reads 150-260 µs against 17-35 µs. **Perf pass 1 (bit-identical, whole-digest and 5 derby heats unchanged):** the time is in
   the scan of every covered node of the lattice rectangle B's box lands on, each with a middle placement, up to four end placements and

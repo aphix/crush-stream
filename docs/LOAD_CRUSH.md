@@ -100,6 +100,9 @@ What holds a column up, in the shared car-on-car rule:
 
 - **The cages' heights** (`contact/cage-outline.ts` `bandsMeet`, `contact/sat.ts` `satCars`): a car whose body spans heights that overlap
   the car under it by no more than `VERTICAL_CLEAR` is on it, not beside it: the cage's top in the store carries it and the plan SAT does not push it.
+  An outline node's band (the ±3-node window's heights) counts only where some column of its own in that window shares more than `VERTICAL_CLEAR`
+  with the other car's column where it stands (`bandGrazes`): a wagon's rear shoulder edge read its roof's 1.43 m from 15 cm inboard, and a car
+  standing on that roof read it as a side contact (0.75 m at 6 cm into the roof, where the graze-free overlap is 0).
 - **`restsOn`** is set by touching a top, pressed or not (`CarSurfaces.touch`).
 - **One-sided ground**: a car's ground is a car below it (origin height), never one above.
 - **Lifted bodies**: others stand on the drawn roof (the class lift is on the top surface).
@@ -131,8 +134,9 @@ What holds a column up, in the shared car-on-car rule:
 ## The Stack scene
 
 The **Stack** scene (`/`, `scenes/stack-rig.ts`) drops cars one at a time onto a base car: the first after 1 s, then one
-every **gap** seconds (sim time), each from **drop** m over the roof of the stack below it (the roof of the car's own body
-style, 0.13 m belly room), standing over the middle of that roof (`roofSupport`: every style's roof sits behind its belly
+every **gap** seconds (sim time), each falling **drop** m before it first meets the stack below it (`dropGap`: its keel over
+the highest roof under it, or a tyre over the roof under that tyre, whichever is less: a turned SUV's front tyres reach 45 mm
+under its keel, and set by its keel they started 18-39 mm inside the roof), standing over the middle of that roof (`roofSupport`: every style's roof sits behind its belly
 pan) and turned 180° from the car below, so the column zigzags about 0.5 m instead of walking off. After the last car's
 gap it restarts through the shared clear path (with Loop on). The three
 sliders (cars 2–20, drop 0.02–2 m, gap 1–20 s) default to 4 / 0.02 m / 8 s, live in the share URL (`scars` / `sdrop` /

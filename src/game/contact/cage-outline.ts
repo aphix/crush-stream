@@ -14,7 +14,7 @@ export const OUTLINE_REACH = CAGE_STEP / 2;
  */
 export const VERTICAL_CLEAR = CAGE_STEP;
 /** How many nodes around a node `bandAround` reads: 15 cm, a few times the lattice's own resolution of the body's edge. */
-const VERTICAL_WINDOW = 3;
+export const VERTICAL_WINDOW = 3;
 const _window = new Float64Array(2);
 
 /** One cage's outline as of a fit: the covered nodes that touch an uncovered one (or the lattice's edge), and the cage's height range. */

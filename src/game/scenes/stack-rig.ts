@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { readContact } from "../vehicle/car-air-points.ts";
+import { beginContacts, readContact, wheelsAt } from "../vehicle/car-air-points.ts";
 import { crownY, keelY } from "../vehicle/car-cage-rig.ts";
 import { SKIN } from "../vehicle/car-surfaces.ts";
+import { armTops, C_OWNER, C_TOUCH, HIT_SIZE } from "../world/surfaces.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { UPRIGHT } from "./constants.ts";
 
@@ -75,19 +76,64 @@ function roofSupport(car: DeformableCar): THREE.Vector3 {
   return _support.set(0, 0, 0.5 * (rear + front)).applyQuaternion(car.group.quaternion).add(car.group.position);
 }
 
-/** Stand car `k` (hidden or spent) upright over the roof's support of the car below it (`cars[k-1]`), turned from it, over the crushed roofs of the stack (`cars[0..k-1]`), its belly `drop` m clear, falling. */
+/** Stand car `k` (hidden or spent) upright over the roof's support of the car below it (`cars[k-1]`), turned from it, over the crushed roofs of the stack (`cars[0..k-1]`), `drop` m clear of them (`dropGap`), falling. */
 export function placeDrop(cars: readonly DeformableCar[], k: number, drop: number): void {
-  let top = 0;
-  for (let i = 0; i < k; i++) top = Math.max(top, cars[i]!.group.position.y + crownY(cars[i]!));
+  const top = stackTop(cars, k);
   const car = cars[k]!;
   car.group.visible = true;
   const over = k > 0 ? roofSupport(cars[k - 1]!) : _support.set(0, 0, 0);
   car.spawnFacing(over.x, over.z, (k % 2) * Math.PI, 0);
   car.parked = true;
   car.group.position.y = top - keelY(car) + drop;
+  liftClear(cars, k, drop);
   readContact(car);
   // The load crush reads the car below's matrixWorld in the next step; the renderer's update comes after it.
   car.group.updateMatrixWorld(true);
+}
+
+/** How close (m) a drop's start is found to its height: a tenth of the millimetre the stack's rows read it to. */
+const PLACE_TOL = 1e-4;
+
+/** Raise car `k` (set by its keel) to the least height from which it falls `drop` before meeting the stack. A tyre reads a face over its hub as a wall and one under it as a floor, so the gap jumps as the car rises: bisected, not raised by the shortfall. */
+function liftClear(cars: readonly DeformableCar[], k: number, drop: number): void {
+  const p = cars[k]!.group.position;
+  let lo = p.y;
+  for (let g = dropGap(cars, k); g < drop - PLACE_TOL; g = dropGap(cars, k)) {
+    lo = p.y;
+    p.y += drop - g;
+  }
+  let hi = p.y;
+  while (hi - lo > PLACE_TOL) {
+    p.y = 0.5 * (lo + hi);
+    if (dropGap(cars, k) < drop - PLACE_TOL) lo = p.y;
+    else hi = p.y;
+  }
+  p.y = hi;
+}
+
+/** The highest crown (m, world y) of the stack's cars under car `k`, the ground's 0 if none stands higher. */
+function stackTop(cars: readonly DeformableCar[], k: number): number {
+  let top = 0;
+  for (let i = 0; i < k; i++) top = Math.max(top, cars[i]!.group.position.y + crownY(cars[i]!));
+  return top;
+}
+
+/** How far (m) car `k`, as posed, falls before it first meets the cars under it: its keel over their highest crown, or a tyre's tread over the roof under that tyre, whichever is less (a turned wagon's front tyres reach under its keel). */
+export function dropGap(cars: readonly DeformableCar[], k: number): number {
+  const car = cars[k]!;
+  let gap = car.group.position.y + keelY(car) - stackTop(cars, k);
+  const surf = car.surfaces;
+  // A car never stepped is in no world: no roof to meet but the keel's.
+  if (surf === null) return gap;
+  car.group.updateMatrixWorld(true);
+  surf.sync(car.slot, car);
+  armTops(surf);
+  beginContacts(car);
+  wheelsAt(car, 0);
+  armTops(null);
+  const hit = car.wheelHit;
+  for (let i = 0; i < 4; i++) if (hit[i * HIT_SIZE + C_OWNER]! >= 0) gap = Math.min(gap, -hit[i * HIT_SIZE + C_TOUCH]!);
+  return gap;
 }
 
 /** How far (m) a car may sit off the axis of the car under it and still stand on it. */

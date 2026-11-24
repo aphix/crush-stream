@@ -7,7 +7,7 @@ import { hypot2 } from "../deform/physics-util.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { nonFinite } from "../kernel/scalar.ts";
-import { OUTLINE_REACH, outlineOf, roundHalfUp, VERTICAL_CLEAR, type CageOutline } from "./cage-outline.ts";
+import { OUTLINE_REACH, outlineOf, roundHalfUp, VERTICAL_CLEAR, VERTICAL_WINDOW, type CageOutline } from "./cage-outline.ts";
 import { activeGround } from "../world/ground.ts";
 
 export const BARRIER_HALF = { x: 0.38, z: 1.96 };
@@ -596,10 +596,48 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
     }
     const depth = _meet[M_DEPTH]!;
     if (!(depth > 0) || (_meet[M_BANDED] === 1 && _meet[M_HIGH]! - _meet[M_LOW]! <= VERTICAL_CLEAR)) continue;
+    // The band reads heights up to 15 cm inboard (a roof over a shoulder's edge): it counts only where a column of its own meets one of `b`'s. An unbanded node has no band to discount.
+    if (!rolled && _meet[M_BANDED] === 1 && bandGrazes(outline.nodes[m]!, styleA, fieldsA, liftA, style, fields)) continue;
     if (depth > best) best = depth;
     addToPatch(found, eb, plan, style);
   }
   found[F_BEST] = best;
+}
+
+/**
+ * Whether outline node `n` of `a` (style `styleA`, fields `fieldsA`, class lift `liftA`) reaches `b` (`style`, `fields`, lift `_in[I_LIFT_B]`, placed through `_ab`)
+ * only through its band: some column of its part taller than `VERTICAL_CLEAR` within the band's window stands over or under a column of `b` taller than that, and
+ * none of them shares more than `VERTICAL_CLEAR` of height there. False where no such pair is found (a hood's lip whose bonnet is still out of `b`): the band is all there is to read.
+ */
+function bandGrazes(n: number, styleA: CageStyle, fieldsA: CageFields, liftA: number, style: CageStyle, fields: CageFields): boolean {
+  const nuA = styleA.nu;
+  const i = n % nuA;
+  const j = (n - i) / nuA;
+  const part = fieldsA.part[n] ?? 0;
+  const liftB = _in[I_LIFT_B]!;
+  let met = false;
+  for (let jj = Math.max(0, j - VERTICAL_WINDOW); jj <= Math.min(styleA.nv - 1, j + VERTICAL_WINDOW); jj++) {
+    for (let ii = Math.max(0, i - VERTICAL_WINDOW); ii <= Math.min(nuA - 1, i + VERTICAL_WINDOW); ii++) {
+      const k = jj * nuA + ii;
+      const lo = fieldsA.bottom[k]! + liftA;
+      const hi = fieldsA.top[k]! + liftA;
+      if (fieldsA.covered[k] === 0 || fieldsA.part[k] !== part || hi - lo <= VERTICAL_CLEAR) continue;
+      const x = styleA.u0 + ii * styleA.step;
+      const z = styleA.v0 + jj * styleA.step;
+      const y = 0.5 * (lo + hi);
+      const bi = roundHalfUp((_ab[0]! + _ab[1]! * x + _ab[2]! * y + _ab[3]! * z - style.u0) / style.step);
+      const bj = roundHalfUp((_ab[8]! + _ab[9]! * x + _ab[10]! * y + _ab[11]! * z - style.v0) / style.step);
+      if (bi < 0 || bj < 0 || bi >= style.nu || bj >= style.nv) continue;
+      const kb = bj * style.nu + bi;
+      if (fields.covered[kb] === 0 || fields.top[kb]! - fields.bottom[kb]! <= VERTICAL_CLEAR) continue;
+      const yc = _ab[4]! + _ab[5]! * x + _ab[7]! * z;
+      const a0 = yc + _ab[6]! * lo;
+      const a1 = yc + _ab[6]! * hi;
+      if (Math.min(Math.max(a0, a1), fields.top[kb]! + liftB) - Math.max(Math.min(a0, a1), fields.bottom[kb]! + liftB) > VERTICAL_CLEAR) return false;
+      met = true;
+    }
+  }
+  return met;
 }
 
 /** `found`'s sums take the node `meet` placed, weighted by its depth: its place in the world at the middle of the heights shared there (`eb`: the container's, `b`'s, world matrix), and the outline normal there. */
