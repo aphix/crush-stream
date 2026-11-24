@@ -232,7 +232,6 @@ describe("given Dee, a named resident whose home is the one farthest on foot fro
     expect(intAt(state, dee, RESIDENT_INT.pathCount), "nodes on a walk").toBe(0);
   });
 
-  // mutation: sed -i 's/^  if (isOutdoorPurpose(purpose)) return;/  void purpose;/' src/game/ai/civilians/civilian-plan.ts
   it("when she waits at the door of a shut coffee shop with seats, then she holds no seat inside it", () => {
     const { state, dee } = city();
     const tick = tickOfHour(state, 1, 20);

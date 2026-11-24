@@ -952,7 +952,6 @@ describe("given kerb cars standing near the local player", () => {
     expect(carAtSpace(field, traffic, own), "her own car, not another").toBe(hers);
   });
 
-  // mutation: sed -i 's/ <= SPACE_OCCUPIED_M) return false;/ <= -1) return false;/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when the player's own car is parked in a kerb space, then that space is not free for a lease, and the next one is", () => {
     const { field, traffic } = kerbWorld();
     const { spot, own } = twoSpaces(traffic);
@@ -1241,7 +1240,6 @@ describe("given cars of the traffic held still in view for longer than they are 
     expect(moved, "metres it moved while held: gone from where it stood").toBeGreaterThan(AHEAD_M / 2);
   });
 
-  // mutation: sed -i 's/        this.person\[id\] = this.person\[other.id\]!;/        this.person[id] = 0;/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when a mover is queued behind a mover a walker holds, then neither is towed in view in 100 s", () => {
     const run = lane();
     const lead = run.field.cars[run.first]!;
