@@ -25,6 +25,8 @@ export interface SagSkin {
   lift: Float32Array;
   dirty: Uint8Array;
   overTris: readonly Int32Array[];
+  /** Per wheel, how many entries of its `overTris` (a buffer kept, longer than what it holds) are in use. */
+  overTrisN: Int32Array;
   sagRead: readonly Float32Array[];
   /** Per wheel, its axle then its hub in the mesh's frame (`HELD_ELEMENTS` long each). */
   heldAt: Float64Array;
@@ -107,7 +109,8 @@ export class TyreSagArena {
    */
   sagPass(skin: SagSkin, pos: Float32Array, wheel: number, again: boolean, tyre: TyreSize): boolean {
     const tris = skin.overTris[wheel]!;
-    this.room(skin, pos, tris);
+    const n = skin.overTrisN[wheel]!;
+    this.room(skin, pos, n);
     if (skin.serial !== this.loadedSerial || this.loaded?.deref() !== skin) {
       this.pos.view.set(pos);
       this.rest.view.set(skin.rest);
@@ -117,10 +120,10 @@ export class TyreSagArena {
       if (this.loaded?.deref() !== skin) this.loaded = new WeakRef(skin);
       this.loadedSerial = skin.serial;
     }
-    this.tris.view.set(tris);
+    for (let k = 0; k < n; k++) this.tris.view[k] = tris[k]!;
     this.lift.view.set(skin.lift);
     this.dirty.view.set(skin.dirty);
-    if (again) this.read.view.set(skin.sagRead[wheel]!);
+    if (again) for (let k = 0; k < n; k++) this.read.view[k] = skin.sagRead[wheel]![k]!;
     const job = this.job.view;
     for (let k = 0; k < HELD_LENGTH; k++) job[SAG_JOB.held + k] = skin.heldAt[wheel * HELD_LENGTH + k]!;
     job[SAG_JOB.tyreR] = tyre.r;
@@ -132,8 +135,8 @@ export class TyreSagArena {
     job[SAG_JOB.topNone] = skin.sagTop[1]!;
     job[SAG_JOB.fade] = skin.fade[wheel]!;
     const raised =
-      this.ex.sag_pass(this.pos.at, this.rest.at, this.weld.at, this.liftable.at, this.sagFree.at, this.tris.at, tris.length, this.lift.at, this.bump.at, this.dirty.at, this.read.at, again ? 1 : 0, this.job.at) !== 0;
-    skin.sagRead[wheel]!.set(this.read.view.subarray(0, tris.length));
+      this.ex.sag_pass(this.pos.at, this.rest.at, this.weld.at, this.liftable.at, this.sagFree.at, this.tris.at, n, this.lift.at, this.bump.at, this.dirty.at, this.read.at, again ? 1 : 0, this.job.at) !== 0;
+    skin.sagRead[wheel]!.set(this.read.view.subarray(0, n));
     if (!raised) return false;
     skin.lift.set(this.lift.view.subarray(0, skin.lift.length));
     skin.dirty.set(this.dirty.view.subarray(0, skin.dirty.length));
@@ -141,17 +144,17 @@ export class TyreSagArena {
   }
 
   /** Room for a pass: the arena moves only here. */
-  private room(skin: SagSkin, pos: Float32Array, tris: Int32Array): void {
+  private room(skin: SagSkin, pos: Float32Array, n: number): void {
     this.want(this.pos, pos.length);
     this.want(this.rest, skin.rest.length);
     this.want(this.weld, skin.weld.length);
     this.want(this.liftable, skin.liftable.length);
     this.want(this.sagFree, skin.sagFree.length);
-    this.want(this.tris, tris.length);
+    this.want(this.tris, n);
     this.want(this.lift, skin.lift.length);
     this.want(this.bump, skin.lift.length);
     this.want(this.dirty, skin.dirty.length);
-    this.want(this.read, tris.length);
+    this.want(this.read, n);
     this.settle();
   }
 

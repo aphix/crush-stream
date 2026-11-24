@@ -17,6 +17,7 @@ import { must } from "../kernel/must.test-util.ts";
 import { worstHoldOverRest } from "./skin-stretch.test-util.ts";
 import { hiddenTwins, NOSE_HIT } from "./hidden-twins.test-util.ts";
 import { makeShell } from "./car-panels.ts";
+import { allocatedBytes } from "../kernel/alloc-sample.test-util.ts";
 
 /** A car's tear hook, protected on the car: the hit that would tear the part is beside the point. */
 type Tearable = { detachPart(p: unknown, impulse: number): void; parts: readonly { name: string }[] };
@@ -659,19 +660,52 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
 
 /** How far (m) a crush carried the front-right hub inboard: past a tyre's width, so no point that rested over the tyre at its rest seat rests over it where it is drawn. */
 const HUB_CARRIED_IN_M = 0.5;
+/** How far (m) a carried hub's seat moves a frame while the crush goes on, the frames the allocation row holds over, and the most (B) a frame of them may allocate in the over-set's search. */
+const SEAT_FRAME_M = 0.002;
+const SEAT_FRAMES = 120;
+const SEARCH_BYTES_PER_FRAME = 16;
 
 describe("given a pickup wreck whose front-right hub a crush carried 0.5 m inboard", () => {
-  it("when the skin is held with that seat, then a point that rested over the tyre at its rest seat is held by the tyre no longer", () => {
+  it("when the skin is held with that seat, then points held over the tyre at its rest seat are let go and points that were not are held: the set moved with the wheel", () => {
     const car = buildCar("pickup", "truck");
     const skin = new TyreSkin(car.frame, car["body"] as THREE.Mesh, car.deform.restSkin, true);
     const lift = CLASSES[carClass(car)].lift;
     car.group.updateMatrixWorld(true);
     skin.hold(car.group, car.wheels, 0, lift, true);
-    const heldAtRest = skin["overAt"][FRONT_RIGHT_WHEEL]!.length;
-    expect(heldAtRest, "fixture: points rest over the tyre at its rest seat").toBeGreaterThan(0);
+    const atRest = Float32Array.from(skin["over"][FRONT_RIGHT_WHEEL]!);
+    expect(skin["overAtN"][FRONT_RIGHT_WHEEL], "fixture: points rest over the tyre at its rest seat").toBeGreaterThan(0);
     const seats = new Float64Array(8);
     seats[FRONT_RIGHT_WHEEL * 2] = -HUB_CARRIED_IN_M;
     skin.hold(car.group, car.wheels, 0, lift, true, [], false, seats);
-    expect(skin["overAt"][FRONT_RIGHT_WHEEL]!.length, "points held over the tyre at its drawn seat").toBeLessThan(heldAtRest);
+    const atSeat = skin["over"][FRONT_RIGHT_WHEEL]!;
+    let letGo = 0;
+    let found = 0;
+    for (let i = 0; i < atSeat.length; i++) {
+      if (Number.isNaN(atSeat[i]!) && !Number.isNaN(atRest[i]!)) letGo++;
+      if (!Number.isNaN(atSeat[i]!) && Number.isNaN(atRest[i]!)) found++;
+    }
+    expect(letGo, "points held at the rest seat only").toBeGreaterThan(0);
+    expect(found, "points held at the drawn seat only").toBeGreaterThan(0);
+  });
+
+  it("when its hub's seat moves 2 mm a frame for 120 frames, then the over-set's search allocates at most 16 B a frame", () => {
+    const car = buildCar("pickup", "truck");
+    const skin = new TyreSkin(car.frame, car["body"] as THREE.Mesh, car.deform.restSkin, true);
+    const lift = CLASSES[carClass(car)].lift;
+    car.group.updateMatrixWorld(true);
+    const seats = new Float64Array(8);
+    const frame = (at: number): void => {
+      seats[FRONT_RIGHT_WHEEL * 2] = -at * SEAT_FRAME_M;
+      skin.hold(car.group, car.wheels, 0, lift, true, [], false, seats);
+    };
+    // The buffers grow to the largest over-set the seat's whole travel finds, once: the read starts after that travel has been made.
+    for (let at = 0; at < 2 * SEAT_FRAMES; at++) frame(at);
+    const bytes = allocatedBytes(
+      () => {
+        for (let at = 0; at < SEAT_FRAMES; at++) frame(SEAT_FRAMES + at);
+      },
+      { fn: "findOver", file: "car-tyre-skin.ts" },
+    );
+    expect(bytes / SEAT_FRAMES, "bytes a frame").toBeLessThanOrEqual(SEARCH_BYTES_PER_FRAME);
   });
 });

@@ -52,6 +52,8 @@ const HELD_ELEMENTS = [0, 1, 2, 12, 13, 14] as const;
 const WHEEL_SLACK = 5e-4;
 /** How far (m) a wreck's drawn hub seat may travel from where its over-set was found before it is found again: a third of the 3 cm gap the body paint keeps, while a crush carrying a hub 2 mm a frame finds it again every few frames, not each. */
 const SEAT_STEP = 0.01;
+/** The entries a wheel's `overTris` buffer starts with (ints): it doubles when a search needs more, and is then kept. */
+const TRIS_START = 4096;
 /** How far (m) the skin stands over a part under it (`liftOverParts`): the 5 mm the drawn skin keeps over a tyre. */
 const PART_CLEAR = 0.005;
 /** A part's top is read at its highest vertex in each plan cell this wide (m): a skin over the part clears every vertex of the cell to within its tilt over 5 cm. */
@@ -116,20 +118,6 @@ export function spreadSagLift(by: number, cl: ArrayLike<number>, cs: ArrayLike<n
   for (let m = 0; m < 3; m++) carried += cl[m]! * cs[m]! * cc[m]!;
   const past = sagLift(short, carried) * carried;
   for (let m = 0; m < 3; m++) if (cl[m]! > 0) cu[m] = cu[m]! + past * cs[m]! * cc[m]!;
-}
-
-/** The first corner (index in `tris`) of each distinct welded point among `tris`' corners, ascending. */
-function firstCorners(tris: Int32Array, weld: Int32Array, points: number): Int32Array {
-  const seen = new Uint8Array(points);
-  const firsts: number[] = [];
-  for (let k = 0; k < tris.length; k++) {
-    const p = weld[tris[k]!]!;
-    if (seen[p] === 0) {
-      seen[p] = 1;
-      firsts.push(k);
-    }
-  }
-  return Int32Array.from(firsts);
 }
 
 /** `geometry`'s highest vertex (own frame, x y z each) in each `TOP_CELL` plan cell: what a skin over it must clear. */
@@ -393,9 +381,15 @@ export class TyreSkin {
   private readonly over: Float32Array[] = [];
   /** Per wheel, the vertices with a point in `over` (not NaN), ascending. */
   private readonly overAt: Int32Array[] = [];
+  /** Per wheel, how many of its `overAt`, `overTris` and `sagFirst` entries are in use: the arrays are buffers kept and written in place (`findOver`), longer than what they hold. */
+  private readonly overAtN = new Int32Array(4);
+  private readonly overTrisN = new Int32Array(4);
+  private readonly sagFirstN = new Int32Array(4);
+  /** The welded points `firstCorners` has seen: cleared and reused. */
+  private seenPoints: Uint8Array | null = null;
   /** Per vertex, bit w: it rests over wheel w's tyre (`over[w]` is not NaN). */
   private readonly liftable: Uint8Array;
-  /** Per wheel, the corners (vertex ids, three a triangle) of the triangles with a point resting over its tyre. */
+  /** Per wheel, the corners (vertex ids, three a triangle) of the triangles with a point resting over its tyre, in the first `overTrisN` entries. */
   private readonly overTris: Int32Array[] = [];
   /** Per wheel, the lift of each corner of its `overTris` when the sag passes last read it this hold (`cornersRose`). */
   private readonly sagRead: Float32Array[] = [];
@@ -483,7 +477,7 @@ export class TyreSkin {
     this.lifted = new Int32Array(rest.length / 3);
     this.liftedBefore = new Int32Array(rest.length / 3);
     this.near = new Int32Array((2 * rest.length) / 3);
-    this.sagSkin = { serial: 0, weld: this.edges.weld, liftable: this.liftable, sagFree: this.sagFree, rest, lift: this.lift, dirty: this.dirty, overTris: this.overTris, sagRead: this.sagRead, heldAt: this.heldAt, restHub: this.restHub, restScale: this.overFor, sagTop: this.sagTop, fade: this.fade };
+    this.sagSkin = { serial: 0, weld: this.edges.weld, liftable: this.liftable, sagFree: this.sagFree, rest, lift: this.lift, dirty: this.dirty, overTris: this.overTris, overTrisN: this.overTrisN, sagRead: this.sagRead, heldAt: this.heldAt, restHub: this.restHub, restScale: this.overFor, sagTop: this.sagTop, fade: this.fade };
   }
 
   /** The skin as last written, before this hold lifted any of it; null until a hold has read one. */
@@ -534,7 +528,8 @@ export class TyreSkin {
       _h[1] = _hub.y;
       _h[2] = _hub.z;
       const over = (this.over[w] ??= new Float32Array(this.rest.length / 3));
-      const resting: number[] = [];
+      const resting = (this.overAt[w] ??= new Int32Array(over.length));
+      let restingN = 0;
       for (let i = 0; i < this.rest.length; i += 3) {
         const c = clearOver(this.frame.rig.tyre, this.rest, i, _h, _a, scale, 0);
         const restsOver = c >= -REST_SLACK && c < REACH;
@@ -542,14 +537,14 @@ export class TyreSkin {
         this.liftable[i / 3]! &= ~(1 << w);
         if (restsOver) {
           this.liftable[i / 3]! |= 1 << w;
-          resting.push(i / 3);
+          resting[restingN++] = i / 3;
         }
       }
-      this.overAt[w] = Int32Array.from(resting);
-      this.overTris[w] = this.trianglesOver(over);
+      this.overAtN[w] = restingN;
+      this.trianglesOver(w, over);
       this.restHub.set(_h, w * 3);
-      this.sagRead[w] = new Float32Array(this.overTris[w].length);
-      this.sagFirst[w] = firstCorners(this.overTris[w], this.edges.weld, this.lift.length);
+      this.sagRead[w]!.fill(0, 0, this.overTrisN[w]!);
+      this.firstCorners(w);
     }
     f[0] = lift;
     f[1] = hubShift;
@@ -557,18 +552,47 @@ export class TyreSkin {
     return found;
   }
 
-  /** The corners of the mesh's triangles that have a point in `over` (not NaN). */
-  private trianglesOver(over: Float32Array): Int32Array {
+  /** Wheel `w`'s `overTris`: the corners of the mesh's triangles that have a point in `over` (not NaN), written in place (the buffer grows only past what it held, so a search allocates nothing once warm), and their `sagRead` grown with it. */
+  private trianglesOver(w: number, over: Float32Array): void {
     const index = this.mesh.geometry.index;
     const corners = index ? index.count : over.length;
-    const found: number[] = [];
+    let tris = (this.overTris[w] ??= new Int32Array(TRIS_START));
+    let n = 0;
     for (let t = 0; t + 2 < corners; t += 3) {
       const a = index ? index.getX(t) : t;
       const b = index ? index.getX(t + 1) : t + 1;
       const c = index ? index.getX(t + 2) : t + 2;
-      if (!Number.isNaN(over[a]!) || !Number.isNaN(over[b]!) || !Number.isNaN(over[c]!)) found.push(a, b, c);
+      if (Number.isNaN(over[a]!) && Number.isNaN(over[b]!) && Number.isNaN(over[c]!)) continue;
+      if (n + 3 > tris.length) {
+        const grown = new Int32Array(tris.length * 2);
+        grown.set(tris);
+        tris = grown;
+        this.overTris[w] = tris;
+      }
+      tris[n++] = a;
+      tris[n++] = b;
+      tris[n++] = c;
     }
-    return Int32Array.from(found);
+    this.overTrisN[w] = n;
+    if ((this.sagRead[w]?.length ?? 0) < tris.length) this.sagRead[w] = new Float32Array(tris.length);
+  }
+
+  /** Wheel `w`'s `sagFirst`: the first corner (index in its `overTris`) of each distinct welded point among them, ascending, written in place. */
+  private firstCorners(w: number): void {
+    const tris = this.overTris[w]!;
+    const { weld } = this.edges;
+    const seen = (this.seenPoints ??= new Uint8Array(this.lift.length));
+    const firsts = (this.sagFirst[w] ??= new Int32Array(this.lift.length));
+    seen.fill(0);
+    let count = 0;
+    for (let k = 0; k < this.overTrisN[w]!; k++) {
+      const p = weld[tris[k]!]!;
+      if (seen[p] === 0) {
+        seen[p] = 1;
+        firsts[count++] = k;
+      }
+    }
+    this.sagFirstN[w] = count;
   }
 
   /** Whether a deferred hold's lift is not on the mesh yet. */
@@ -931,12 +955,13 @@ export class TyreSkin {
     const tris = this.overTris[w]!;
     const { weld } = this.edges;
     const read = this.sagRead[w]!;
+    const n = this.overTrisN[w]!;
     let lowest = Infinity;
-    for (let k = 0; k < tris.length; k++) lowest = Math.min(lowest, pos[tris[k]! * 3 + 1]! + this.lift[weld[tris[k]!]!]!);
+    for (let k = 0; k < n; k++) lowest = Math.min(lowest, pos[tris[k]! * 3 + 1]! + this.lift[weld[tris[k]!]!]!);
     // A triangle's point is a blend of its corners': with every corner over the tyre's top and the clearance, none can stand short.
     const overTop = lowest > _h[1]! + Math.abs(_a[1]!) * _sag.halfW + _sag.flat * _sag.r + SAG_CLEAR;
     let raised = false;
-    for (let t = 0; t < tris.length; t += 3) {
+    for (let t = 0; t < n; t += 3) {
       // Read again, a triangle whose corners kept the lifts of its last read asks what it asked then: nothing, or a corner would have risen.
       let rose = !again;
       for (let k = t; k < t + 3; k++) {
@@ -947,7 +972,7 @@ export class TyreSkin {
       if (rose && !overTop && this.sagTriangle(pos, w, t)) raised = true;
     }
     if (!raised) return false;
-    for (let k = 0; k < tris.length; k++) {
+    for (let k = 0; k < n; k++) {
       const p = weld[tris[k]!]!;
       if (this.bump[p]! > 0) this.dirty[p] = 1;
       this.lift[p] = this.lift[p]! + this.bump[p]!;
@@ -1128,7 +1153,7 @@ export class TyreSkin {
     const read = this.sagRead[w]!;
     const firsts = this.sagFirst[w]!;
     const { weld } = this.edges;
-    for (let i = 0; i < firsts.length; i++) {
+    for (let i = 0; i < this.sagFirstN[w]!; i++) {
       const k = firsts[i]!;
       if (this.lift[weld[tris[k]!]!] !== read[k]) return true;
     }
@@ -1171,7 +1196,7 @@ export class TyreSkin {
     const r = tyre.r * scale;
     const halfW = tyre.halfW * scale;
     const endsAhead = ENDS_ZONE * tyre.r * scale;
-    for (let k = 0; k < resting.length; k++) {
+    for (let k = 0; k < this.overAtN[w]!; k++) {
       const v = resting[k]!;
       const dx = pos[v * 3]! - h0;
       const dy = pos[v * 3 + 1]! - h1;
