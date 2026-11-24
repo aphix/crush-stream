@@ -62,7 +62,7 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import { KILL_HITS_MIN, KILL_HITS_SPREAD } from "../scenes/lawn-guard.ts";
 import { STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
 import { PlayerBlows } from "./engine-openworld-acts.ts";
-import { NamedThings } from "./engine-openworld-named.ts";
+import { NamedThings, type Placed } from "./engine-openworld-named.ts";
 import { NAMED, type Named } from "../net/act-codec.ts";
 import { activeGround } from "../world/ground.ts";
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
@@ -926,7 +926,7 @@ export class OpenWorldDirector {
   }
 
   /** The world point of named thing (`kind`, `id`) with its offset, as this machine has it now: into `out`; false when it is not there (`NamedThings.place`). */
-  placeNamed(kind: number, id: number, ox: number, oy: number, oz: number, out: { x: number; y: number; z: number }): boolean {
+  placeNamed(kind: number, id: number, ox: number, oy: number, oz: number, out: Placed): boolean {
     return this.named.place(kind, id, ox, oy, oz, out);
   }
 

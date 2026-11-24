@@ -8,7 +8,7 @@ import { ACT, ACT_KINDS, NAMED, type Act, type Named } from "../net/act-codec.ts
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { gunAt, slotOfGun, STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
 import type { ActorPlace } from "./engine-openworld-law.ts";
-import { namedFits, namedReach } from "./engine-openworld-named.ts";
+import { namedFits, namedReach, type Placed } from "./engine-openworld-named.ts";
 
 /** Actors are car indexes. */
 const MAX_ACTORS = MAX_CARS;
@@ -54,7 +54,7 @@ const _aim = new LookRay();
 const _ray = new LookRay();
 const _near = new LookRay();
 const _muzzle = { x: 0, y: 0, z: 0 };
-const _at = { x: 0, y: 0, z: 0 };
+const _at: Placed = { x: 0, y: 0, z: 0, speed: 0 };
 const _named: Named = { kind: NAMED.nothing, id: 0, x: 0, y: 0, z: 0 };
 
 /** What the director resolves at the authority for an actor. */
@@ -64,7 +64,7 @@ type ActResolver = {
   /** How far (m) along `ray`, within `range`, the nearest wall, ground, person, dummy, car or prop is, or `range`; nothing is struck. `name`, when given, is filled with what that was (`NamedThings.name`). */
   meet(actor: number, ray: LookRay, range: number, name?: Named | null): number;
   /** The world point of named thing (`kind`, `id`) plus its hit offset as this machine has it now, into `out`; false when it is not there. */
-  placeNamed(kind: number, id: number, ox: number, oy: number, oz: number, out: { x: number; y: number; z: number }): boolean;
+  placeNamed(kind: number, id: number, ox: number, oy: number, oz: number, out: Placed): boolean;
   /** Whether a wall of a place stands between the points a and b (m). */
   wallBetween(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean;
   /** Actor `actor` fired a gun: the law hears of him. */
@@ -240,7 +240,7 @@ export class OpenWorldActs {
     if (named.kind === NAMED.nothing || !namedFits(named.kind, named.x, named.y, named.z) || !this.resolver.placeNamed(named.kind, named.id, named.x, named.y, named.z, _at)) return null;
     const along = Math.max(0, (_at.x - line.eyeX) * line.dirX + (_at.y - line.eyeY) * line.dirY + (_at.z - line.eyeZ) * line.dirZ);
     const gap = hypot3(line.eyeX + line.dirX * along - _at.x, line.eyeY + line.dirY * along - _at.y, line.eyeZ + line.dirZ * along - _at.z);
-    return gap <= namedReach(named.kind) ? _at : null;
+    return gap <= namedReach(named.kind, _at.speed) ? _at : null;
   }
 
   /** `ray`'s direction turned from its eye toward `at`; kept when `at` is on the eye. */
@@ -310,7 +310,7 @@ export class OpenWorldActs {
    */
   private aimFromMuzzle(aim: LookRay, gun: Gun): number {
     this.nearestToTorso(aim);
-    const met = this.resolver.meet(this.ports.self(), _near, gun.range, _named);
+    const met = this.resolver.meet(this.ports.self(), _near, gun.range, this.ports.guest() ? _named : null);
     const targetX = _near.eyeX + _near.dirX * met;
     const targetY = _near.eyeY + _near.dirY * met;
     const targetZ = _near.eyeZ + _near.dirZ * met;

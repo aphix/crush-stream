@@ -20,7 +20,7 @@ type Point = { x: number; y: number; z: number };
 /** The host's acts over a stub director that puts every named thing at `stands` (null: nowhere) and has a wall wherever `wallZ` says. */
 function rig() {
   const clock = { now: 100 };
-  const stands = { at: null as Point | null };
+  const stands = { at: null as Point | null, speed: 0 };
   const wallZ: number[] = [];
   const asked: number[][] = [];
   const shots: LookRay[] = [];
@@ -49,7 +49,7 @@ function rig() {
       placeNamed: (kind, id, ox, oy, oz, out) => {
         asked.push([kind, id, ox, oy, oz]);
         if (stands.at === null) return false;
-        Object.assign(out, stands.at);
+        Object.assign(out, stands.at, { speed: stands.speed });
         return true;
       },
       shotFired: () => {},
@@ -148,14 +148,36 @@ describe("given a host that hears a guest's shot naming a person, the guest aimi
 });
 
 describe("given a host that hears a guest's shot naming a car, and then a shotgun's pellets", () => {
-  it("when the car now stands 10 m off the sent line, which a car can have moved and a walker cannot, then the shot is aimed at it; the same 10 m for a person is refused", () => {
+  it("when a car moving at 20 m/s now stands 10 m off the sent line, then the shot is aimed at it; the same 10 m for a person standing still is refused", () => {
     const r = rig();
     const at = { x: 20, y: 1.3, z: 35 };
     r.stands.at = at;
+    r.stands.speed = 20;
     r.acts.hear(GUEST, actNaming(ACT.shot, NAMED.car, CAR_ID));
     expect(firstMismatch(dirOf(r.shots[0]!), toward(at), AIM_TOLERANCE), "the car: the ray's direction").toBeUndefined();
+    r.stands.speed = 0;
     r.acts.hear(GUEST, actNaming(ACT.shot, NAMED.player, PERSON_ID));
     expect(firstMismatch(dirOf(r.shots[1]!), STRAIGHT, AIM_TOLERANCE), "a player: the ray's direction").toBeUndefined();
+  });
+
+  it("when a car moving at 60 m/s, a boosted player car, now stands 30 m off the sent line, then the shot is aimed at it; a parked car 20 m off the line is refused", () => {
+    const r = rig();
+    const fast = { x: 40, y: 1.3, z: 35 };
+    r.stands.at = fast;
+    r.stands.speed = 60;
+    r.acts.hear(GUEST, actNaming(ACT.shot, NAMED.car, CAR_ID));
+    expect(firstMismatch(dirOf(r.shots[0]!), toward(fast), AIM_TOLERANCE), "the fast car: the ray's direction").toBeUndefined();
+    r.stands.at = { x: 30, y: 1.3, z: 35 };
+    r.stands.speed = 0;
+    r.acts.hear(GUEST, actNaming(ACT.shot, NAMED.car, CAR_ID));
+    expect(firstMismatch(dirOf(r.shots[1]!), STRAIGHT, AIM_TOLERANCE), "the parked car: the ray's direction").toBeUndefined();
+  });
+
+  it("when a civilian standing still is named 3.9 m off the sent line, then the shot goes along the sent line", () => {
+    const r = rig();
+    r.stands.at = { x: 13.9, y: 1.3, z: 35 };
+    r.acts.hear(GUEST, actNaming(ACT.shot, NAMED.civilian, PERSON_ID));
+    expect(firstMismatch(dirOf(r.shots[0]!), STRAIGHT, AIM_TOLERANCE), "the ray's direction").toBeUndefined();
   });
 
   it("when a shotgun shot names a person, then every pellet stays within the shotgun's cone of the line to her", () => {

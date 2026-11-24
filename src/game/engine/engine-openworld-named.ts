@@ -3,9 +3,8 @@ import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { LookRay } from "../ai/civilians/civilian-look.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
-import { BODY_KIND } from "../net/body-codec.ts";
+import { BODY_KIND, type BodyMotion } from "../net/body-codec.ts";
 import { NAMED, type Named } from "../net/act-codec.ts";
-import { SPRINT_SPEED } from "../present/walker-locomotion.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { activeGround } from "../world/ground.ts";
@@ -19,27 +18,43 @@ const NAMED_AGE_S = 0.5;
 const PERSON_RADIUS_M = 0.5;
 const PERSON_TOP_M = 2.2;
 const PERSON_LOW_M = -0.3;
-/** A walker cannot outrun a sprint (m/s). */
-const PERSON_TOP_MPS = SPRINT_SPEED;
-/** A car on the open world's streets: twice the 20 m/s it was measured crossing at (m/s); how far from its origin its surface lies (m). */
-const CAR_TOP_MPS = 40;
+/** The most a walker gains speed (m/s²): the push up to a run (`ACCEL_TO_RUN`, walker-locomotion.ts). */
+const PERSON_ACCEL = 12;
+/** The most a car gains speed (m/s²): the hardest launch of any class (20.4, vehicle-classes.ts) times the boost's acceleration (1.55). */
+const CAR_ACCEL = 32;
+/** How far (m) a car's surface lies from its origin (the guest's pre-filter sphere), and its size in the window (m). */
 const CAR_REACH_M = 4;
+const CAR_SIZE_M = 2.5;
+/** The host holds a named car's offset to the car's own box grown by this much (m) on each axis. */
+const CAR_BOX_SLACK_M = 0.3;
 
-const _spot = { x: 0, z: 0 };
+/** A named thing as the host places it: the world point and the thing's own speed (m/s). */
+export type Placed = { x: number; y: number; z: number; speed: number };
+
+const _spot = { x: 0, z: 0, speed: 0 };
+const _motion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
 const _foot = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
 const _place = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
 const _v = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 
-/** Whether `named` kind's offset (x, y, z) lies within that kind of thing. */
+/** Whether `named` kind's offset (x, y, z) lies within that kind of thing: a person's cylinder, a car's sphere (the guest's pre-filter; the host holds a car to its own box, `inCarBox`). */
 export function namedFits(kind: number, x: number, y: number, z: number): boolean {
   if (kind === NAMED.car) return hypot3(x, y, z) <= CAR_REACH_M;
   return kind !== NAMED.nothing && hypot2(x, z) <= PERSON_RADIUS_M && y >= PERSON_LOW_M && y <= PERSON_TOP_M;
 }
 
-/** How far (m) a named thing may stand from the line a guest aimed along: what it moves in the oldest honest view, and its radius. */
-export function namedReach(kind: number): number {
-  return kind === NAMED.car ? CAR_TOP_MPS * NAMED_AGE_S + CAR_REACH_M : PERSON_TOP_MPS * NAMED_AGE_S + PERSON_RADIUS_M;
+/** Whether the offset (x, y, z) in `car`'s frame lies in its own box: its half extents about its centre, and `CAR_BOX_SLACK_M`. */
+function inCarBox(car: DeformableCar, x: number, y: number, z: number): boolean {
+  const { half, centre } = car.frame;
+  return Math.abs(x - centre.x) <= half.x + CAR_BOX_SLACK_M && Math.abs(y - centre.y) <= half.y + CAR_BOX_SLACK_M && Math.abs(z - centre.z) <= half.z + CAR_BOX_SLACK_M;
+}
+
+/** How far (m) a named thing may stand from the line a guest aimed along: what it moves in the oldest honest view at its own present `speed` and the most it can have gained, and its size. */
+export function namedReach(kind: number, speed: number): number {
+  const car = kind === NAMED.car;
+  const gained = 0.5 * (car ? CAR_ACCEL : PERSON_ACCEL) * NAMED_AGE_S * NAMED_AGE_S;
+  return speed * NAMED_AGE_S + gained + (car ? CAR_SIZE_M : PERSON_RADIUS_M);
 }
 
 /** What the picks of a look along a ray hold, as the director fills them. */
@@ -69,12 +84,18 @@ export class NamedThings {
     this.world = world;
   }
 
-  /** Where person `person` (`people-index`) stands on this machine, into `_spot`: her body's torso, else where she is drawn, else the table of her kind. */
+  /** Where person `person` (`people-index`) stands on this machine and how fast she moves, into `_spot`: her body's torso, else where she is drawn, else the table of her kind. */
   private personAt(person: number): boolean {
     const table = this.world.crowd();
     if (table === null) return false;
     const body = this.world.bodies();
-    if (body !== null && body.torsoOf(person, _spot)) return true;
+    if (body !== null && body.motionOf(person, _motion)) {
+      _spot.x = _motion.x;
+      _spot.z = _motion.z;
+      _spot.speed = hypot2(_motion.vx, _motion.vz);
+      return true;
+    }
+    _spot.speed = 0;
     const drawn = this.world.shared();
     if (drawn !== null && drawn.drawnAt(person, _spot) !== DRAWN.none) return true;
     const kind = kindOf(person, table.count);
@@ -84,21 +105,24 @@ export class NamedThings {
     if (rows === null || rows.shown[id] === 0) return false;
     _spot.x = rows.x[id]!;
     _spot.z = rows.z[id]!;
+    _spot.speed = rows.speed[id]!;
     return true;
   }
 
-  /** Player `actor`'s torso (x, z) into `_spot`: this machine's own player on foot, or another as his record has him. */
+  /** Player `actor`'s torso (x, z) and speed into `_spot`: this machine's own player on foot, or another as his record has him. */
   private playerAt(actor: number): boolean {
     const world = this.world;
     if (actor === world.ownCar()) {
       if (!world.ownFoot(_foot)) return false;
       _spot.x = _foot.x;
       _spot.z = _foot.z;
+      _spot.speed = hypot2(_foot.velocityX, _foot.velocityZ);
       return true;
     }
     if (!world.playerPlace(actor, _place)) return false;
     _spot.x = _place.x;
     _spot.z = _place.z;
+    _spot.speed = hypot2(_place.velocityX, _place.velocityZ);
     return true;
   }
 
@@ -154,16 +178,17 @@ export class NamedThings {
     this.namePerson(civilian >= 0 ? civilian : (this.world.bodies()?.personOfSlot(slot) ?? -1), x, y, z, out);
   }
 
-  /** The world point of named thing (`kind`, `id`) plus its offset (ox, oy, oz) as this machine has it now, into `out`; false when it is not there (no such index, not shown). */
-  place(kind: number, id: number, ox: number, oy: number, oz: number, out: { x: number; y: number; z: number }): boolean {
+  /** The world point of named thing (`kind`, `id`) plus its offset (ox, oy, oz) as this machine has it now, and the thing's own speed, into `out`; false when it is not there (no such index, not shown), or a car's offset lies outside that car's own box. */
+  place(kind: number, id: number, ox: number, oy: number, oz: number, out: Placed): boolean {
     const world = this.world;
     if (kind === NAMED.car) {
       const car = id < MAX_CARS ? world.cars()[id] : undefined;
-      if (car === undefined || car.stored) return false;
+      if (car === undefined || car.stored || !inCarBox(car, ox, oy, oz)) return false;
       _v.set(ox, oy, oz).applyQuaternion(car.group.quaternion).add(car.group.position);
       out.x = _v.x;
       out.y = _v.y;
       out.z = _v.z;
+      out.speed = hypot3(car.velocity.x, car.velocity.y, car.velocity.z);
       return true;
     }
     const table = world.crowd();
@@ -173,6 +198,7 @@ export class NamedThings {
     out.x = _spot.x + ox;
     out.y = activeGround().heightAt(_spot.x, _spot.z) + oy;
     out.z = _spot.z + oz;
+    out.speed = _spot.speed;
     return true;
   }
 }

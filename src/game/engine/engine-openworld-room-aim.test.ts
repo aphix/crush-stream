@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { CHEST_HEIGHT } from "../ai/civilians/civilian-crowd-constants.ts";
 import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
@@ -52,7 +53,10 @@ const SHOOTER_AWAY_M = 15;
 /** A target runs along its line for this long (s) before the shot, and the shot comes this long into it. */
 const RUN_S = 1.5;
 const COLUMN = { radius: 0.3, height: 1.8 };
-const CAR_BOX = { x: 2.2, y: 0.7, z: 0.9 };
+/** The height of a car's centre over its origin (m), and the lag (s) the guest's picture of a target may have behind the host's: the interpolation delay and the link, 0.2 to 0.4 s. */
+const CAR_CENTRE_Y = pooledCar(0).frame.centre.y;
+const MIN_LAG_S = 0.2;
+const MAX_LAG_S = 0.4;
 /** Net frames the host takes to hear a guest's foot message over the slowed link, and the eye's height over the torso (m). */
 const HEAR_FRAMES = 20;
 const EYE_UP_M = 0.3;
@@ -110,23 +114,21 @@ function hitColumn(ray: LookRay, x: number, z: number, range: number, out: { alo
   Object.assign(out, { along, x: ray.eyeX + ray.dirX * along, y, z: ray.eyeZ + ray.dirZ * along });
 }
 
-/** Where along `ray` (to `range`) it enters the box of `car`, into `out`. */
+/** Where along `ray` (to `range`) it enters the box of `car` (its frame's half extents about its centre, in the car's own axes), into `out`. */
 function hitCar(ray: LookRay, car: DeformableCar, range: number, out: { along: number; x: number; y: number; z: number }): void {
-  const c = car.group.position;
+  car.group.updateMatrixWorld(true);
+  const eye = car.group.worldToLocal(new THREE.Vector3(ray.eyeX, ray.eyeY, ray.eyeZ));
+  const dir = new THREE.Vector3(ray.dirX, ray.dirY, ray.dirZ).applyQuaternion(car.group.quaternion.clone().invert());
+  const { half, centre } = car.frame;
   let near = 0;
   let far = range;
-  const eye = [ray.eyeX - c.x, ray.eyeY - (c.y + CAR_BOX.y), ray.eyeZ - c.z];
-  const dir = [ray.dirX, ray.dirY, ray.dirZ];
-  const half = [CAR_BOX.x, CAR_BOX.y, CAR_BOX.z];
-  for (let axis = 0; axis < 3; axis++) {
-    if (Math.abs(dir[axis]!) < 1e-9) {
-      if (Math.abs(eye[axis]!) > half[axis]!) return;
+  for (const [from, along, low, high] of [[eye.x, dir.x, centre.x - half.x, centre.x + half.x], [eye.y, dir.y, centre.y - half.y, centre.y + half.y], [eye.z, dir.z, centre.z - half.z, centre.z + half.z]] as const) {
+    if (Math.abs(along) < 1e-9) {
+      if (from < low || from > high) return;
       continue;
     }
-    const a = (-half[axis]! - eye[axis]!) / dir[axis]!;
-    const b = (half[axis]! - eye[axis]!) / dir[axis]!;
-    near = Math.max(near, Math.min(a, b));
-    far = Math.min(far, Math.max(a, b));
+    near = Math.max(near, Math.min((low - from) / along, (high - from) / along));
+    far = Math.min(far, Math.max((low - from) / along, (high - from) / along));
   }
   if (near > far || near >= out.along) return;
   Object.assign(out, { along: near, x: ray.eyeX + ray.dirX * near, y: ray.eyeY + ray.dirY * near, z: ray.eyeZ + ray.dirZ * near });
@@ -384,10 +386,10 @@ function shootCivilians(r: Room, side: "guest" | "host"): Tally {
   return tally;
 }
 
-/** A target that runs along +x at `speed` for `RUN_S` and is shot at the end of it: `place(x, t)` puts it at x on the host and, at the age of the guest's view, on the guest. Hits are `counted()` more than before. */
-type Runner = { start(x0: number): void; hostAt(x: number): void; drawnAt(x: number): void; aim(side: "guest" | "host"): Point | null; counted(): number };
+/** A target that runs along +x at `speed` for `RUN_S` and is shot at the end of it: `hostAt(x)` puts it at x on the host and `drawnAt(x)` where the guest draws it. Hits are `counted()` more than before; `lag()` is how far (m) the guest's picture of it is behind the host's. */
+type Runner = { start(x0: number): void; hostAt(x: number): void; drawnAt(x: number): void; aim(side: "guest" | "host"): Point | null; counted(): number; lag(): number };
 
-/** `SHOTS` shots from `side` at the runner, each at where `side` draws it at the end of a run. */
+/** `SHOTS` shots from `side` at the runner, each at where `side` draws it at the end of a run. The guest's picture is as old as his crowd (the host's crowd clock less his), and that lag is checked against the target's speed at every shot. */
 function shootRunner(r: Room, side: "guest" | "host", speed: number, runner: Runner): Tally {
   const tally = { hits: 0, shots: 0 };
   const from = eyeAt(OPEN_AT.x, OPEN_AT.z + SHOOTER_AWAY_M);
@@ -399,12 +401,15 @@ function shootRunner(r: Room, side: "guest" | "host", speed: number, runner: Run
     const frames = Math.round(RUN_S * 30);
     for (let f = 0; f < frames; f++) {
       const t = r.host.director.crowdTime() - t0;
+      const age = side === "guest" ? r.host.director.crowdTime() - r.guest.director.crowdTime() : 0;
       runner.hostAt(OPEN_AT.x + speed * t);
-      runner.drawnAt(OPEN_AT.x + speed * Math.max(0, t - (side === "guest" ? VIEW_AGE_S : 0)));
+      runner.drawnAt(OPEN_AT.x + speed * Math.max(0, t - age));
       r.step(1);
     }
     const target = runner.aim(side);
     const before = runner.counted();
+    if (side === "guest") expect(runner.lag() / speed, "seconds the guest's picture of the target is behind the host's").toBeGreaterThanOrEqual(MIN_LAG_S);
+    if (side === "guest") expect(runner.lag() / speed, "seconds the guest's picture of the target is behind the host's").toBeLessThanOrEqual(MAX_LAG_S);
     if (target !== null) acts.shootLocal(rayTo(from, target), WEAPONS.pistol);
     tally.shots++;
     for (let f = 0; f < SHOT_GAP_FRAMES; f++) {
@@ -416,22 +421,35 @@ function shootRunner(r: Room, side: "guest" | "host", speed: number, runner: Run
   return tally;
 }
 
-/** The car crossing the open ground: the host's car, and the guest's picture of it. */
-function carRunner(r: Room): Runner {
+/** Car `car` stands at (x, z) with its long axis along +x, moving at `speed` m/s along it. */
+function placeCar(car: DeformableCar, x: number, z: number, speed: number): void {
+  car.group.position.set(x, 0, z);
+  car.group.rotation.set(0, Math.PI / 2, 0);
+  car.group.updateMatrixWorld(true);
+  car.velocity.set(speed, 0, 0);
+}
+
+/** The car crossing the open ground at `speed`: the host's car, and the guest's picture of it. */
+function carRunner(r: Room, speed: number): Runner {
   return {
     start: (x0) => {
-      r.host.car.group.position.set(x0, 0, OPEN_AT.z);
-      r.guest.car.group.position.set(x0, 0, OPEN_AT.z);
+      placeCar(r.host.car, x0, OPEN_AT.z, speed);
+      placeCar(r.guest.car, x0, OPEN_AT.z, speed);
     },
-    hostAt: (x) => r.host.car.group.position.set(x, 0, OPEN_AT.z),
-    drawnAt: (x) => r.guest.car.group.position.set(x, 0, OPEN_AT.z),
-    aim: (side) => ({ x: (side === "guest" ? r.guest : r.host).car.group.position.x, y: CAR_BOX.y, z: OPEN_AT.z }),
+    hostAt: (x) => placeCar(r.host.car, x, OPEN_AT.z, speed),
+    drawnAt: (x) => placeCar(r.guest.car, x, OPEN_AT.z, speed),
+    aim: (side) => ({ x: (side === "guest" ? r.guest : r.host).car.group.position.x, y: CAR_CENTRE_Y, z: OPEN_AT.z }),
     counted: () => r.host.sparks.count,
+    lag: () => r.host.car.group.position.x - r.guest.car.group.position.x,
   };
 }
 
 /** The host's own player sprinting across the open ground, drawn on the guest by a dummy that follows the host's record. */
 function playerRunner(r: Room): Runner {
+  const drawn = (): number => {
+    for (const body of r.guest.fake!.bodies.values()) if (body.out) return body.x;
+    return NaN;
+  };
   return {
     start: (x0) => void (r.host.walk.path = { x0, z0: OPEN_AT.z, vx: SPRINT_MPS, vz: 0, t0: r.host.director.crowdTime() }),
     hostAt: () => {},
@@ -441,6 +459,10 @@ function playerRunner(r: Room): Runner {
       return null;
     },
     counted: () => r.host.struck.filter((slot) => slot === SELF_SLOT).length,
+    lag: () => {
+      const path = r.host.walk.path!;
+      return path.x0 + path.vx * (r.host.director.crowdTime() - path.t0) - drawn();
+    },
   };
 }
 
@@ -460,11 +482,11 @@ const MOST_MISS = 3;
 describe("given a guest 15 m from the open ground a car crosses at 20 m/s, over a link that puts his view 0.25 s behind", () => {
   it("when he fires 30 pistol shots at the car where his machine draws it, then none of them hit when his act names nothing, and the host's own player's rate (30 of 30) is his when it names the car", () => {
     const r = started(false);
-    const hostOwn = shootRunner(r, "host", CAR_MPS, carRunner(r));
+    const hostOwn = shootRunner(r, "host", CAR_MPS, carRunner(r, CAR_MPS));
     r.names.on = false;
-    const unnamed = shootRunner(r, "guest", CAR_MPS, carRunner(r));
+    const unnamed = shootRunner(r, "guest", CAR_MPS, carRunner(r, CAR_MPS));
     r.names.on = true;
-    const named = shootRunner(r, "guest", CAR_MPS, carRunner(r));
+    const named = shootRunner(r, "guest", CAR_MPS, carRunner(r, CAR_MPS));
     expect(hostOwn.hits, "the host's own shots that hit").toBe(SHOTS);
     expect(unnamed.hits, "shots that hit, the act naming nothing").toBeLessThanOrEqual(MOST_MISS);
     expect(named.hits, "shots that hit, the act naming the car").toBe(SHOTS);
@@ -474,12 +496,13 @@ describe("given a guest 15 m from the open ground a car crosses at 20 m/s, over 
     const r = started(false);
     const from = eyeAt(OPEN_AT.x, OPEN_AT.z + SHOOTER_AWAY_M);
     standAt(r, "guest", from.x, from.z);
-    for (const side of [r.host, r.guest]) side.car.group.position.set(OPEN_AT.x, 0, OPEN_AT.z - MODIFIED_CAR_AWAY_M);
-    const name = Object.assign(new Named(), { kind: NAMED.car, id: 0, x: 0, y: CAR_BOX.y, z: 0 });
+    placeCar(r.host.car, OPEN_AT.x, OPEN_AT.z - MODIFIED_CAR_AWAY_M, CAR_MPS);
+    placeCar(r.guest.car, OPEN_AT.x, OPEN_AT.z - MODIFIED_CAR_AWAY_M, CAR_MPS);
+    const name = Object.assign(new Named(), { kind: NAMED.car, id: 0, x: 0, y: CAR_CENTRE_Y, z: 0 });
     r.nets[1]!.sendAct(ACT.shot, PISTOL_SLOT, from, { x: 1, y: 0, z: 0 }, name);
     r.step(SHOT_GAP_FRAMES);
     expect(r.host.sparks.count, "hits on the car from a line that points away from it").toBe(0);
-    const honest = rayTo(from, { x: OPEN_AT.x, y: CAR_BOX.y, z: OPEN_AT.z - MODIFIED_CAR_AWAY_M });
+    const honest = rayTo(from, { x: OPEN_AT.x, y: CAR_CENTRE_Y, z: OPEN_AT.z - MODIFIED_CAR_AWAY_M });
     r.nets[1]!.sendAct(ACT.shot, PISTOL_SLOT, from, { x: honest.dirX, y: honest.dirY, z: honest.dirZ }, name);
     r.step(SHOT_GAP_FRAMES);
     expect(r.host.sparks.count, "hits on the car from a line aimed at it").toBe(1);
