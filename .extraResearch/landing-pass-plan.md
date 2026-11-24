@@ -94,27 +94,45 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 
 ## 4. Open world and host/guest: what is open
 
-To dispatch, each as its own lane with a reviewer:
+What was open when this plan was written, and what became of each:
 
-1. **A foot cop on a stoop is drawn at street height.** `Stoops` lifts the crowd's walkers (`liftFeet`,
-   `world/openworld/openworld-stoops.ts`) and nothing lifts the law's poses. Old commit 9189b952d had `Stoops.liftAll(poses)`.
-2. **A guest who sprints out of a doorway and fires within about 0.3 s is refused that shot.** `engine-openworld-acts.ts`
-   `shootBy` tests the wall from the host's present torso for him; test it from his last record's own position.
-3. **Kelly's Tap: people stacked at the bar's end and behind it.** The standing-room work landed; whether the owner's trace
-   (`~/crash-wt/owner-traces/bar-stacking`) still shows it has not been replayed on `main`. Replay it, then fix what shows.
-4. **A player shot down and left lying ended 37.6 m from where he fell** (one browser run). Cause not read.
-5. **A guest's reticle can light a civilian the host then refuses** (its body pool is full); and no row drives a guest's hook
-   onto a foot cop end to end.
-6. **A hook fire whose eye is behind the actor is not tested against walls** (`engine-openworld-acts.ts`, `ahead > 0`).
+1. A foot cop on a stoop drawn at street height: fixed (CopStoops, merged).
+2. A guest's shot out of a doorway refused: did not reproduce over the real room path, straight or at 30 and 45 degrees
+   (the host's place for a sprinter is extrapolated and leads him); pinned by rows (GuestEdge).
+3. Kelly's Tap: measured on the real map: nobody behind the bar but staff, no pair under 0.45 m for a second, no seat within
+   0.6 m of a spot. Fixed what was left: clerks walking through the counter, a late customer popping in at her lane (BarRoom,
+   merged).
+4. A player shot down ended 37.6 m away: no traffic car braked for a player on foot and each one launched the lying host again
+   (CarsSeePlayers, in its last review round).
+5. A guest's hook at a person the host has no body for tied the wall behind her: now a miss; a guest's hook onto a foot cop
+   has its end-to-end row (GuestEdge, merged).
+6. A hook fire whose eye is behind the actor: nothing is gained by a modified client (no cable end at the actor; range and
+   walls run from the eye); argued in `docs/MULTIPLAYER.md`, no change.
+7. Someone staying inside a shut or wrecked place: ShutPlaces (in its last review round).
 
-To verify before any lane (a scout with a closer read; many were closed by lanes that landed after the list was written):
-the parking claims that displace the brain's pick (`openworld-traffic.ts` `spotFor`/`claimFor`); seed 7's decision that stays at
-a shut place; police car 14 throwing its driver at 15 to 23 m/s in seed aa3a76 (`vehicle/ejection.ts`); a shot at
-a dummy's first-use cost (`pickDoll`, 587 KB); headless engine tests that still boot phone-class (one file opts into
-`device: "desktop"`); Needle's worker path in a production build, never run in a browser.
+Still open, each a lane of its own when memory allows:
+
+- **KerbClaims** (worktree ready): a resident's get-in clip is never drawn while her car stands at a fallback space
+  (`openworld-traffic.ts` `claimFor`, `carForClip`); a patrol car's start space is picked with no check that it is free
+  (`traffic-patrol-ports.ts` `startSpot`: the likely cause of police car 14 throwing its driver; measure first).
+- **A stacked car's belly 10 to 15 cm into the roof under it** (found by ContactRows at -0.6 m along a sedan's roof): the roof
+  surface the sim reads (`CarSurfaces.sync`, `cage.fields.top` as last published) stands under the cage's top there. A lane
+  prints, along that line, each sample's place in the patch box, the height the surface reads and `cage.fields.top`.
+- **Small leftovers from the reviews** (one sweep lane before the gate): a guest that never heard a record for a cop throws
+  him at the map's origin if he goes down within 2 s of the join (`crime-scene.ts` `throwFromNearest`: a per-cop heard bit);
+  the far kinds row should check each course's own biome table (`scenery-far-flag.test.ts`); a row that a rigid exchange on
+  a leaning, rolling wreck adds no kinetic energy (`move-as-one-body.test.ts`: today's row has no exchange);
+  `docs/UNIFIED_CONTACT.md` line 559 (the pitched over-read reads 0.500 m since `bandGrazes`); the office meeting-room chairs
+  that no aisle reaches (nothing walks to them today); a medic is never named by a guest's hook; medics are not seen by
+  traffic.
+- **Not looked at:** a shot at a dummy's first-use cost (`pickDoll` builds 0.6 MB of tables on a mesh's first shot; no row
+  bounds a warm shot); 21 of 22 open-world engine test files boot phone-class (60 residents, 1 cruiser, 3 bodies), so arrest
+  rides with the cops' own cars are exercised by one file only; Needle's worker path in a production build, never run in a
+  browser.
 
 For the owner (decisions, not defects): a passenger is not thrown in a crash and takes the wheel only by his throttle; lit room
-walls near saturation; `JERK` 175 against the old plan's 250; the speed-dependent side-blow bar.
+walls near saturation; `JERK` 175 against the old plan's 250; the speed-dependent side-blow bar; the far clumps' cost on a
+desktop (section 3); a customer holding a far seat with a few ticks left before closing still hurries in at more than a run.
 
 ## 5. Old branches: what is real and not on `main`
 
@@ -122,9 +140,12 @@ Triage of 843 refs that are not ancestors of `main` (2,500 non-merge commits, ab
 in `~/crash-wt/triage/` (`verdict-*.json|txt`, `show/<sha>.txt`). Before a port, check the commit's premise still holds
 (`git merge-base --is-ancestor <sha>^ main`; `git log -S'<line>' main` for code `main` had and removed).
 
-- **Fixes to port, with their rows:** c851270b7 (`DRIVE.gripBleed`: overdrive costs speed); ed1e8b655 (`standOnTop` has no top
-  friction, `prop-contact.ts`); 8b916af11 (the PIT ceiling, `cop-brain.ts`); 6e78dd888 (`clusterRule` cuts to 4 hard,
-  `deform-rig.ts`); e3df9c357 (a lying wreck's turn rule and level weighting; the squeeze-seat part is on `main`).
+- **Fixes to port, with their rows:** ed1e8b655 (`standOnTop` has no top friction, `prop-contact.ts`); e3df9c357 (a lying
+  wreck's turn rule and level weighting; the squeeze-seat part is on `main`). 6e78dd888 (`clusterRule` cuts to 4 hard,
+  `deform-rig.ts`) and d498838af belong to the skin stack's lane.
+- **For the owner's ruling, not ported (they change how the game plays):** c851270b7 (`DRIVE.gripBleed`: full lock at speed
+  sheds speed: a handling change, and the owner calls the cars nailed); 8b916af11 (Survival's hunters PIT a player up to
+  30 m/s in place of 20: its own commit records `survival.test`'s schedule row going red on seed 1).
 - **Cost cuts to port (bit-equal or dropped):** fb1624283 (`sampleGround` called twice, `deform-solve.ts`); d498838af
   (`setNearView` re-skins any crashed car, `car.ts`).
 - **Rows to add for behaviour `main` already has:** f3f14ec91 (a second Rapier load shares the first); 2a25ed4bc (the high jump
@@ -144,8 +165,13 @@ in `~/crash-wt/triage/` (`verdict-*.json|txt`, `show/<sha>.txt`). Before a port,
 
 ## 6. Sequence
 
-1. Review and merge each port lane as it reports (section 2); measure each cost cut once.
-2. Dispatch the open-world lanes of section 4 as memory allows, then the fix lanes of section 5.
-3. The skin stack after CageWasm.
-4. The gate over the union, the landing, the Windows mount.
-5. Ask the owner: the simulation-law ports; the three race reds.
+1. Merge order for what is reviewed: ContactRows (review: merge), then DeformSeat (its `rideCage` needs ContactRows' port of
+   4ec0e6601), then one re-derivation of the crash digests (`whole-digest.test.ts`, `car-smooth.test.ts`) with the reason
+   per change, then `REPLAY_VERSION` entries 252 onward (seven from ContactRows, two from DeformSeat). CarsSeePlayers and
+   ShutPlaces after their last review round; `NET_VERSION` 73 once, for BarRoom and ShutPlaces together, with both pins.
+2. The MonsterSlab lane (section 3), then the sweep lane and KerbClaims (section 4).
+3. On the worker, when humm-tauri says yes: the three speed measurements (section 3); CarsSeePlayers' hunt for the fleet
+   file's red seed (`engine-onfoot-fleet.test.ts` boots with a random scene seed: the likely cause of its one red run).
+4. CageWasm and LooseBatch merge only if faster; the skin stack after CageWasm.
+5. The gate over the union, the landing, the Windows mount.
+6. Ask the owner: the simulation-law ports and the two gameplay ports (section 5); the three race reds.
