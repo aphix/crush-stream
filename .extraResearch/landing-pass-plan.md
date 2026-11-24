@@ -71,6 +71,12 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
   app and scripts without the GL file; 6 of the long AI suite), one vitest at a time with two workers under a 4 GB cap;
   logs and one `GATE` line a shard in `~/crash-wt/landing/gate-b66471175/`. Then: the GL file (`DISPLAY=:0`), `build:node`,
   the secret scan, the ff-only merge and `wsl-push`. A red in a shard: read the test, its setup and its source first.
+  - Shards 1, 2 and 4 of 8: green. Shard 3: one red, `engine/engine-record-scrape.test.ts` (a replay's pose differed from
+    the live run's by 2.6e-18 at a clip's step 753), red from DeformSeat's merge: `writeNetState` adopted a hub's shove from
+    the float32 net local, and a replay's keyframe restore calls it too. Fixed by the lane (97fe97786, reviewed: merge,
+    merged): the adoption is `adoptHubPlaces()`, called only on the guest's and the held reset's paths. Because that fix
+    came after the gate's tree was cut, the files that cover it (`src/game/net`, `src/game/deform`, `vehicle/car-damage`,
+    `engine/engine-record*`, `engine-replay*`, `engine-race-field*`, `engine-podium*`) are run once more on the final head.
 - **Tried and taken out again: ed1e8b655** (a solid's top scrapes the body it stops: friction on `standOnTop`). Main's hand
   port was reviewed "merge" and merged, and then turned `scenes/derby-containment-wedge.test.ts` red: the truck driven at the
   north ramp's -x side wedge, 30° off square, ended at 38.03 m, outside the arena wall's inner face at 38 m (it comes down on
