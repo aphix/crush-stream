@@ -11,6 +11,7 @@ import { ROAD_DECAL, ROAD_DECAL_ASSET, type RoadDecalName } from "./scenery-asse
 import { OCC_PAD, Occupancy, SEG_COVERED, blankNear, buildField, crossGap, hashString, mix, nearest, unit, type Near, type RoadField } from "./scenery-field.ts";
 import type { Track, TrackPath } from "./track.ts";
 import { NO_FLOOR } from "./ground.ts";
+import { CLUSTER_CLEAR, layClusters, type ClusterWorld, type Look } from "./scenery-clusters.ts";
 
 /**
  * The scenery service: dresses a course from its geometry alone, deterministically, with no per-course editing. `placeScenery` reads the
@@ -183,6 +184,11 @@ type Ctx = {
   solidMeta: Meta[];
   drawn: Placed[];
   drawnMeta: Meta[];
+  /** The far clusters' members and their meta, joined to `drawn` last so no earlier index moves. */
+  far: Placed[];
+  farMeta: Meta[];
+  /** The draw groups the drawn list holds before the clusters: a far member stands only in one of them. */
+  farGroups: Set<string>;
   lots: Lot[];
   /** The road paint laid, each with the one biome it is limited to (null: wherever its row stands). */
   roadDecals: { name: RoadDecalName; only: BiomeId | null }[];
@@ -215,6 +221,9 @@ function newCtx(track: Track, base: readonly Placed[]): Ctx {
     solidMeta: [],
     drawn: [],
     drawnMeta: [],
+    far: [],
+    farMeta: [],
+    farGroups: new Set(),
     lots: [],
     roadDecals: spec?.roadDecals?.map((name) => ({ name, only: null })) ?? [{ name: DEFAULT_ROAD_DECAL, only: BIOME.city }],
   };
@@ -321,10 +330,11 @@ function crowded(c: Ctx, x: number, z: number, yaw: number, hx: number, hz: numb
   return false;
 }
 
-/** `place` at scales (`sx`, `sy`, `sz`), as an asset's own size is (`asset`: its index in `SCENERY_ASSETS`, none for a built-in prefab). */
-function stand(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw: number, sx: number, sy: number, sz: number, core?: number, asset?: number): boolean {
+/** `place` at scales (`sx`, `sy`, `sz`), as an asset's own size is (`asset`: its index in `SCENERY_ASSETS`, none for a built-in prefab). A `look` makes it a far cluster member: drawn only, and never within `CLUSTER_CLEAR` of a car's reach. */
+function stand(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw: number, sx: number, sy: number, sz: number, core?: number, asset?: number, look?: Look): boolean {
   const near = nearest(c.field, x, z, c.near);
   if (near.seg >= 0 && (c.field.flags[near.seg]! & SEG_COVERED) !== 0) return false;
+  if (look && near.openGap < SOLID_REACH + CLUSTER_CLEAR) return false;
   const size = PREFABS[prefab].size;
   const hx = (size[0] * sx) / 2;
   const hz = (size[2] * sz) / 2;
@@ -334,9 +344,18 @@ function stand(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw
   if (near.gap < r + ROAD_STANDOFF || (core === undefined ? crowded(c, x, z, yaw, hx, hz, margin) : c.occ.hits(x, z, core, margin))) return false;
   const y = standAt(c, x, z);
   if (y === null) return false;
-  if (core === undefined) c.occ.add(x, z, detCos(yaw), detSin(yaw), hx, hz);
   const p: Placed = { prefab, x, y, z, yaw, sx, sy, sz };
   if (asset !== undefined) p.asset = asset;
+  if (look && !c.farGroups.has(drawGroupOf(p))) return false;
+  if (core === undefined) c.occ.add(x, z, detCos(yaw), detSin(yaw), hx, hz);
+  if (look) {
+    p.y -= look.sink * size[1] * sy + detSin(look.lean) * Math.max(hx, hz);
+    p.lean = look.lean;
+    p.far = true;
+    c.far.push(p);
+    c.farMeta.push({ rule, dc: near.dc });
+    return true;
+  }
   record(c, PREFABS[prefab].body !== "none" && near.openGap < SOLID_REACH, p, rule, near.dc);
   return true;
 }
@@ -983,6 +1002,23 @@ function assets(c: Ctx): void {
   lotAssets(c);
 }
 
+/** Rule 3, far: clumps of plants and rocks beyond a car's reach (`scenery-clusters.ts`), laid after every other rule so no placement before them moves. A member stands only in a draw group the finished drawn list (after `kept`) already holds, so a clump is more instances in a mesh already drawn and never another draw. */
+function clusters(c: Ctx): void {
+  const density = c.density[RULE_VERGE]!;
+  if (density <= 0) return;
+  c.farGroups = new Set(kept(c, c.drawn, c.drawnMeta).map(drawGroupOf));
+  const world: ClusterWorld = {
+    field: c.field,
+    near: c.near,
+    seed: c.seed,
+    sweepBox: (reach) => sweepBox(c, reach),
+    dressable: (x, z) => dressable(c, x, z),
+    biomeAt: (x, z, seg) => biomeAt(c, x, z, seg),
+    stand: (prefab, x, z, yaw, sx, sy, sz, look) => stand(c, RULE_VERGE, prefab, x, z, yaw, sx, sy, sz, undefined, undefined, look),
+  };
+  layClusters(world, density);
+}
+
 /** `list` less what the course's `scenery` block takes out: switched-off rules, `noGen` ground, and anything nearer a centreline than `clear`. */
 function kept(c: Ctx, list: readonly Placed[], meta: readonly Meta[]): Placed[] {
   const out: Placed[] = [];
@@ -1010,15 +1046,21 @@ export function placeScenery(track: Track, base: readonly Placed[]): Scenery {
   verge(c);
   islands(c);
   assets(c);
+  clusters(c);
+  for (let n = 0; n < c.far.length; n++) {
+    c.drawn.push(c.far[n]!);
+    c.drawnMeta.push(c.farMeta[n]!);
+  }
   return { solid: kept(c, c.solid, c.solidMeta), drawn: kept(c, c.drawn, c.drawnMeta) };
 }
 
 /**
  * The share `keep` (0 to 1) of `drawn` a lower effects tier draws, by a hash of each prop's spot: every lower share is a subset of the
  * higher. The sidewalk slabs always stay: they abut to make one apron, and thinned they read as dotted tiles (the owner saw it at Auto).
+ * The far clusters are for a device that draws the full share and has room for them (`far`: a phone's frame has none).
  */
-export function thinScenery(drawn: readonly Placed[], keep: number): Placed[] {
-  return drawn.filter((p) => p.prefab === PREFAB.sidewalk || unit(mix(Math.round(p.x * 16), Math.round(p.z * 16))) < keep);
+export function thinScenery(drawn: readonly Placed[], keep: number, far = keep >= 1): Placed[] {
+  return drawn.filter((p) => p.prefab === PREFAB.sidewalk || (p.far ? far : unit(mix(Math.round(p.x * 16), Math.round(p.z * 16))) < keep));
 }
 
 /** A prop's draw group, which `TrackArt` draws as one instanced mesh: its prefab in a 512 m cell, an asset's `assetDrawGroupOf`. */

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { MAT } from "../kernel/material-ids.ts";
 import { PREFAB } from "../world/constants.ts";
+import type { Placed } from "../world/placements.ts";
 import { LeafMaterial, leafDepth, NatureMaterial, setNatureTier } from "./nature-look.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
+import { PropTumble } from "./prop-tumble.ts";
 
 /** The shader three hands `onBeforeCompile`, cut to the chunk anchors the patch replaces. */
 function compile(material: THREE.Material): THREE.WebGLProgramParametersWithUniforms {
@@ -92,5 +94,22 @@ describe("given the street trees' leaf material", () => {
     depth!.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
     expect(shader.vertexShader, "the leaf class handed on").toContain("vLeafClass = materialClass;");
     expect(shader.fragmentShader, "the atlas read on leaf fragments").toContain("texture2D(map, vMapUv)");
+  });
+});
+
+describe("given a rock placed leaning 0.2 rad, and one upright", () => {
+  it("when their instance matrices are read, then the leaning rock's up axis is 0.2 rad off vertical and the upright one's is vertical", () => {
+    const rock = (lean?: number): Placed => ({ prefab: PREFAB.rock, x: 3, y: 1, z: -2, yaw: 0.7, sx: 1.5, sy: 2, sz: 1, ...(lean === undefined ? {} : { lean }) });
+    const meshes: THREE.InstancedMesh[] = [];
+    new PropTumble([rock(0.2), rock()], plainMaterials(new THREE.MeshBasicMaterial()), (mesh) => meshes.push(mesh));
+    const matrix = new THREE.Matrix4();
+    const tilt: number[] = [];
+    for (const slot of [0, 1]) {
+      meshes[0]!.getMatrixAt(slot, matrix);
+      const up = new THREE.Vector3(0, 1, 0).transformDirection(matrix);
+      tilt.push(Math.acos(Math.min(1, up.y)));
+    }
+    expect(tilt[0]!, "the leaning rock").toBeCloseTo(0.2, 6);
+    expect(tilt[1]!, "the upright rock").toBeCloseTo(0, 6);
   });
 });
