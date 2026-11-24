@@ -726,7 +726,7 @@ const WARM_LOOPS = 200;
 /** The guns `side` draws for the players on foot, as the engine wires them (figures only: no dummies' world), and the shots it heard. `draw` is one frame of them from an eye `awayX` m east of the side's own. */
 function gunsOf(side: Side) {
   const heard: string[] = [];
-  const guns = new RemoteGuns(new THREE.MeshBasicMaterial(), () => false, (weapon) => void heard.push(weapon));
+  const guns = new RemoteGuns(new THREE.MeshBasicMaterial(), () => false, () => {}, (weapon) => void heard.push(weapon));
   const draw = (awayX = 0): void => {
     guns.dt = SIM_STEP;
     guns.eyeX = side.eye.x + awayX;
@@ -823,7 +823,7 @@ describe("given a host and two guests in an open-world room, all on foot, each d
   it("when a player fires every frame for 600 frames, then drawing his gun, flash and tracer allocates under 8 KB", () => {
     const r = footRoom();
     r.host.walk.path = { x0: FOOT_AT.x, z0: FOOT_AT.z, vx: 0, vz: 0, t0: r.host.director.crowdTime(), posture: BODY_POSTURE.stand };
-    const guns = new RemoteGuns(new THREE.MeshBasicMaterial(), () => false, () => {});
+    const guns = new RemoteGuns(new THREE.MeshBasicMaterial(), () => false, () => {}, () => {});
     guns.dt = SIM_STEP;
     guns.eyeX = r.guest.eye.x;
     guns.eyeZ = r.guest.eye.z;

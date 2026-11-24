@@ -18,10 +18,14 @@ const HAND_UP_M = 0.79 - TORSO_ABOVE_FEET;
 const HAND_AHEAD_M = 0.3;
 
 const _hand = new THREE.Vector3();
+const _forearm = new THREE.Vector3();
 const _aim = new LookRay();
 
-/** Where player `car`'s right hand is drawn when a dummy body carries it, into `out`; false when he is drawn as a figure. */
-type HandOf = (car: number, out: THREE.Vector3) => boolean;
+/** Where player `car`'s right hand is drawn when a dummy body carries it, into `hand`, and the unit way its forearm points (elbow to hand) into `forearm`; false when he is drawn as a figure. */
+type HandOf = (car: number, hand: THREE.Vector3, forearm: THREE.Vector3) => boolean;
+
+/** Whether the body that carries player `car` holds his right arm out as the local walker's is (`Walker.holdGun`); a player no body carries has nothing to raise. */
+type RaiseArm = (car: number, held: boolean) => void;
 
 /** The gun in each other player's hand, and the flash and tracer of his shots: drawn from his record's arms (weapon slot, shot counter, far end), the same on every machine. */
 export class RemoteGuns {
@@ -37,12 +41,14 @@ export class RemoteGuns {
   eyeX = 0;
   eyeZ = 0;
   private readonly handOf: HandOf;
+  private readonly raise: RaiseArm;
   private readonly heard: (weapon: "pistol" | "shotgun" | "rifle") => void;
 
-  /** `handOf`: the hand of a body; `heard`: plays the shot of a gun the listener is near enough to hear. */
-  constructor(material: THREE.Mesh["material"], handOf: HandOf, heard: (weapon: "pistol" | "shotgun" | "rifle") => void) {
+  /** `handOf`: the hand of a body; `raise`: holds a body's right arm out or lets it hang; `heard`: plays the shot of a gun the listener is near enough to hear. */
+  constructor(material: THREE.Mesh["material"], handOf: HandOf, raise: RaiseArm, heard: (weapon: "pistol" | "shotgun" | "rifle") => void) {
     this.material = material;
     this.handOf = handOf;
+    this.raise = raise;
     this.heard = heard;
     this.group.add(this.shots.group);
   }
@@ -66,12 +72,16 @@ export class RemoteGuns {
       const mesh = this.meshes[car] ?? null;
       if (arms === null || arms.armsSeen[car] === 0) {
         this.counted[car] = -1;
-        if (mesh !== null) mesh.visible = false;
+        if (mesh !== null && mesh.visible) {
+          mesh.visible = false;
+          this.raise(car, false);
+        }
         continue;
       }
       const place = arms.armsPlace[car]!;
       const weapon = weaponAt(arms.armsWeapon[car]!);
       const held = weapon !== "fists" && place.posture === BODY_POSTURE.stand;
+      this.raise(car, held);
       const fired = this.counted[car] !== -1 && this.counted[car] !== arms.armsShots[car]!;
       this.counted[car] = arms.armsShots[car]!;
       if (!held) {
@@ -84,9 +94,9 @@ export class RemoteGuns {
       _aim.eyeX = _hand.x;
       _aim.eyeY = _hand.y;
       _aim.eyeZ = _hand.z;
-      _aim.dirX = detSin(place.heading);
-      _aim.dirY = 0;
-      _aim.dirZ = detCos(place.heading);
+      _aim.dirX = _forearm.x;
+      _aim.dirY = _forearm.y;
+      _aim.dirZ = _forearm.z;
       guns.dt = this.dt;
       guns.pose(weapon, _hand, _aim);
       if (!fired || weapon === "hook" || !guns.layOnRow(weapon, _hand, arms.armsFar, 3 * car)) continue;
@@ -100,14 +110,17 @@ export class RemoteGuns {
     this.shots.age();
   }
 
-  /** `_hand` is player `car`'s right hand at `place`: his body's, else a figure's at its torso facing `place.heading`. */
+  /** `_hand` is player `car`'s right hand at `place`: his body's (and `_forearm` the way his forearm points, elbow to hand), else a figure's at its torso facing `place.heading` (`_forearm` level along it). */
   private placeHand(car: number, place: BodyMotion): void {
-    if (this.handOf(car, _hand)) return;
+    if (this.handOf(car, _hand, _forearm)) return;
     const sin = detSin(place.heading);
     const cos = detCos(place.heading);
     _hand.x = place.x + cos * HAND_SIDE_M + sin * HAND_AHEAD_M;
     _hand.y = place.y + HAND_UP_M;
     _hand.z = place.z - sin * HAND_SIDE_M + cos * HAND_AHEAD_M;
+    _forearm.x = sin;
+    _forearm.y = 0;
+    _forearm.z = cos;
   }
 
   dispose(): void {

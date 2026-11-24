@@ -277,7 +277,8 @@ export class CrashEngine extends EngineGarage {
   /** The guns in the other players' hands, and their shots' flashes and tracers. */
   private readonly remoteGuns = new RemoteGuns(
     this.handGun.material,
-    (car, out) => this.bodyHand(car, out),
+    (car, hand, forearm) => this.bodyHand(car, hand, forearm),
+    (car, held) => this.raiseBodyArm(car, held),
     (weapon) => {
       if (this.audioOn) this.audio.shot(weapon);
     },
@@ -1077,12 +1078,21 @@ export class CrashEngine extends EngineGarage {
     if (this.audioOn && weapon !== "fists" && weapon !== "hook") this.audio.shot(weapon);
   }
 
-  /** Where player `car`'s right hand is, when a dummy body carries him; false when he is drawn as a figure. */
-  private bodyHand(car: number, out: THREE.Vector3): boolean {
+  /** Where player `car`'s right hand is, and the way his forearm points (elbow to hand, a unit vector), when a dummy body carries him; false when he is drawn as a figure. */
+  private bodyHand(car: number, hand: THREE.Vector3, forearm: THREE.Vector3): boolean {
     const slot = this.openWorld.playerSlot(car);
     if (slot < 0) return false;
-    this.ragdolls.pickMesh.partPoint(slot, 5, _gunRest.set(0.24, 0.79, 0), out);
+    const mesh = this.ragdolls.pickMesh;
+    mesh.partPoint(slot, 5, _gunRest.set(0.24, 0.79, 0), hand);
+    mesh.partPoint(slot, 5, _gunRest.set(0.24, 1.07, 0), forearm);
+    forearm.subVectors(hand, forearm).normalize();
     return true;
+  }
+
+  /** The body that carries player `car`, if any, holds his right arm out as the local walker's is while a gun or the hook is in his hand (`Walker.holdGun`), and lets it hang otherwise. */
+  private raiseBodyArm(car: number, held: boolean): void {
+    const slot = this.openWorld.playerSlot(car);
+    if (slot >= 0) this.ragdolls.walkers[slot]?.holdGun(held);
   }
 
   /** The first dummy of the pool the ray meets within `range` m, not the walker of actor `actor` when that is this player (`DummyMesh.nearestHit`: what the raycaster would sort first, with no hit list). */
