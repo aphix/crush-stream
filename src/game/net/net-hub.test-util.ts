@@ -15,7 +15,11 @@ export class Hub {
   readonly ends = new Map<string, Link>();
   readonly unlisted = new Set<string>();
   private readonly cut = new Set<string>();
-  private queue: (() => void)[] = [];
+  private queue: { due: number; fn: () => void }[] = [];
+  private readonly delays = new Map<string, number>();
+
+  /** The time (ms) the delays run on: a test sets it to its own clock. */
+  now: () => number = () => 0;
 
   /** Each end's `meta` getter (a public host's relay tag), by peer id. */
   readonly metas = new Map<string, () => string>();
@@ -39,16 +43,28 @@ export class Hub {
     }
   }
 
-  post(fn: () => void): void {
-    this.queue.push(fn);
+  /** Delay every message between two peers, both ways, by `ms` (0: none): the first `flush` at or after that long delivers it. */
+  setDelay(a: string, b: string, ms: number): void {
+    this.delays.set(`${a}|${b}`, ms);
+    this.delays.set(`${b}|${a}`, ms);
   }
 
-  /** Deliver everything sent so far (and whatever that sends in turn). */
+  delayOf(a: string, b: string): number {
+    return this.delays.get(`${a}|${b}`) ?? 0;
+  }
+
+  post(fn: () => void, delayMs = 0): void {
+    this.queue.push({ due: this.now() + delayMs, fn });
+  }
+
+  /** Deliver everything sent so far that is due (and whatever that sends in turn, if it too is due). */
   flush(): void {
-    while (this.queue.length) {
-      const q = this.queue;
-      this.queue = [];
-      for (const fn of q) fn();
+    const now = this.now();
+    for (;;) {
+      const due = this.queue.filter((item) => item.due <= now);
+      if (due.length === 0) return;
+      this.queue = this.queue.filter((item) => item.due > now);
+      for (const item of due) item.fn();
     }
   }
 
@@ -75,7 +91,7 @@ class Link extends NetTransport {
     for (const [id, end] of this.hub.ends) {
       if (id === this.selfId || end.closed || (to !== undefined && to !== id) || !this.hub.linked(this.selfId, id)) continue;
       const copy = data.slice();
-      this.hub.post(() => end.onMessage?.(this.selfId, copy));
+      this.hub.post(() => end.onMessage?.(this.selfId, copy), this.hub.delayOf(this.selfId, id));
     }
   }
 

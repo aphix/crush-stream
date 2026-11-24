@@ -4,10 +4,11 @@ import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { detAtan2, detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { wrapAngle } from "../present/walker-math.ts";
 import { exitDoorOf, SEATS_NOTICE } from "../net/seats-codec.ts";
-import { ACT, ACT_KINDS, type Act } from "../net/act-codec.ts";
+import { ACT, ACT_KINDS, NAMED, type Act, type Named } from "../net/act-codec.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { gunAt, slotOfGun, STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
 import type { ActorPlace } from "./engine-openworld-law.ts";
+import { namedFits, namedReach, type Placed } from "./engine-openworld-named.ts";
 
 /** Actors are car indexes. */
 const MAX_ACTORS = MAX_CARS;
@@ -20,6 +21,8 @@ const HOOK_FIRE_COOLDOWN = 0.2;
 const HOOK_EYE_AHEAD = 2.6;
 /** The line of a shot must pass within this (m) of the actor's torso: the gun's tip held out in front of his chest (0.8 m) plus the most the host's view of a sprinting guest can lag across a shot to his side (7 m/s x 0.25 s = 1.75 m, the age the shared bodies extrapolate to: the interpolation delay 0.1 s, a 15 Hz foot message's 0.067 s and 0.05 to 0.15 s of latency make 0.22 to 0.32 s) plus 0.3 m of margin. Where the shot may start is bounded apart, by `SHOT_ORIGIN_REACH` and the wall test, so this line test only has to cover those two. */
 const SHOT_RAY_REACH = 2.9;
+/** The hook's sight line must pass within this (m) of the actor's torso: the follow camera's pivot over his shoulder (its largest offset, sqrt(0.95^2 + 0.70^2) = 1.18 m with aim held) plus the focus's lag behind a sprint (7 m/s x 0.12 s = 0.84 m) plus the host's lead on a sprinting guest (7 m/s x 0.25 s = 1.75 m) plus 0.3 m of margin. */
+const HOOK_RAY_REACH = 4.1;
 /** The point of a shot's line the rays start at (the eye, or the line's point nearest his torso when the eye is behind him) must be within this (m) of his torso: the farthest tip (the shotgun's, 0.7 m past a hand held 0.7 m out: 1.4 m) plus a sprint's lag at the oldest view of him (7 m/s x 0.32 s = 2.24 m) plus 0.3 m of margin, so no eye far along his line fires from there. */
 const SHOT_ORIGIN_REACH = 4;
 /** Network jitter bunches honest acts, so an actor's acts of one kind may run this far (s) ahead of the gun's own rate, and no further: a faster stream than the gun's is refused. */
@@ -51,13 +54,17 @@ const _aim = new LookRay();
 const _ray = new LookRay();
 const _near = new LookRay();
 const _muzzle = { x: 0, y: 0, z: 0 };
+const _at: Placed = { x: 0, y: 0, z: 0, speed: 0 };
+const _named: Named = { kind: NAMED.nothing, id: 0, x: 0, y: 0, z: 0 };
 
 /** What the director resolves at the authority for an actor. */
 type ActResolver = {
   punch(actor: number, x: number, z: number, dirX: number, dirZ: number): void;
   shoot(actor: number, ray: LookRay, gun: Gun): number;
-  /** How far (m) along `ray`, within `range`, the nearest wall, ground, person, dummy, car or prop is, or `range`; nothing is struck. */
-  meet(actor: number, ray: LookRay, range: number): number;
+  /** How far (m) along `ray`, within `range`, the nearest wall, ground, person, dummy, car or prop is, or `range`; nothing is struck. `name`, when given, is filled with what that was (`NamedThings.name`). */
+  meet(actor: number, ray: LookRay, range: number, name?: Named | null): number;
+  /** The world point of named thing (`kind`, `id`) plus its hit offset as this machine has it now, into `out`; false when it is not there. */
+  placeNamed(kind: number, id: number, ox: number, oy: number, oz: number, out: Placed): boolean;
   /** Whether a wall of a place stands between the points a and b (m). */
   wallBetween(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean;
   /** Actor `actor` fired a gun: the law hears of him. */
@@ -78,15 +85,15 @@ type ActPorts = {
   face(dx: number, dz: number): void;
   /** A shot is fired at (x, y, z): the gun in this machine's player's hand is laid from the hand straight at it, and `out` is its tip; false while no gun is in his hand. */
   layGun(x: number, y: number, z: number, out: { x: number; y: number; z: number }): boolean;
-  /** The guest's way to the host: `NetPlay.sendAct`. */
-  sendAct(kind: number, arg: number, eye: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }): void;
+  /** The guest's way to the host: `NetPlay.sendAct`; `name`: what a shot's own ray met. */
+  sendAct(kind: number, arg: number, eye: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }, name?: Named | null): void;
   /** The car actor `actor` sits in (the seat table), -1 when none. */
   seatedCar(actor: number): number;
   /** Actor `actor`, on foot, gets in car `car` (`OpenWorldSeats.getIn`): 0, or the `SEATS_NOTICE` that says why not. */
   getIn(actor: number, car: number): number;
   /** Actor `actor` gets out of his seat by the door at x sign `door` (0: the one the host finds) (`OpenWorldSeats.getOut`): 0, or the `SEATS_NOTICE` that says why not. */
   getOut(actor: number, door: number): number;
-  /** Actor `actor` fires the hook along `ray`; `sawPerson`: his own reticle had lit a person (`TetherDirector.fireFor`). */
+  /** Actor `actor` fires the hook along `ray`; `sawPerson`: his own reticle had lit a person, named in the act (`TetherDirector.fireFor`). */
   hookFire(actor: number, ray: LookRay, sawPerson: boolean): void;
   /** Actor `actor` cuts his cables (`TetherDirector.cutFor`). */
   hookCut(actor: number): void;
@@ -185,7 +192,7 @@ export class OpenWorldActs {
     _aim.dirX = act.dirX / length;
     _aim.dirY = act.dirY / length;
     _aim.dirZ = act.dirZ / length;
-    this.shootBy(actor, _aim, gun);
+    this.shootBy(actor, _aim, gun, this.namedPoint(act.named, _aim));
     return SEATS_NOTICE.none;
   }
 
@@ -219,8 +226,30 @@ export class OpenWorldActs {
     _aim.dirZ = act.dirZ / length;
     const ahead = (act.eyeX - _place.x) * _aim.dirX + (act.eyeY - _place.y) * _aim.dirY + (act.eyeZ - _place.z) * _aim.dirZ;
     if (ahead > HOOK_EYE_AHEAD || (ahead > 0 && this.resolver.wallBetween(_place.x, _place.y, _place.z, act.eyeX, act.eyeY, act.eyeZ))) return SEATS_NOTICE.none;
-    if (this.nearestToTorso(_aim) <= SHOT_RAY_REACH) this.ports.hookFire(actor, _aim, act.arg === 1);
+    if (this.nearestToTorso(_aim) > HOOK_RAY_REACH) return SEATS_NOTICE.none;
+    const kind = act.named.kind;
+    const person = kind === NAMED.civilian || kind === NAMED.cop || kind === NAMED.player;
+    const at = person ? this.namedPoint(act.named, _aim) : null;
+    if (at !== null && !this.resolver.wallBetween(_place.x, _place.y, _place.z, at.x, at.y, at.z)) this.lay(_aim, at);
+    this.ports.hookFire(actor, _aim, person);
     return SEATS_NOTICE.none;
+  }
+
+  /** The point named thing `named` stands at now plus its hit offset, in `_at`; null when the act names nothing, the offset is past the thing, it is not there, or it stands farther from the line a guest sent than it can have moved in the oldest honest view. */
+  private namedPoint(named: Named, line: LookRay): typeof _at | null {
+    if (named.kind === NAMED.nothing || !namedFits(named.kind, named.x, named.y, named.z) || !this.resolver.placeNamed(named.kind, named.id, named.x, named.y, named.z, _at)) return null;
+    const along = Math.max(0, (_at.x - line.eyeX) * line.dirX + (_at.y - line.eyeY) * line.dirY + (_at.z - line.eyeZ) * line.dirZ);
+    const gap = hypot3(line.eyeX + line.dirX * along - _at.x, line.eyeY + line.dirY * along - _at.y, line.eyeZ + line.dirZ * along - _at.z);
+    return gap <= namedReach(named.kind, _at.speed) ? _at : null;
+  }
+
+  /** `ray`'s direction turned from its eye toward `at`; kept when `at` is on the eye. */
+  private lay(ray: LookRay, at: { x: number; y: number; z: number }): void {
+    const length = hypot3(at.x - ray.eyeX, at.y - ray.eyeY, at.z - ray.eyeZ);
+    if (length < MIN_TIP_TO_TARGET_M) return;
+    ray.dirX = (at.x - ray.eyeX) / length;
+    ray.dirY = (at.y - ray.eyeY) / length;
+    ray.dirZ = (at.z - ray.eyeZ) / length;
   }
 
   /** Actor `actor`, on foot, throws a punch along the unit (dirX, dirZ) from where he stands. */
@@ -232,12 +261,14 @@ export class OpenWorldActs {
   /**
    * Actor `actor`, on foot, fires `gun` along `aim`, the unscattered line of the shot. It is his only if the line passes within `SHOT_RAY_REACH` of his torso, its start (the eye, or the line's point nearest his torso when the eye is behind him) is
    * within `SHOT_ORIGIN_REACH` of it, and no wall of a place stands between his torso and that start; the rays start there (so nothing between a far camera and him is hit), each scattered by his own seeded stream.
+   * `at`: the point a thing the guest named stands at now (`namedPoint`): the rays are aimed at it when it is within the gun's range and no wall of a place stands between the start and it.
    * How far (m) the farthest ray went from `aim`'s eye; 0 when refused.
    */
-  shootBy(actor: number, aim: LookRay, gun: Gun): number {
+  shootBy(actor: number, aim: LookRay, gun: Gun, at: { x: number; y: number; z: number } | null = null): number {
     if (!this.ports.actorPlace(actor, _place)) return 0;
     if (this.nearestToTorso(aim) > SHOT_RAY_REACH || this.apartFromTorso(_near) > SHOT_ORIGIN_REACH) return 0;
     if (this.resolver.wallBetween(_place.x, _place.y, _place.z, _near.eyeX, _near.eyeY, _near.eyeZ)) return 0;
+    if (at !== null && hypot3(at.x - _near.eyeX, at.y - _near.eyeY, at.z - _near.eyeZ) <= gun.range && !this.resolver.wallBetween(_near.eyeX, _near.eyeY, _near.eyeZ, at.x, at.y, at.z)) this.lay(_near, at);
     let far = 0;
     for (let ray = 0; ray < gun.rays; ray++) {
       this.scatter(actor, _near, gun.cone, _ray);
@@ -279,7 +310,7 @@ export class OpenWorldActs {
    */
   private aimFromMuzzle(aim: LookRay, gun: Gun): number {
     this.nearestToTorso(aim);
-    const met = this.resolver.meet(this.ports.self(), _near, gun.range);
+    const met = this.resolver.meet(this.ports.self(), _near, gun.range, this.ports.guest() ? _named : null);
     const targetX = _near.eyeX + _near.dirX * met;
     const targetY = _near.eyeY + _near.dirY * met;
     const targetZ = _near.eyeZ + _near.dirZ * met;
@@ -321,6 +352,7 @@ export class OpenWorldActs {
   /** This machine's player fires `gun` along `aim`: a guest tells the host, the host carries it out. `aim` is rewritten to the ray the shot leaves along (`aimFromMuzzle`). How far (m) to draw the tracer from `aim`'s eye. */
   shootLocal(aim: LookRay, gun: Gun): number {
     const self = this.ports.self();
+    _named.kind = NAMED.nothing;
     const known = this.ports.actorPlace(self, _place) ? this.aimFromMuzzle(aim, gun) : -1;
     if (!this.ports.guest()) return this.shootBy(self, aim, gun);
     this.eye.x = aim.eyeX;
@@ -329,7 +361,7 @@ export class OpenWorldActs {
     this.dir.x = aim.dirX;
     this.dir.y = aim.dirY;
     this.dir.z = aim.dirZ;
-    this.ports.sendAct(ACT.shot, slotOfGun(gun), this.eye, this.dir);
+    this.ports.sendAct(ACT.shot, slotOfGun(gun), this.eye, this.dir, _named);
     return known >= 0 ? known : Math.min(gun.range, GUEST_TRACER_M);
   }
 

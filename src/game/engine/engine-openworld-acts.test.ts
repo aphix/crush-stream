@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { hypot3 } from "../kernel/physics-core.js";
-import { ACT, Act } from "../net/act-codec.ts";
+import { ACT, Act, NAMED } from "../net/act-codec.ts";
 import { WEAPONS } from "./engine-onfoot-arms.ts";
 import { OpenWorldActs, PlayerBlows } from "./engine-openworld-acts.ts";
 import type { ActorPlace } from "./engine-openworld-law.ts";
@@ -87,17 +87,18 @@ function rig(guest = false) {
         return met.along ?? range;
       },
       wallBetween: (_ax, _ay, az, _bx, _by, bz) => wallsAtZ.some((wall) => (az - wall) * (bz - wall) < 0),
+      placeNamed: () => false,
       shotFired: () => void fired.count++,
     },
   );
   return { acts, places, clock, punches, shots, sent, fired, looks, met, turned, gun, wallsAtZ, seated, getIns, getOuts, hooks };
 }
 
-/** A hook act of `kind` whose eye is at (x, 1, z), looking along +z; `arg` 1: his reticle was on a person. */
-function hookAct(kind: number, x: number, z: number, arg = 0): Act {
+/** A hook act of `kind` whose eye is at (x, 1, z), looking along +z; `person` 1: his reticle was on a person (the act names a civilian). */
+function hookAct(kind: number, x: number, z: number, person = 0): Act {
   const act = new Act();
   act.kind = kind;
-  act.arg = arg;
+  act.named.kind = person === 1 ? NAMED.civilian : NAMED.nothing;
   act.eyeX = x;
   act.eyeY = GUEST_AT.y;
   act.eyeZ = z;

@@ -32,6 +32,7 @@ import { carLayout } from "./car-pose.ts";
 import { readRoster } from "./roster-codec.ts";
 import { readCrowd } from "./crowd-codec.ts";
 import { BodyWire } from "./body-wire.ts";
+import type { Named } from "./act-codec.ts";
 import { ActOutbox } from "./act-link.ts";
 import { readSeats } from "./seats-codec.ts";
 import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
@@ -142,10 +143,10 @@ export abstract class NetPlayClient {
     this.resetWanted |= this.heardGate ? INPUT_RESET : INPUT_HOLD;
   }
 
-  /** Client: tell the host what this player did on foot (`MSG.act`, reliable); the host decides what it does. Nothing is sent before a host has seated this peer, or for a value that is not finite or out of range. */
-  sendAct(kind: number, arg: number, eye: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }): void {
+  /** Client: tell the host what this player did on foot (`MSG.act`, reliable); the host decides what it does. `name`: what a shot's or hook fire's own ray first met on this machine. Nothing is sent before a host has seated this peer, or for a value that is not finite or out of range. */
+  sendAct(kind: number, arg: number, eye: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }, name: Named | null = null): void {
     if (this.hostId === null || this.car < 0) return;
-    const data = this.actsOut.pack(kind, arg, eye, dir);
+    const data = this.actsOut.pack(kind, arg, eye, dir, name);
     if (data !== null) this.transport?.send(data, this.hostId, true);
   }
 

@@ -5,7 +5,7 @@ import { rigidCentre } from "../vehicle/car-air.ts";
 import { MAX_TETHERS } from "../kernel/constants.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { RAPIER, THING, TETHER_RANGE, thingCode, thingIndex, thingKind, WORLD, type TetherSet } from "../contact/tether.ts";
-import { ACT } from "../net/act-codec.ts";
+import { ACT, Named } from "../net/act-codec.ts";
 import { AIM, TetherArt } from "../present/tether-art.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { Aim, SightCaster, type SightHost } from "./tether-sight.ts";
@@ -53,8 +53,10 @@ interface TetherHost extends SightHost {
   /** Guest: where the host says this machine's player's first end is, into `out`; false when he holds none. */
   hostHoldAt(out: { x: number; y: number; z: number }): boolean;
   hostCables(): number;
-  /** Sends act `kind` to the host with the sight line it was made along. */
-  sendAct(kind: number, arg: number, eye: Triple, dir: Triple): void;
+  /** Sends act `kind` to the host with the sight line it was made along; a hook fire names what its reticle lit. */
+  sendAct(kind: number, arg: number, eye: Triple, dir: Triple, name?: Named | null): void;
+  /** The person the reticle lit, into `out` (`OpenWorldDirector.nameHook`): civilian `civilian` or the dummy in pool slot `slot`, hit at (x, y, z); nothing when neither is a person. */
+  nameHook(civilian: number, slot: number, x: number, y: number, z: number, out: Named): void;
   /** The drawn civilian with no body whose chest the sight line passes nearer than `reach` m, into `out` (index -1: none). `remote`: the ray is another actor's, so buildings are the crowd's footprints and not the host's streamed rooms. */
   personMet(ray: LookRay, reach: number, out: Meeting, remote: boolean): Meeting;
   /** A body stood now for drawn civilian `civilian` by an actor whose eye is at (eyeX, eyeZ): its dummy slot, -1 when she can have none. */
@@ -111,6 +113,7 @@ export class TetherDirector {
   /** The sight line of this machine's camera, and the person the sight line met. */
   private readonly sight = new LookRay();
   private readonly personAim: Meeting = { index: -1, along: 0 };
+  private readonly lit = new Named();
   /** Per cable slot, the number of the rope command that tied it in the dummies' world (0: none there), and whether the winch was last told to reel it. */
   private readonly commands: number[] = Array.from({ length: MAX_TETHERS }, () => 0);
   private readonly reelSent: boolean[] = Array.from({ length: MAX_TETHERS }, () => false);
@@ -137,9 +140,8 @@ export class TetherDirector {
   }
 
   /**
-   * `actor` fires the hook along `ray`: the first fire holds what the ray meets, the second ties it to what the ray then meets. `sawPerson` is the act's argument byte: whether the actor's own
-   * reticle lit a person (1) or not (0), which only he can know (his machine has the walls and windows of his own eyes). Another actor's fire meets no person when it is false; this machine's own
-   * player is not judged by it. False where nothing was held or tied: the actor is not on foot, the ray meets nothing in reach, or no body can be stood for the person it meets. A guest holds no cable and does nothing.
+   * `actor` fires the hook along `ray`: the first fire holds what the ray meets, the second ties it to what the ray then meets. `sawPerson`: whether the actor's own reticle lit a person, which only he can know
+   * (his machine has the walls and windows of his own eyes); the act names her. Another actor's fire meets no person when it is false; this machine's own player is not judged by it. False where nothing was held or tied: the actor is not on foot, the ray meets nothing in reach, or no body can be stood for the person it meets. A guest holds no cable and does nothing.
    */
   fireFor(actor: number, ray: LookRay, sawPerson: boolean): boolean {
     if (this.host.guest() || actor < 0 || actor >= MAX_CARS || !this.onFoot(actor)) return false;
@@ -226,7 +228,7 @@ export class TetherDirector {
 
   /** This machine's fire, read as the reticle's aim: a guest sends it to the host, the host carries it out as `fireFor` does for any actor. */
   private attach(): void {
-    if (this.host.guest()) this.sendAct(ACT.hookFire, this.mine.person >= 0 ? 1 : 0);
+    if (this.host.guest()) this.sendAct(ACT.hookFire, 0, this.litPerson());
     else if (this.host.afoot()) this.attachFor(this.host.actor(), this.mine);
   }
 
@@ -275,12 +277,20 @@ export class TetherDirector {
     this.sendAct(on ? ACT.hookReelOn : ACT.hookReelOff);
   }
 
-  /** Act `kind` goes to the host along this machine's sight line, `arg` its argument byte. */
-  private sendAct(kind: number, arg = 0): void {
+  /** The person this machine's reticle lit (a drawn civilian, or a dummy that is a person), named for the host. */
+  private litPerson(): Named {
+    const aim = this.mine;
+    const slot = aim.car === RAPIER && thingKind(aim.thing) === THING.doll ? thingIndex(aim.thing) : -1;
+    this.host.nameHook(aim.person, slot, aim.point.x, aim.point.y, aim.point.z, this.lit);
+    return this.lit;
+  }
+
+  /** Act `kind` goes to the host along this machine's sight line, `arg` its argument byte, `name` what it lit. */
+  private sendAct(kind: number, arg = 0, name: Named | null = null): void {
     this.cameraRay();
     this.mine.eye.set(this.sight.eyeX, this.sight.eyeY, this.sight.eyeZ);
     this.mine.dir.set(this.sight.dirX, this.sight.dirY, this.sight.dirZ);
-    this.host.sendAct(kind, arg, this.mine.eye, this.mine.dir);
+    this.host.sendAct(kind, arg, this.mine.eye, this.mine.dir, name);
   }
 
   /** How far down the view (0 at the top, 1 at the bottom) the aim passes: the middle, or `CHASE_RETICLE_FROM_TOP` on a chase camera. */

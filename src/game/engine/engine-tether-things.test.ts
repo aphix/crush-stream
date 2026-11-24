@@ -65,7 +65,7 @@ function rig(scene: THREE.Scene, dollsOut: number[] = [0], chase = false, person
     dollsOut.push(PERSON_SLOT);
     return PERSON_SLOT;
   };
-  const director = new TetherDirector({ tethers, camera, scene, ropes, cars: () => [], movers: () => [], playerCar: () => -1, offered: () => true, chase: () => chase, afoot: () => true, self: () => -1, actor: () => 0, actorSlot: () => -1, actorAfoot: () => false, guest: () => false, hostHolds: () => false, hostHoldAt: () => false, hostCables: () => 0, sendAct: () => {}, personMet, standPerson, holdDoll: (slot: number) => void ropes.held.push(slot) });
+  const director = new TetherDirector({ tethers, camera, scene, ropes, cars: () => [], movers: () => [], playerCar: () => -1, offered: () => true, chase: () => chase, afoot: () => true, self: () => -1, actor: () => 0, actorSlot: () => -1, actorAfoot: () => false, guest: () => false, hostHolds: () => false, hostHoldAt: () => false, hostCables: () => 0, sendAct: () => {}, nameHook: () => {}, personMet, standPerson, holdDoll: (slot: number) => void ropes.held.push(slot) });
   const aimAt = (point: THREE.Vector3): void => {
     camera.lookAt(point);
     scene.updateMatrixWorld(true);

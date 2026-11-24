@@ -61,7 +61,7 @@ function room() {
   });
   const acts = new OpenWorldActs(
     { actorPlace: (actor, out) => (places.has(actor) ? (Object.assign(out, places.get(actor)), true) : false), now: () => now / 1000, self: () => 0, guest: () => false, face: () => {}, layGun: () => false, sendAct: () => {}, seatedCar: (actor) => seats.table.carOf(actor), getIn: (actor, car) => seats.getIn(actor, car), getOut: (actor, door) => seats.getOut(actor, door), hookFire: () => {}, hookCut: () => {}, hookReel: () => {} },
-    { punch: () => {}, shoot: () => 0, meet: () => 0, wallBetween: () => false, shotFired: () => {} },
+    { punch: () => {}, shoot: () => 0, meet: () => 0, wallBetween: () => false, placeNamed: () => false, shotFired: () => {} },
   );
   tables[0] = seats.table;
   const hostGame = worldGame(hostWorld, "Ann", () => null, (actor, act) => acts.hear(actor, act), seats.table).game;
