@@ -61,36 +61,39 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 ## 3. State
 
 - `main` = Windows mount = GitHub = 5989b47a0 (NET 72, REPLAY 249).
-- `play/union` (`~/worktrees/land`), not yet gated: ae0007683 (a derby driver that cannot get rolling lifts off, REPLAY 250),
-  seven picks of `lane-hub-creep4` and 50cefd7eb (REPLAY 251: the planted hubs' pins and seat ride), this plan, and the merges
-  of PerfPath, SmallCuts, CopStoops and GuestEdge.
-- **Red on the union, owed before the gate.** The hub-creep picks moved every pinned crash digest (`whole-digest.test.ts`, four
-  rows; `car-smooth.test.ts`, seven) and nobody re-pinned them: they are re-derived once, after ContactRows and DeformSeat are
-  in. And they broke `vehicle/barrier.test.ts` "when a monster hits the slab at 48 km/h, then none of its hubs ends inside the
-  slab" (green on `main`; hubFL ends at (-0.34, 0.59, -1.18) on the union). DeformSeat's probe: `holdHubVelocity`
-  (`deform-solve.ts`) is the one rule whose removal alone puts the hub outside; the planted hub rides 13 cm into the slab while
-  the frame still pitches at 2 rad/s; gating the seat ride and the frame tilt on the frame's spin at or under 0.3 rad/s made the
-  row green with `compactor`, `crush-keep` and `slice-budget` green too, but it is knife-edge. This gets its own lane
-  (MonsterSlab) once ContactRows and DeformSeat are merged; if the creep rows and this row cannot both hold, the seven
-  hub-creep commits come out.
+- `play/union` (`~/worktrees/land`, 70 commits past `main`, NET 73, REPLAY 253), not yet gated. Merged, each reviewed (its
+  later commits too), static checks clean and its own test files green on the union: PerfPath, SmallCuts, CopStoops,
+  GuestEdge, BarRoom, ContactRows, DeformSeat, ShutPlaces, CarsSeePlayers; their worktrees are removed. Under them: ae0007683
+  (a derby driver that cannot get rolling lifts off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251).
+- **Red on the union, owed before the gate** (lane HubRules has both):
+  - `vehicle/barrier.test.ts` "when a monster hits the slab at 48 km/h, then none of its hubs ends inside the slab" (green on
+    `main`; red since the hub-creep picks; hubFL ends at (0.06, 0.14, -1.19)). DeformSeat's probe: `holdHubVelocity`
+    (`deform-solve.ts`) off alone puts the hub outside; the planted hub rides 13 cm into the slab while the frame still
+    pitches at 2 rad/s; gating the seat ride and the frame tilt on the frame's spin made the row green but knife-edge.
+  - `scenes/stack-column.test.ts` "when the Police column settles, then each roof's crush is the same within its bar (9 mm)"
+    reads 10.97 mm since DeformSeat joined ContactRows (green on each branch alone).
+  - If the creep rows, the monster row and the column row cannot all hold, the lane reports the smallest set of hub commits
+    to take out and Main decides.
+  - After it: the crash digests (`whole-digest.test.ts` four rows, `car-smooth.test.ts` seven) are re-derived ONCE with the
+    reason per change (hub creep, the seven contact rules, the tilt and the hub ride, HubRules' fix), and REPLAY 254.
 - Reviews are kept in `~/crash-wt/landing/reviews/<Lane>-review.json`. A lane's commits written after its review get a reviewer
   too, before the gate.
-- Speed measurements owed (the worker, a quiet hour): PerfPath, CageWasm, LooseBatch (a browser derby with many torn parts).
+- Speed measurements owed (the worker, a quiet hour, humm-tauri's yes still awaited): PerfPath, CageWasm, LooseBatch (a
+  browser derby with many torn parts).
+- The box: our session is the `omp` process whose working directory is this repository (`readlink /proc/<pid>/cwd`); it was
+  5.1 GB at 19:00Z. (Main read humm-tauri's process as ours for most of the day and reported 7 to 8 GB: wrong.)
 
 |Lane|Goal|State|
 |---|---|---|
-|PerfPath|`projectPath` skips samples that cannot hold the nearest; `guardContact` reads a per-car cache; both bit-equal|merged (2c13f5d08); worktree removed; speed to be measured|
-|SmallCuts|the crease blur's row pass bounded to the dent (texel-equal); far clumps of plants and rocks beyond a race course (drawn only, desktop at full share)|merged (5d4613ed0); worktree removed. Stated cost, desktop at full share only: at most 30,000 far triangles a course, no shadow, one draw a far kind (dam-spine start: calls 206 to 209, triangles 250k to 280k), about 58 ms more placement at load. Its last commit (one course-wide mesh a far kind) is with a reviewer|
-|CopStoops|foot cops, and the suspects the law draws, stand and are thrown at the stoop's height (section 4, item 1)|merged (0a993ad89); worktree removed; its last commit is with a reviewer|
-|GuestEdge|section 4, items 2, 5, 6|merged (ff5366b49). The doorway-sprint refusal did not reproduce over the real room path (the host's place for a sprinter leads him), so nothing changed there but a pin row; a hook fire at a person the host cannot stand a body for is a miss; a guest's hook onto a foot cop has its end-to-end row. Its last commit is with a reviewer|
+|HubRules|the two reds above, at the rule that is wrong in principle, with margin shown; or the conflict report|working|
+|KerbClaims|a resident's clip drawn where her car stands (it was never drawn while her car stood at a fallback space); a patrol car's start space (measure: leased onto an occupied space, or a cruiser at urgent pace hitting traffic)|working|
+|Sweep|five review leftovers: a guest's throw of a cop it never heard a record for; the far kinds row per course; whether a rigid exchange adds energy to a leaning, rolling wreck (a row, or a todo with the joules); two doc lines; the twin row hearing its danger and ambulance events|working|
 |LooseBatch|torn car parts in one draw batch, only where the browser has `WEBGL_multi_draw`|reviewed twice, ready (c930818e5); NOT merged: waits for the browser measurement, dropped if no gain|
 |CageWasm|the cage raster and plan field in the Rust kernel, bit-equal to the JS|reviewed, bit-equal by construction (69a0f7d3d); NOT merged: waits for the speed measurement (`bench.mjs strip-crash`, base against head), dropped if not faster. The skin stack (section 5) waits on it|
-|ContactRows|contact fixes with their rows: a rigid exchange carries a wreck as its whole body; a leaning wreck's row reads no false yaw; `bandGrazes`; the Stack's true drop; the belly's ridge|reviewed: two of the old history's own corrections were missing (1c9ff3ffb, 4ec0e6601: `moveAsOneBody` keeps roll and pitch); the lane is porting them with five smaller items. Merges BEFORE DeformSeat (its `rideCage` needs 4ec0e6601)|
-|DeformSeat|the frame's tilt and the hub riding the cage|reviewed; its four items are done (5db54b3b9: a guest and a held reset keep a crushed hub's place with no wire change; `findOver` allocates nothing; `car-smooth` re-pinned on its branch). Merges after ContactRows; digests re-derived then|
-|CarsSeePlayers|traffic stops for a player on foot, standing or lying; a lying walker is not launched again by each car (section 4, item 4)|reviewed; its three items done (a car held in view is no longer towed in view); a confirm review is out (a fleet row failed once on a slow box: cause wanted)|
-|BarRoom|section 4, item 3 (the owner's report)|reviewed: merge; two row tightenings with the lane. Measured on the real map: no seat within 0.6 m of a spot; a busy Kelly's has nobody behind the bar and no pair under 0.45 m for a second; fixed: 5 of 30 clerk walks cut through a counter, and a customer with a few ticks left popped in at her lane. NET 73|
-|ShutPlaces|nobody but staff on shift is inside a place whose sign reads shut (a wreck, or its hours)|reported (2d8158c1d: 68 stuck residents over 24 seeds, 0 after); in review. NET 73|
-|KerbClaims|a resident's get-in clip is never drawn while her car stands at a fallback space; a patrol car leased onto an occupied space (measure first)|worktree ready; not started (memory)|
+
+Stated costs of what is merged, for the owner: the far clumps (SmallCuts), on a desktop at the full scenery share only: at most
+30,000 triangles a course, no shadow, one draw a far kind on every race frame (dam-spine start: 206 to 209 draw calls, 250k to
+280k triangles), about 58 ms more placement at a course's load.
 
 ## 4. Open world and host/guest: what is open
 
