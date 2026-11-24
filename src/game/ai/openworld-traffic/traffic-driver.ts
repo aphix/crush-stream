@@ -78,6 +78,8 @@ export class TrafficDriver {
   /** Per car: the signal it decided to stop at (-1: none). A decision to stop holds until the light is green, so a yellow it could stop for is not run once its own braking has made the stop harder. */
   private readonly stopLatched = new Int32Array(MAX_CARS).fill(-1);
   private readonly arc = new Float64Array(MAX_CARS);
+  /** Per car, 1 when what holds it back on its route (`leadLimit`) is a person, or a car that is itself held by one (a queue behind a person inherits it), else 0. */
+  private readonly person = new Uint8Array(MAX_CARS);
 
   constructor(network: RoadNetwork) {
     this.network = network;
@@ -93,8 +95,14 @@ export class TrafficDriver {
     this.boxGivenUp[id] = -1;
     this.stopLatched[id] = -1;
     this.arc[id] = 0;
+    this.person[id] = 0;
     this.pedals.forget(id);
     this.wedge.reset(id);
+  }
+
+  /** Whether what holds car `id` back, as of its last step, is a person (a player on foot included) or a queue behind one: a hold that ends when she moves, so it is waited out in view. */
+  heldByPerson(id: number): boolean {
+    return this.person[id] === 1;
   }
 
   /** Whether car `id`, going `speed` m/s, has come to the end of `route` and stopped. */
@@ -227,6 +235,7 @@ export class TrafficDriver {
     const look = Math.max(LOOK_MINIMUM, LOOK_SECONDS * speed);
     const sample = this.sample;
     this.sampleSegment[id] = this.segment[id]!;
+    this.person[id] = 0;
     for (let ahead = PATH_SAMPLE_STEP; ahead <= look && arc + ahead <= route.length; ahead += PATH_SAMPLE_STEP) {
       this.sampleSegment[id] = pointAtArc(route, arc + ahead, this.sampleSegment[id]!, sample);
       for (let index = 0; index < others.length; index++) {
@@ -236,9 +245,13 @@ export class TrafficDriver {
         const dz = other.z - sample.z;
         if (Math.abs(dx) > PATH_REACH || Math.abs(dz) > PATH_REACH || hypot2(dx, dz) > PATH_REACH) continue;
         const leadSpeed = Math.max(0, other.vx * sample.tx + other.vz * sample.tz);
+        this.person[id] = this.person[other.id]!;
         return leadSpeed + Math.sqrt(2 * FOLLOW_BRAKE * Math.max(0, ahead - FOLLOW_GAP));
       }
-      if (this.personNear(sample.x, sample.z)) return Math.sqrt(2 * FOLLOW_BRAKE * Math.max(0, ahead - PERSON_GAP));
+      if (this.personNear(sample.x, sample.z)) {
+        this.person[id] = 1;
+        return Math.sqrt(2 * FOLLOW_BRAKE * Math.max(0, ahead - PERSON_GAP));
+      }
     }
     return Infinity;
   }

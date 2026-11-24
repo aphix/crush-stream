@@ -390,8 +390,8 @@ export class MoverFleet {
     this.wreckedFor[slot] = isWreck(car) ? this.wreckedFor[slot]! + passDt : 0;
     const speed = hypot2(car.velocity.x, car.velocity.z);
     this.stillFor[slot] = speed < STANDING_SPEED ? this.stillFor[slot]! + passDt : 0;
-    // A car held still (by a person in its lane, a red) is towed only out of every eye's sight: the queue waits in view and clears away unseen.
-    if (this.wreckedFor[slot]! > TOW_SECONDS || (this.stillFor[slot]! > STUCK_SECONDS && this.unseenAndFar(slot, car))) {
+    // A car held still by a person in its lane (or queued behind one held so) waits in view and is towed only out of every eye's sight; any other jam is towed at once.
+    if (this.wreckedFor[slot]! > TOW_SECONDS || (this.stillFor[slot]! > STUCK_SECONDS && (!this.driver.heldByPerson(id) || this.unseenAndFar(slot, car)))) {
       this.tow(slot);
       return;
     }
