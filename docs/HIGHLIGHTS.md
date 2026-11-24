@@ -407,6 +407,7 @@ before). `Sight.grid` (`roadGrid`,
 8 m cells over the course) names, per cell, a path sample on each stretch of road near it (up to 3), and `solid` projects from those
 windows: a trackside pick costs what it did (0.40 / 0.59 / 0.48 / 0.41 ms mean on oval / rally / city / stunt; 0.44 / 0.62 / 0.50
 / 0.41 before), and the grid builds in about the time `raceSight` already took.
+The aim is where the camera looks, not always where the hit is: `hitAim` aims `AIM_UP` over the road, not over a car sunk into it, so the hit's own point can sit under the aim (`aimSink`; 0.11 m at a city wall hit, where the crane's eye behind the wall cleared the wall's lip by 5 cm at the aim and by none at the car, the point the reel's judge tests). An eye counts as usable for a hit only if its line is clear to the aim and to that point (`seesHit`): in the pick (`CrashPick.begin`'s `sink`) and for every later impact a held cut looks at (`LaterHits.sink`). The test costs one `sightLine` more, and only for a hit whose car is sunk (`sink` 0 otherwise).
 The crash cam's pick is `CrashPick`, a search that runs over the lead-in before the first cut (`CUTS[0]`, 1.3 s): `Cinematics.direct`
 spends `PICK_RATE` (1000) `camUsable` calls a wall second on it, so at 240 Hz about 5 a frame, and finishes what is left 0.05 s
 before the cut. Whole, the pick costs 0.6-1.1 ms median and 1.3-4.3 ms at worst (stunt); a frame of it costs 0.05-0.06 ms median, 0.13-0.19 ms

@@ -10,7 +10,7 @@ import type { ReelHud, SaveResult, ViewBox } from "../match/types.ts";
 import { mulberry32 } from "../world/placements.ts";
 import { AFTERS, OPENERS, pickShot, RUN_INS, ShotCam, type Shot as PickedShot, type ShotKind } from "../present/shot-cam.ts";
 import { CINE, type Sight } from "../present/spectate-cam.ts";
-import { crashCamEnd, CUTS, hitAim, laterHits, type CrashCam, type CrashHold } from "../present/engine-cine.ts";
+import { aimSink, crashCamEnd, CUTS, hitAim, laterHits, type CrashCam, type CrashHold } from "../present/engine-cine.ts";
 import { overheadPose } from "../present/highlight-cam.ts";
 import { ClipSim, NO_RIDE, type ReplayScene } from "./engine-replay.ts";
 import { SPARK_MIN_IMPULSE, TIMELINE_HZ } from "./constants.ts";
@@ -747,6 +747,7 @@ export class ReelDirector {
         l.from[k] = l.from[k - 1]!;
         l.until[k] = l.until[k - 1]!;
         l.at[k]!.copy(l.at[k - 1]!);
+        l.sink[k] = l.sink[k - 1]!;
         l.thrown[k] = l.thrown[k - 1]!;
       }
       l.from[k] = w - HIT_LEAD;
@@ -754,6 +755,7 @@ export class ReelDirector {
       l.thrown[k] = thrown ? 1 : 0;
       if (thrown) l.at[k]!.set(x, y, z);
       else hitAim(l.at[k]!, x, y, z, s);
+      l.sink[k] = thrown ? 0 : aimSink(l.at[k]!, y);
     };
     for (let k = 1; k < clip.hits.length; k++) {
       const h = clip.hits[k]!;
