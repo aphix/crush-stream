@@ -13,6 +13,7 @@ import { BodyFit } from "./body-fit.ts";
 import { detSin, detCos, detAtan2, sinCosAt } from "../kernel/physics-core.js";
 import { CONTACT_REF_SLICE, MIN_IMPACT_ZONE, MIN_INERTIA, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { seatTilt, TILT_SEAT_QUIET, TILT_SEAT_TIME } from "./frame-tilt.ts";
 import { EPICENTER } from "./epicenter.ts";
 
 /** Engine slack (m) a hit too slow to pack the nose still allows (mounts, not crush).
@@ -292,16 +293,25 @@ export abstract class DeformContact extends DeformState {
       }
       _toLocal.copy(group.matrixWorld).invert();
     }
+    this.readLocals();
+    if (dt > 0 && this.quietTime() > TILT_SEAT_QUIET && this.quietTime() < PLANT_QUIET && seatTilt(this.masses, group, Math.min(1, dt / TILT_SEAT_TIME))) {
+      _toLocal.copy(group.matrixWorld).invert();
+      this.readLocals();
+    }
+    this.clampLocal(group);
+    this.settleDrift(0, this.budgetAt());
+    if (dt > 0) { this.keptTurn[3] = this.keptTurn[0]! / dt; this.keptTurn[0] = 0; } // prettier-ignore
+    this.prevYaw = group.rotation.y;
+  }
+
+  /** Every mass's place in the frame `_toLocal` inverts, and where a hub stands in it (`hubStand`). */
+  private readLocals(): void {
     for (let mi = 0; mi < this.masses.length; mi++) {
       const m = this.masses[mi]!;
       m.local.copy(m.world).applyMatrix4(_toLocal);
       this.hubStand[mi * 2] = m.local.x;
       this.hubStand[mi * 2 + 1] = m.local.z;
     }
-    this.clampLocal(group);
-    this.settleDrift(0, this.budgetAt());
-    if (dt > 0) { this.keptTurn[3] = this.keptTurn[0]! / dt; this.keptTurn[0] = 0; } // prettier-ignore
-    this.prevYaw = group.rotation.y;
   }
 
   /** The dynamic masses' mean velocity (`out` x, y, z) and the yaw spin their motion carries about their centroid (`out[3]`). */
