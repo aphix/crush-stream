@@ -5,7 +5,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { blankPoint, Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import stunt from "../world/tracks/stunt.json" with { type: "json" };
-import { camUsable, carsBlock, occluder, withCars, type Sight } from "./spectate-cam.ts";
+import { camUsable, carsBlock, occluder, sightLine, withCars, type Sight } from "./spectate-cam.ts";
 import { CrashCam, crashEye, CUTS, easeWarp, heldCut, hitAim, laterHits } from "./engine-cine.ts";
 import { courseCensus, crashAxis, crashSeen } from "./engine-cine-courses.test-util.ts";
 import { fovFor } from "./highlight-cam.ts";
@@ -293,6 +293,59 @@ describe("given the crash camera aiming at a hit on the stunt course's road", ()
       assertAimsAt(roadHeight + testCase.carAbove, roadHeight + testCase.aimAbove + riseOverCar);
     });
   }
+});
+
+describe("given a crash on flat ground whose car sits 0.11 m under the road the camera aims over, and a wall lip across the crane's line", () => {
+  const open: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0.6, rim: Infinity, occ: [] };
+  const at = new THREE.Vector3(0, 0.55, 0);
+  const n = new THREE.Vector3(1, 0, 0);
+  /** The car's depth under the aim (m): a city wall hit measured 0.11, and the crane's line cleared the aim over the wall's top by 5 cm. */
+  const SINK = 0.11;
+  /** The times through a cut the pick tries an eye at (`CUT_SAMPLES`). */
+  const SAMPLES = 9;
+  const eyes = Array.from({ length: SAMPLES }, (_, i) => {
+    const eye = new THREE.Vector3();
+    crashEye(eye, CUTS[1] + ((CUTS[2] - CUTS[1]) * i) / (SAMPLES - 1), at, n, 1, 1);
+    return eye;
+  });
+  /** A thin wall 3.3 m from the hit toward the crane's first eye, wide across that line, `top` m high. */
+  const lipOfHeight = (top: number): Sight => {
+    const dx = eyes[0]!.x - at.x;
+    const dz = eyes[0]!.z - at.z;
+    const d = Math.hypot(dx, dz);
+    return { ...open, occ: [occluder(at.x + (dx / d) * 3.3, at.z + (dz / d) * 3.3, Math.atan2(dx, dz), 8, 0.15, false, 0, top)] };
+  };
+  const underAim = new THREE.Vector3(at.x, at.y - SINK, at.z);
+  /** The lowest lip that the crane's line clears at the aim from every eye of its cut, and does not clear at the car's own point from the cut's first eye. */
+  const lips: number[] = [];
+  for (let top = 1; top < 4; top += 0.02) {
+    const wall = lipOfHeight(top);
+    if (eyes.every((eye) => camUsable(wall, eye, at, STILL, 0)) && sightLine(wall, eyes[0]!.x, eyes[0]!.y, eyes[0]!.z, underAim.x, underAim.y, underAim.z) < 0) lips.push(top);
+  }
+
+  it("when the lip stands where the crane clears the aim and not the car's own point, then the pick that knows the car's depth takes the crane no full eye, and the one that aims alone takes it whole", () => {
+    expect(lips.length, "heights of lip between the aim's line and the car's").toBeGreaterThan(0);
+    const wall = lipOfHeight(lips[0]!);
+    const aimed = new Float32Array(3);
+    const sunk = new Float32Array(3);
+    crashSeen(wall, at, n, aimed);
+    crashSeen(wall, at, n, sunk, SINK);
+    expect(aimed[1], "the crane's reach with the aim alone").toBe(1);
+    expect(sunk[1], "the crane's reach with the car's own point too").toBeLessThan(1);
+  });
+
+  it("when the same lip stands in a held cut's way to a later impact sunk that deep, then the crane that held it gives way, and keeps it with no sink or no lip", () => {
+    const wall = lipOfHeight(lips[0]!);
+    const reach = new Float32Array([1, 1, 1]);
+    const later = laterHits(1);
+    later.n = 1;
+    later.until[0] = 99;
+    later.at[0]!.copy(at);
+    expect(heldCut(wall, at, n, reach, at, 1, later, 0, at), "no sink: the crane holds").toBe(1);
+    expect(heldCut(open, at, n, reach, at, 1, later, 0, at), "no lip: the crane holds").toBe(1);
+    later.sink[0] = SINK;
+    expect(heldCut(wall, at, n, reach, at, 1, later, 0, at), "the lip hides the car's own point: another cut").not.toBe(1);
+  });
 });
 
 describe("given a crash in an open field and the cars of the pile standing about the hit", () => {

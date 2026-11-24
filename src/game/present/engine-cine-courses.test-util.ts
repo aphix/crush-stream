@@ -24,10 +24,10 @@ export function crashAxis(s: Sight, at: THREE.Vector3, n: THREE.Vector3, reach: 
   pick.begin(s, at, n, reach);
   pick.run(Infinity);
 }
-/** The cuts of axis `n` alone (no turning) that have an eye, their reach into `reach`. */
-export function crashSeen(s: Sight, at: THREE.Vector3, n: THREE.Vector3, reach: Float32Array): number {
+/** The cuts of axis `n` alone (no turning) that have an eye, their reach into `reach`; `sink`: how far the hit's own point sits under `at` (`aimSink`). */
+export function crashSeen(s: Sight, at: THREE.Vector3, n: THREE.Vector3, reach: Float32Array, sink = 0): number {
   const pick = new CrashPick();
-  pick.begin(s, at, n.clone(), reach, 1);
+  pick.begin(s, at, n.clone(), reach, 1, sink);
   pick.run(Infinity);
   return reach.reduce((k, r) => k + (r > 0 ? 1 : 0), 0);
 }
