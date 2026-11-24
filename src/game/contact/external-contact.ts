@@ -291,7 +291,6 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
   let pz = 0;
   let cy = 0;
   let drivingMass = 0;
-  let drivingPY = 0;
   let drivingPX = 0;
   let drivingPZ = 0;
   let drivingX = 0;
@@ -311,7 +310,6 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
       drivingZ += m.mass * m.vel.z;
       drivingPX += m.mass * m.world.x;
       drivingPZ += m.mass * m.world.z;
-      drivingPY += m.mass * m.world.y;
     }
   }
   cx /= mass;
@@ -338,11 +336,10 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
   out[o + BODY_X] = cx;
   out[o + BODY_Z] = cz;
   const w = live ? spin / inertia : car.angular.y;
-  // The driving masses' mean velocity is the body's at their centroid: referred to the centre, a rigid spinning wreck presents no closing of its own.
+  // The driving masses' mean velocity is the body's at their centroid, referred to the centre by the yaw spin the kernel adds back at its lever. Their roll and pitch speed stays: the kernel has no lever for it.
   const lever = driving ? drivingMass : 1;
-  const dy = drivingPY / lever - cy;
-  out[o + BODY_VX] = driving ? drivingX / drivingMass - w * (drivingPZ / lever - cz) + wz * dy : meanX;
-  out[o + BODY_VZ] = driving ? drivingZ / drivingMass + w * (drivingPX / lever - cx) - wx * dy : meanZ;
+  out[o + BODY_VX] = driving ? drivingX / drivingMass - w * (drivingPZ / lever - cz) : meanX;
+  out[o + BODY_VZ] = driving ? drivingZ / drivingMass + w * (drivingPX / lever - cx) : meanZ;
   out[o + BODY_W] = w;
   out[o + BODY_HARD] = 1;
 }
