@@ -66,12 +66,13 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
   ShutPlaces, CarsSeePlayers, Sweep, HubRules, KerbClaims; their worktrees are removed. Under them: ae0007683 (a derby driver
   that cannot get rolling lifts off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251). The crash digests
   were re-derived once (`whole-digest`, `car-smooth`). The six `// mutation:` comments the pass had added are stripped.
-- **The gate runs on this box** (the worker is not ours: see below), on a detached tree `~/worktrees/gate-union` at
-  b66471175: `~/crash-wt/local-gate.sh <tree> <log dir> [first] [last]` runs the worker gate's own 14 shards (8 of parity,
-  app and scripts without the GL file; 6 of the long AI suite), one vitest at a time with two workers under a 4 GB cap;
-  logs and one `GATE` line a shard in `~/crash-wt/landing/gate-b66471175/`. Then: the GL file (`DISPLAY=:0`), `build:node`,
-  the secret scan, the ff-only merge and `wsl-push`. A red in a shard: read the test, its setup and its source first.
-  - App shards 1, 2, 4, 6 and 7 of 8: green. Two reds, both from DeformSeat's merge, both fixed by the lane, reviewed and
+- **The gate runs on this box** (the worker is not ours: see below), on a detached tree `~/worktrees/gate-union`:
+  `~/crash-wt/local-gate.sh <tree> <log dir> [first] [last]` runs the worker gate's own 14 shards (8 of parity, app and
+  scripts without the GL file; 6 of the long AI suite), one vitest at a time with two workers under a 4 GB cap; logs and
+  one `GATE` line a shard in `~/crash-wt/landing/gate-<head>/`. Then: the GL file (`DISPLAY=:0`), `build:node`, the secret
+  scan (clean at 9641f9303), the ff-only merge and `wsl-push`. A red in a shard: read the test, its setup and its source.
+  - First run, at b66471175 (app shards only, then stopped):
+  - Its app shards 1, 2, 4, 6, 7 and 8 of 8: green. Two reds, both from DeformSeat's merge, both fixed by the lane, reviewed and
     merged after the gate's tree was cut:
     - shard 3, `engine/engine-record-scrape.test.ts` (a replay's pose differed from the live run's by 2.6e-18 at a clip's
       step 753): `writeNetState` adopted a hub's shove from the float32 net local, and a replay's keyframe restore calls it
@@ -81,8 +82,9 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
       last written skin, the tyre hold re-lifts and rewrites the normals round the arch flat, and nothing rounded them
       again. Now a hold that rewrote normals has the shells rounded again, for a near car only (b92dab303 and Main's gate
       on it; drawing only).
-  - Because `vehicle/car.ts` and `streamed-deform.ts` changed after the gate's tree was cut, the gate that counts is one
-    full run on the final head: on the worker if humm-tauri's done mail and yes come, else here again.
+  - Because `vehicle/car.ts` and `streamed-deform.ts` changed after that tree was cut, the gate that counts is the second
+    run, all 14 shards at 9641f9303 (started 21:50Z, about three hours here; its remaining shards move to the worker if
+    humm-tauri's done mail and yes come).
 - **Tried and taken out again: ed1e8b655** (a solid's top scrapes the body it stops: friction on `standOnTop`). Main's hand
   port was reviewed "merge" and merged, and then turned `scenes/derby-containment-wedge.test.ts` red: the truck driven at the
   north ramp's -x side wedge, 30° off square, ended at 38.03 m, outside the arena wall's inner face at 38 m (it comes down on
