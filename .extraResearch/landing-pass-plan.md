@@ -61,16 +61,20 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 ## 3. State
 
 - `main` = Windows mount = GitHub = 5989b47a0 (NET 72, REPLAY 249).
-- `play/union` (`~/worktrees/land`, NET 73, REPLAY 254), not yet gated. Merged, each reviewed (its later commits too), static
+- `play/union` (`~/worktrees/land`, NET 73, REPLAY 253), not yet gated. Merged, each reviewed (its later commits too), static
   checks clean and its own test files green on the union: PerfPath, SmallCuts, CopStoops, GuestEdge, BarRoom, ContactRows,
-  DeformSeat, ShutPlaces, CarsSeePlayers, Sweep, and TopScrape (Main's hand port of ed1e8b655: a solid's top scrapes the body
-  it stops; REPLAY 254); their worktrees are removed. Under them: ae0007683 (a derby driver that cannot get rolling lifts
-  off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251).
+  DeformSeat, ShutPlaces, CarsSeePlayers, Sweep; their worktrees are removed. Under them: ae0007683 (a derby driver that
+  cannot get rolling lifts off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251).
+- **Tried and taken out again: ed1e8b655** (a solid's top scrapes the body it stops: friction on `standOnTop`). Main's hand
+  port was reviewed "merge" and merged, and then turned `scenes/derby-containment-wedge.test.ts` red: the truck driven at the
+  north ramp's -x side wedge, 30° off square, ended at 38.03 m, outside the arena wall's inner face at 38 m (it comes down on
+  the wall's top and no longer slides back in). Containment depends on a top that does not hold a body; the merge and its
+  REPLAY 254 are reverted on the union (ab0d96e90, 3dd085838). Not to be ported without a containment answer.
 - Main's own runs over the union, one capped process at a time on this box (the worker is not ours yet): `src/game/contact`
-  and `src/game/deform` whole: green but the four digests; the GL rows green; `engine/prop-height.test.ts` had a row red
-  since the ContactRows merge (the staged wreck's settle now ends facing the other way; `place` squares it to the prism's
-  yaw: fixed, 3559cfaf3). `src/game/scenes`, then `vehicle`, `engine` and the rest follow the same way until the worker
-  takes the gate.
+  and `src/game/deform` whole: green but the four digests; `src/game/scenes` whole (but `stack-column`): green after the
+  revert above; the GL rows green; `engine/prop-height.test.ts` had a row red since the ContactRows merge (the staged
+  wreck's settle now ends facing the other way; `place` squares it to the prism's yaw: fixed, 3559cfaf3). `vehicle`,
+  `engine` and the rest follow the same way until the worker takes the gate.
 - **Red on the union, owed before the gate** (lane HubRules has both):
   - `vehicle/barrier.test.ts` "when a monster hits the slab at 48 km/h, then none of its hubs ends inside the slab" (green on
     `main`; red since the hub-creep picks; hubFL ends at (0.06, 0.14, -1.19)). DeformSeat's probe: `holdHubVelocity`
@@ -81,8 +85,8 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
   - If the creep rows, the monster row and the column row cannot all hold, the lane reports the smallest set of hub commits
     to take out and Main decides.
   - After it: the crash digests (`whole-digest.test.ts` four rows, `car-smooth.test.ts` seven) are re-derived ONCE with the
-    reason per change (hub creep, the seven contact rules, the tilt and the hub ride, the top's friction, HubRules' fix), and
-    REPLAY 255 for HubRules' fix.
+    reason per change (hub creep, the seven contact rules, the tilt and the hub ride, HubRules' fix), and
+    REPLAY 254 for HubRules' fix.
 - Reviews are kept in `~/crash-wt/landing/reviews/<Lane>-review.json`. A lane's commits written after its review get a reviewer
   too, before the gate.
 - Speed measurements owed (the worker, a quiet hour, humm-tauri's yes still awaited): PerfPath, CageWasm, LooseBatch (a
@@ -149,9 +153,9 @@ Triage of 843 refs that are not ancestors of `main` (2,500 non-merge commits, ab
 in `~/crash-wt/triage/` (`verdict-*.json|txt`, `show/<sha>.txt`). Before a port, check the commit's premise still holds
 (`git merge-base --is-ancestor <sha>^ main`; `git log -S'<line>' main` for code `main` had and removed).
 
-- **Fixes to port, with their rows:** ed1e8b655 (`standOnTop` has no top friction, `prop-contact.ts`); e3df9c357 (a lying
-  wreck's turn rule and level weighting; the squeeze-seat part is on `main`). 6e78dd888 (`clusterRule` cuts to 4 hard,
-  `deform-rig.ts`) and d498838af belong to the skin stack's lane.
+- **Fixes to port, with their rows:** e3df9c357 (a lying wreck's turn rule and level weighting; the squeeze-seat part is on
+  `main`), after HubRules (the same code). 6e78dd888 (`clusterRule` cuts to 4 hard, `deform-rig.ts`) and d498838af belong to
+  the skin stack's lane. ed1e8b655 was tried and taken out (section 3).
 - **For the owner's ruling, not ported (they change how the game plays):** c851270b7 (`DRIVE.gripBleed`: full lock at speed
   sheds speed: a handling change, and the owner calls the cars nailed); 8b916af11 (Survival's hunters PIT a player up to
   30 m/s in place of 20: its own commit records `survival.test`'s schedule row going red on seed 1).
