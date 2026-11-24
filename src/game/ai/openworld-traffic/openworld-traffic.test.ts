@@ -1086,6 +1086,61 @@ describe("given a pool the engine built as the fleet's mix, a coupe and a monste
   });
 });
 
+/** A sight that is looking at everything when `watched` (a player is near every car), and at nothing otherwise. */
+class WatchedSight extends ProximitySight {
+  watched = true;
+  override near(x: number, z: number, radius: number): boolean {
+    return this.watched || super.near(x, z, radius);
+  }
+}
+
+describe("given a car of the traffic held still in its lane by a walker for longer than it is let stand", () => {
+  const AHEAD_M = 30;
+  const HELD_S = 100;
+  /** By this many seconds the car has braked to a stop short of the walker. */
+  const SETTLED_S = 20;
+
+  function held(watched: boolean): { field: FakeField; traffic: OpenWorldTraffic; clock: Clock; id: number; walkers: { count: number; x: Float32Array; z: Float32Array } } {
+    const field = quietField();
+    const sight = new WatchedSight(field.ports);
+    sight.watched = watched;
+    const traffic = new OpenWorldTraffic([], field.ports, sight, { movers: 3, kerb: 0, patrol: 0, ambulance: 0 }, null);
+    const car = traffic.spawnDrivenCar(3, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z))!;
+    const walkers = { count: 0, x: new Float32Array(1), z: new Float32Array(1) };
+    traffic.setWalkers(walkers);
+    const clock = new Clock();
+    runSeconds(field, traffic, clock, 6);
+    const body = field.cars[car.index]!;
+    walkers.x[0] = body.group.position.x + detSin(body.yaw) * AHEAD_M;
+    walkers.z[0] = body.group.position.z + detCos(body.yaw) * AHEAD_M;
+    walkers.count = 1;
+    return { field, traffic, clock, id: car.index, walkers };
+  }
+
+  it("when a player's eye is on it for 100 s, then the car is still there, and it drives on when he steps off", () => {
+    const { field, traffic, clock, id, walkers } = held(true);
+    const body = field.cars[id]!;
+    runSeconds(field, traffic, clock, SETTLED_S);
+    const at = { x: body.group.position.x, z: body.group.position.z };
+    runSeconds(field, traffic, clock, HELD_S - SETTLED_S);
+    expect(hypot2(body.group.position.x - at.x, body.group.position.z - at.z), "metres from where it was held: it stayed").toBeLessThan(1);
+    expect(body.speed, "still held").toBeLessThan(0.3);
+    walkers.count = 0;
+    for (let waited = 0; waited < CYCLE_SECONDS && body.speed < 2; waited++) runSeconds(field, traffic, clock, 1);
+    expect(body.speed, "under way again").toBeGreaterThan(2);
+  });
+
+  it("when no eye sees it and no player is near for 100 s, then the car is towed as before", () => {
+    const { field, traffic, clock, id } = held(false);
+    const body = field.cars[id]!;
+    runSeconds(field, traffic, clock, SETTLED_S);
+    const at = { x: body.group.position.x, z: body.group.position.z };
+    runSeconds(field, traffic, clock, HELD_S - SETTLED_S);
+    // Put away, the pool may stand it again at once as another trip's car: it is gone from where it was held either way.
+    expect(hypot2(body.group.position.x - at.x, body.group.position.z - at.z), "metres from where it was held").toBeGreaterThan(AHEAD_M);
+  });
+});
+
 describe("given people on the streets and a car of the traffic on its trip", () => {
   const AHEAD_M = 30;
   const WAIT_S = 8;
