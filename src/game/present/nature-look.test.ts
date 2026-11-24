@@ -7,6 +7,8 @@ import { LeafMaterial, leafDepth, NatureMaterial, setNatureTier } from "./nature
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
 import { PropTumble } from "./prop-tumble.ts";
+import { CLUSTER_LOOK } from "../world/scenery-biome.ts";
+import type { PrefabId } from "../world/catalog.ts";
 
 /** The shader three hands `onBeforeCompile`, cut to the chunk anchors the patch replaces. */
 function compile(material: THREE.Material): THREE.WebGLProgramParametersWithUniforms {
@@ -111,5 +113,28 @@ describe("given a rock placed leaning 0.2 rad, and one upright", () => {
     }
     expect(tilt[0]!, "the leaning rock").toBeCloseTo(0.2, 6);
     expect(tilt[1]!, "the upright rock").toBeCloseTo(0, 6);
+  });
+});
+
+describe("given a far cluster rock and a near one of the same prefab in the same cell", () => {
+  it("when their meshes are made, then the far one is a mesh of its own that casts no shadow and the near one still casts", () => {
+    const rock = (far?: true): Placed => ({ prefab: PREFAB.rock, x: 3, y: 1, z: -2, yaw: 0, sx: 1, sy: 1, sz: 1, ...(far === undefined ? {} : { far }) });
+    const made: { count: number; cast: boolean }[] = [];
+    new PropTumble([rock(), rock(true), rock(true)], plainMaterials(new THREE.MeshBasicMaterial()), (mesh, _id, _shared, cast) => made.push({ count: mesh.count, cast }));
+    expect(made.length, "meshes: near and far").toBe(2);
+    expect([made[0]!.count, made[0]!.cast], "the near rock's mesh").toEqual([1, true]);
+    expect([made[1]!.count, made[1]!.cast], "the far rocks' mesh").toEqual([2, false]);
+  });
+});
+
+describe("given the kinds a far cluster is made of", () => {
+  it("when each kind's drawn prefab is counted, then its triangles are the number the clump budget spends on it", () => {
+    const [plain, nature] = [new THREE.MeshBasicMaterial(), new THREE.MeshBasicMaterial()];
+    const mats = { ...plainMaterials(plain), nature };
+    const triangles = (geometry: THREE.BufferGeometry): number => (geometry.index ? geometry.index.count : geometry.getAttribute("position").count) / 3;
+    for (const [id, look] of Object.entries(CLUSTER_LOOK)) {
+      const counted = prefabParts(id as PrefabId, mats).reduce((sum, part) => sum + triangles(part.geometry), 0);
+      expect(counted, id).toBe(look.triangles);
+    }
   });
 });

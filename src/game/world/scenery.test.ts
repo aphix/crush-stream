@@ -269,6 +269,16 @@ describe("given the scenery's cost on every course", () => {
       for (const [key, n] of cells) expect(n, `${d.track.id} ${key}`).toBeLessThanOrEqual(PER_CELL_MAX);
     }
   });
+
+  it("when the far clusters are laid on every course, then their drawn triangles are at most the budget of 30,000 and no member lies in the solid list", () => {
+    const FAR_TRIANGLES_MAX = 30000;
+    for (const j of COURSE_JSON) {
+      const d = dress(j, {}, true);
+      const triangles = d.drawn.reduce((sum, p) => sum + (p.far ? CLUSTER_LOOK[p.prefab]!.triangles : 0), 0);
+      expect(triangles, `${d.track.id}: drawn triangles of the far members`).toBeLessThanOrEqual(FAR_TRIANGLES_MAX);
+      expect(d.solid.filter((p) => p.far).length, `${d.track.id}: far members in the solid list`).toBe(0);
+    }
+  });
 });
 
 /** `list` in groups, any two members within `link` m of each other (through a chain of such pairs) in one. */
@@ -287,7 +297,7 @@ describe("given the far clusters of a park course and a dirt course", () => {
   const LINK = 12;
   /** A far member keeps at least this far (m) past the verge reach of an open edge: more than a prop's pad and footprint, so a car's reach is never crowded by one. */
   const PAST_REACH = 10;
-  const far = (id: string): Placed[] => dress(json(id)).drawn.filter((p) => p.far);
+  const far = (id: string): Placed[] => dress(json(id), {}, true).drawn.filter((p) => p.far);
   const scale = (p: Placed): number => Math.max(p.sx, p.sz);
 
   it.each([TRACK_ID.rally, TRACK_ID.damSpine])("when %s's far members are linked within 12 m, then most stand in clumps of three or more", (id) => {
@@ -305,7 +315,7 @@ describe("given the far clusters of a park course and a dirt course", () => {
   });
 
   it("when the drawn list is thinned to the Low and Minimal shares, or for a phone at the full share, then no far member is left, and the top tier on a desktop keeps every one", () => {
-    const d = dress(json(TRACK_ID.damSpine));
+    const d = dress(json(TRACK_ID.damSpine), {}, true);
     const all = d.drawn.filter((p) => p.far).length;
     expect(all, "the course has far members").toBeGreaterThan(100);
     for (const keep of [0.6, 0.3]) expect(thinScenery(d.drawn, keep).filter((p) => p.far).length, `share ${keep}`).toBe(0);
@@ -316,7 +326,7 @@ describe("given the far clusters of a park course and a dirt course", () => {
   it("when every far member of every course is measured, then no open road edge lies within the verge reach and the clearance beyond it, and none is a solid prop", () => {
     const bad: string[] = [];
     for (const j of COURSE_JSON) {
-      const d = dress(j);
+      const d = dress(j, {}, true);
       for (const p of d.drawn) if (p.far && nearOpening(d.track, p.x, p.z, REACH + PAST_REACH - REACH_SLACK)) bad.push(`${d.track.id} far ${p.prefab} at (${p.x.toFixed(1)}, ${p.z.toFixed(1)})`);
       for (const p of d.solid) if (p.far) bad.push(`${d.track.id} solid far ${p.prefab}`);
     }
@@ -324,7 +334,7 @@ describe("given the far clusters of a park course and a dirt course", () => {
   });
 
   it.each([TRACK_ID.damSpine, TRACK_ID.razorShelf])("when %s's far rocks are read back, then each stands sunk at least 8 % of its height into the ground, leans, and is not the same size on every axis", (id) => {
-    const d = dress(json(id));
+    const d = dress(json(id), {}, true);
     const rocks = d.drawn.filter((p) => p.far && p.prefab === PREFAB.rock);
     expect(rocks.length, "far rocks").toBeGreaterThan(20);
     for (const p of rocks) {
@@ -339,12 +349,12 @@ describe("given the far clusters of a park course and a dirt course", () => {
     for (const [biome, spec] of Object.entries(CLUSTERS)) for (const [kind] of spec.kinds) expect(CLUSTER_LOOK[kind], `${biome} ${kind}`).toBeDefined();
   });
 
-  it("when every far member of every course is read back, then its draw group is one the drawn list holds without the far members (a clump adds instances, never a draw)", () => {
+  it("when every far member of every course is read back, then its prefab and cell is one the drawn list holds without the far members (the far meshes are bounded by the groups already there)", () => {
     const bad: string[] = [];
     for (const j of COURSE_JSON) {
-      const d = dress(j);
+      const d = dress(j, {}, true);
       const held = new Set(d.drawn.filter((p) => !p.far).map(drawGroupOf));
-      for (const p of d.drawn) if (p.far && !held.has(drawGroupOf(p))) bad.push(`${d.track.id} ${drawGroupOf(p)}`);
+      for (const p of d.drawn) if (p.far && !held.has(drawGroupOf(p).replace(":far", ""))) bad.push(`${d.track.id} ${drawGroupOf(p)}`);
     }
     expect(bad).toEqual([]);
   });

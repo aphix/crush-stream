@@ -71,13 +71,13 @@ export const CLUSTERS: Partial<Record<BiomeId, { chance: number; kinds: Kinds }>
 /** The largest of those chances, so the lattice sweep can skip a cell early. */
 export const CLUSTER_CHANCE_MAX = Math.max(...Object.values(CLUSTERS).map((spec) => spec.chance));
 
-/** What a far cluster member of a kind may look like: its size factor on the prefab (a clump's biggest takes the top, the rest the range under it), the most it leans (rad) and the share of its height it may sink (rocks sit in the ground, never on it). */
-export const CLUSTER_LOOK: Partial<Record<PrefabId, { size: readonly [number, number]; lean: number; sink: readonly [number, number] }>> = {
-  [PREFAB.tree]: { size: [0.9, 2.1], lean: 0.07, sink: [0, 0.02] },
-  [PREFAB.bush]: { size: [0.9, 2.4], lean: 0.12, sink: [0, 0.1] },
-  [PREFAB.rock]: { size: [0.6, 2.6], lean: 0.18, sink: [0.08, 0.22] },
-  [PREFAB.palm]: { size: [0.9, 1.5], lean: 0.1, sink: [0, 0] },
-  [PREFAB.flowers]: { size: [1, 2.5], lean: 0.05, sink: [0, 0] },
+/** What a far cluster member of a kind may look like: its size factor on the prefab (a clump's biggest takes the top, the rest the range under it), the most it leans (rad), the share of its height it may sink (rocks sit in the ground, never on it) and the triangles of its drawn prefab (counted from `prefabParts`; a row in `nature-look.test.ts` holds the count). */
+export const CLUSTER_LOOK: Partial<Record<PrefabId, { size: readonly [number, number]; lean: number; sink: readonly [number, number]; triangles: number }>> = {
+  [PREFAB.tree]: { size: [0.9, 2.1], lean: 0.07, sink: [0, 0.02], triangles: 34 },
+  [PREFAB.bush]: { size: [0.9, 2.4], lean: 0.12, sink: [0, 0.1], triangles: 60 },
+  [PREFAB.rock]: { size: [0.6, 2.6], lean: 0.18, sink: [0.08, 0.22], triangles: 80 },
+  [PREFAB.palm]: { size: [0.9, 1.5], lean: 0.1, sink: [0, 0], triangles: 120 },
+  [PREFAB.flowers]: { size: [1, 2.5], lean: 0.05, sink: [0, 0], triangles: 172 },
 };
 
 /**

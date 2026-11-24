@@ -1,6 +1,6 @@
 import { detCos, detSin } from "../kernel/physics-core.js";
 import type { PrefabId } from "./catalog.ts";
-import type { BiomeId } from "./constants.ts";
+import { BIOME_IDS, type BiomeId } from "./constants.ts";
 import { CLUSTER_CHANCE_MAX, CLUSTER_LOOK, CLUSTERS, pickKind } from "./scenery-biome.ts";
 import { buildFarField, farCell, hashString, mix, nearest, unit, type FarField, type Near, type RoadField } from "./scenery-field.ts";
 
@@ -32,6 +32,8 @@ const BIGGEST_OFF = 0.25;
 /** The biggest member's size rank (lowest, span) against the others' (span from 0): most of a clump is smaller than its middle. */
 const BIGGEST_RANK = [0.75, 0.25] as const;
 const OTHER_RANK = 0.55;
+/** The most drawn triangles a course's far clumps may hold. A review's number, not a measurement: the owner may tune it by eye. Whole clumps are kept in hash order, so the pick is stable. */
+const FAR_TRIANGLES_MAX = 30000;
 
 /** How a far cluster member sits: tipped `lean` rad from upright, and `sink` of its height into the ground. */
 export type Look = { lean: number; sink: number };
@@ -47,7 +49,16 @@ export type ClusterWorld = {
   dressable(x: number, z: number): boolean;
   biomeAt(x: number, z: number, seg: number): BiomeId;
   stand(prefab: PrefabId, x: number, z: number, yaw: number, sx: number, sy: number, sz: number, look: Look): boolean;
+  /** The course's own biome (`scenery.biome`, null when each stretch is classified) and its biome zones: what says whether any clump table applies at all. */
+  course: BiomeId | null;
+  zones: readonly { biome: BiomeId }[];
+  /** How many members stand so far, and the call that keeps only those whose flag is 1 (flags run in the order they stood). */
+  count(): number;
+  keep(flags: Uint8Array): void;
 };
+
+/** One clump as laid: the range of members it stands as, their drawn triangles, and its hash for the budget's pick. */
+type Clump = { first: number; last: number; triangles: number; key: number };
 
 /** A smooth hash noise over (x, z), wide patches of thick (`THICKET_MAX`) and thin (`THICKET_MIN`): the value noise's middle stretched so a patch is mostly one or the other. */
 function thicket(seed: number, x: number, z: number): number {
@@ -63,8 +74,8 @@ function thicket(seed: number, x: number, z: number): number {
   return THICKET_MIN + (THICKET_MAX - THICKET_MIN) * s * s * (3 - 2 * s);
 }
 
-/** Member `k` of the clump at (x, z) with hash `seed`, its kind drawn from `lead` and `kinds`, stood through `w.stand`. */
-function layMember(w: ClusterWorld, seed: number, k: number, x: number, z: number, radius: number, lead: PrefabId, kinds: Parameters<typeof pickKind>[0]): void {
+/** Member `k` of the clump at (x, z) with hash `seed`, its kind drawn from `lead` and `kinds`, stood through `w.stand`: the drawn triangles it adds (0 when it does not stand). */
+function layMember(w: ClusterWorld, seed: number, k: number, x: number, z: number, radius: number, lead: PrefabId, kinds: Parameters<typeof pickKind>[0]): number {
   const m = mix(seed, 16 + k);
   const prefab = k === 0 || unit(mix(m, 0)) < CLUSTER_LEAD ? lead : pickKind(kinds, unit(mix(m, 1)));
   const look = CLUSTER_LOOK[prefab]!;
@@ -73,40 +84,70 @@ function layMember(w: ClusterWorld, seed: number, k: number, x: number, z: numbe
   const rank = k === 0 ? BIGGEST_RANK[0] + BIGGEST_RANK[1] * unit(mix(m, 4)) : OTHER_RANK * unit(mix(m, 4));
   const size = look.size[0] + (look.size[1] - look.size[0]) * rank;
   const sink = look.sink[0] + (look.sink[1] - look.sink[0]) * unit(mix(m, 10));
-  w.stand(prefab, x + off * detSin(angle), z + off * detCos(angle), unit(mix(m, 5)) * 2 * Math.PI, size * (0.8 + 0.4 * unit(mix(m, 6))), size * (0.75 + 0.55 * unit(mix(m, 7))), size * (0.8 + 0.4 * unit(mix(m, 8))), { lean: look.lean * unit(mix(m, 9)), sink });
+  const stood = w.stand(prefab, x + off * detSin(angle), z + off * detCos(angle), unit(mix(m, 5)) * 2 * Math.PI, size * (0.8 + 0.4 * unit(mix(m, 6))), size * (0.75 + 0.55 * unit(mix(m, 7))), size * (0.8 + 0.4 * unit(mix(m, 8))), { lean: look.lean * unit(mix(m, 9)), sink });
+  return stood ? look.triangles : 0;
 }
 
 /**
  * One lattice cell's far cluster, if it holds one: a clump of 3 to 9 plants and rocks of mixed sizes about a centre, its biggest member in the middle, most of them one lead kind, each its own size on every axis, turned at random, leaning
  * a little and (a rock) sunk into the ground. The centre's gap is `nearest`'s where it sees a road, else the coarse grid's.
  */
-function clusterCell(w: ClusterWorld, salt: number, density: number, far: FarField, i: number, j: number): void {
+function clusterCell(w: ClusterWorld, salt: number, density: number, far: FarField, i: number, j: number): Clump | null {
   const seed = mix(salt, mix(i, j));
   const roll = unit(mix(seed, 0));
-  if (roll >= CLUSTER_CHANCE_MAX * THICKET_MAX * density) return;
+  if (roll >= CLUSTER_CHANCE_MAX * THICKET_MAX * density) return null;
   const x = (i + unit(mix(seed, 1))) * CLUSTER_CELL;
   const z = (j + unit(mix(seed, 2))) * CLUSTER_CELL;
   const cell = farCell(far, x, z);
-  if (cell < 0 || far.dist[cell]! < CLUSTER_INNER - FAR_CELL || far.dist[cell]! > CLUSTER_OUTER + FAR_CELL || !w.dressable(x, z)) return;
+  if (cell < 0 || far.dist[cell]! < CLUSTER_INNER - FAR_CELL || far.dist[cell]! > CLUSTER_OUTER + FAR_CELL || !w.dressable(x, z)) return null;
   const near = nearest(w.field, x, z, w.near);
   const seg = near.seg >= 0 ? near.seg : far.seg[cell]!;
   const gap = near.seg >= 0 ? near.gap : far.dist[cell]!;
-  if (seg < 0 || gap < CLUSTER_INNER || gap > CLUSTER_OUTER) return;
+  if (seg < 0 || gap < CLUSTER_INNER || gap > CLUSTER_OUTER) return null;
   const spec = CLUSTERS[w.biomeAt(x, z, seg)];
   const edge = Math.min(1, Math.max(0, (gap - CLUSTER_THIN_FROM) / (CLUSTER_OUTER - CLUSTER_THIN_FROM)));
-  if (!spec || roll >= spec.chance * thicket(salt, x, z) * (1 - (1 - CLUSTER_EDGE_SHARE) * edge * edge * (3 - 2 * edge)) * density) return;
+  if (!spec || roll >= spec.chance * thicket(salt, x, z) * (1 - (1 - CLUSTER_EDGE_SHARE) * edge * edge * (3 - 2 * edge)) * density) return null;
   const count = CLUSTER_MEMBERS[0] + Math.floor(unit(mix(seed, 3)) * (CLUSTER_MEMBERS[1] - CLUSTER_MEMBERS[0] + 1));
   const radius = CLUSTER_RADIUS[0] + unit(mix(seed, 4)) * (CLUSTER_RADIUS[1] - CLUSTER_RADIUS[0]);
   const lead = pickKind(spec.kinds, unit(mix(seed, 5)));
-  for (let k = 0; k < count; k++) layMember(w, seed, k, x, z, radius, lead, spec.kinds);
+  const first = w.count();
+  let triangles = 0;
+  for (let k = 0; k < count; k++) triangles += layMember(w, seed, k, x, z, radius, lead, spec.kinds);
+  return { first, last: w.count(), triangles, key: unit(mix(seed, 6)) };
 }
 
-/** The far clusters over the course's sweep grown by `CLUSTER_OUTER`: every lattice cell once, by its own hash alone (the course's and the rule's). */
+/** Whether any biome the course holds has a clump table: a city's or the open world's has none, and nothing of the far work is worth doing there. */
+function clusterable(w: ClusterWorld): boolean {
+  if (w.zones.some((zone) => CLUSTERS[zone.biome] !== undefined)) return true;
+  if (w.course !== null) return CLUSTERS[w.course] !== undefined;
+  for (let s = 0; s < w.field.biome.length; s++) if (CLUSTERS[BIOME_IDS[w.field.biome[s]!]!] !== undefined) return true;
+  return false;
+}
+
+/** The clumps (by hash, whole clumps) that fit `FAR_TRIANGLES_MAX` drawn triangles, as a flag per member laid; the rest are dropped. */
+function withinBudget(w: ClusterWorld, clumps: readonly Clump[]): void {
+  const flags = new Uint8Array(w.count());
+  let total = 0;
+  for (const clump of [...clumps].sort((a, b) => a.key - b.key)) {
+    if (total + clump.triangles > FAR_TRIANGLES_MAX) continue;
+    total += clump.triangles;
+    flags.fill(1, clump.first, clump.last);
+  }
+  w.keep(flags);
+}
+
+/** The far clusters over the course's sweep grown by `CLUSTER_OUTER`: every lattice cell once, by its own hash alone (the course's and the rule's), then the clumps that fit the course's triangle budget. */
 export function layClusters(w: ClusterWorld, density: number): void {
+  if (!clusterable(w)) return;
   const box = w.sweepBox(CLUSTER_OUTER);
   const salt = mix(w.seed, hashString("cluster"));
   const far = buildFarField(w.field, box, FAR_CELL);
+  const clumps: Clump[] = [];
   for (let i = Math.floor(box[0] / CLUSTER_CELL); i <= Math.ceil(box[1] / CLUSTER_CELL); i++) {
-    for (let j = Math.floor(box[2] / CLUSTER_CELL); j <= Math.ceil(box[3] / CLUSTER_CELL); j++) clusterCell(w, salt, density, far, i, j);
+    for (let j = Math.floor(box[2] / CLUSTER_CELL); j <= Math.ceil(box[3] / CLUSTER_CELL); j++) {
+      const clump = clusterCell(w, salt, density, far, i, j);
+      if (clump !== null) clumps.push(clump);
+    }
   }
+  withinBudget(w, clumps);
 }

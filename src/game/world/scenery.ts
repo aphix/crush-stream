@@ -1002,7 +1002,7 @@ function assets(c: Ctx): void {
   lotAssets(c);
 }
 
-/** Rule 3, far: clumps of plants and rocks beyond a car's reach (`scenery-clusters.ts`), laid after every other rule so no placement before them moves. A member stands only in a draw group the finished drawn list (after `kept`) already holds, so a clump is more instances in a mesh already drawn and never another draw. */
+/** Rule 3, far: clumps of plants and rocks beyond a car's reach (`scenery-clusters.ts`), laid after every other rule so no placement before them moves. A member stands only in a prefab-and-cell the finished drawn list (after `kept`) already holds, which bounds the draws of the far meshes (their own, since they cast no shadow). */
 function clusters(c: Ctx): void {
   const density = c.density[RULE_VERGE]!;
   if (density <= 0) return;
@@ -1015,6 +1015,20 @@ function clusters(c: Ctx): void {
     dressable: (x, z) => dressable(c, x, z),
     biomeAt: (x, z, seg) => biomeAt(c, x, z, seg),
     stand: (prefab, x, z, yaw, sx, sy, sz, look) => stand(c, RULE_VERGE, prefab, x, z, yaw, sx, sy, sz, undefined, undefined, look),
+    course: c.course,
+    zones: c.zones,
+    count: () => c.far.length,
+    keep: (flags) => {
+      let to = 0;
+      for (let n = 0; n < c.far.length; n++) {
+        if (flags[n] === 0) continue;
+        c.far[to] = c.far[n]!;
+        c.farMeta[to] = c.farMeta[n]!;
+        to++;
+      }
+      c.far.length = to;
+      c.farMeta.length = to;
+    },
   };
   layClusters(world, density);
 }
@@ -1033,9 +1047,9 @@ function kept(c: Ctx, list: readonly Placed[], meta: readonly Meta[]): Placed[] 
 
 /**
  * What the course's geometry says to add to `base` (`placeProps`'s hand props, `along` rows, scatter and chevrons, in order): the
- * solid props to append to it, and the drawn-only ones. Pure in (track, base).
+ * solid props to append to it, and the drawn-only ones. Pure in (track, base, far). `far`: the far clusters are laid (only where the art that draws them will be built: a phone, the ragdoll worker and the bench's no-scenery arms leave them out).
  */
-export function placeScenery(track: Track, base: readonly Placed[]): Scenery {
+export function placeScenery(track: Track, base: readonly Placed[], far = false): Scenery {
   const c = newCtx(track, base);
   if (c.course === BIOME.none && c.zones.length === 0) return { solid: [], drawn: [] };
   sidewalks(c);
@@ -1046,7 +1060,7 @@ export function placeScenery(track: Track, base: readonly Placed[]): Scenery {
   verge(c);
   islands(c);
   assets(c);
-  clusters(c);
+  if (far) clusters(c);
   for (let n = 0; n < c.far.length; n++) {
     c.drawn.push(c.far[n]!);
     c.drawnMeta.push(c.farMeta[n]!);
@@ -1063,8 +1077,8 @@ export function thinScenery(drawn: readonly Placed[], keep: number, far = keep >
   return drawn.filter((p) => p.prefab === PREFAB.sidewalk || (p.far ? far : unit(mix(Math.round(p.x * 16), Math.round(p.z * 16))) < keep));
 }
 
-/** A prop's draw group, which `TrackArt` draws as one instanced mesh: its prefab in a 512 m cell, an asset's `assetDrawGroupOf`. */
-export const drawGroupOf = (p: Placed): string => (p.asset === undefined ? `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}` : assetDrawGroupOf(p.asset, p.x, p.z));
+/** A prop's draw group, which `TrackArt` draws as one instanced mesh: its prefab in a 512 m cell, an asset's `assetDrawGroupOf`; a far cluster member's is its own (it casts no shadow, so it cannot share a mesh that does). */
+export const drawGroupOf = (p: Placed): string => (p.asset === undefined ? `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}${p.far ? ":far" : ""}` : assetDrawGroupOf(p.asset, p.x, p.z));
 
 /** The draw groups the service adds to the authored props' (`authored`): the solid props' groups none of them stands in (they join its meshes), plus the drawn-only ones' (each group its own draw). */
 export function addedDrawGroups(authored: readonly Placed[], solid: readonly Placed[], drawn: readonly Placed[]): number {

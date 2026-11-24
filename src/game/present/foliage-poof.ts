@@ -110,12 +110,12 @@ export class FoliagePoof {
   /** One past the highest ring slot used since the leaves last emptied. */
   private top = 0;
 
-  /** The plants among `placed` (bushes, flower beds and assets whose body is a poof), hidden in `tumble` (which draws `placed`) when a car drives through; the leaves draw in `material`. */
+  /** The plants among `placed` (bushes, flower beds and assets whose body is a poof; not the far clusters', which no car reaches), hidden in `tumble` (which draws `placed`) when a car drives through; the leaves draw in `material`. */
   constructor(placed: readonly Placed[], tumble: Pick<PropTumble, "hide" | "reset">, material: THREE.Material) {
     this.placed = placed;
     this.tumble = tumble;
     const plants: number[] = [];
-    for (let i = 0; i < placed.length; i++) if (piecesOf(placed[i]!) > 0) plants.push(i);
+    for (let i = 0; i < placed.length; i++) if (piecesOf(placed[i]!) > 0 && placed[i]!.far !== true) plants.push(i);
     const n = plants.length;
     this.ids = Int32Array.from(plants);
     this.x = new Float32Array(n);
