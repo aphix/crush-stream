@@ -17,6 +17,8 @@ export type TrafficApi = {
   driverDoorSpotOf(carIndex: number, out: DoorSpot): boolean;
   openDriverDoor(carIndex: number, radians: number): void;
   nearestSpot(x: number, z: number): number;
+  /** Whether no car stands at kerb space `spot` and none holds it. */
+  spotIsFree(spot: number): boolean;
   /** Calls `listener` for every car that runs a red light until the returned function is called. */
   onRedLightRun(listener: (carIndex: number, x: number, z: number, seconds: number) => void): () => void;
   spawnDrivenCar(resident: number, fromSpot: number, toSpot: number, options?: { urgent?: boolean }): LeasedCar | null;
@@ -119,14 +121,14 @@ export class TrafficPatrolPorts {
     return this.traffic.residentOf(index);
   }
 
-  /** The space whose distance from (x, z) is nearest `PATROL_START_DISTANCE`, other than `to`; the lower number on a tie. -1 with none. */
+  /** The free space whose distance from (x, z) is nearest `PATROL_START_DISTANCE`, other than `to`; the lower number on a tie. A space a car stands in or holds is passed over: a cruiser put there would stand on it. -1 with none. */
   private startSpot(x: number, z: number, to: number): number {
     const { parkingSpots } = this.traffic;
     let best = -1;
     let bestMiss = Infinity;
     for (let spot = 0; spot < parkingSpots.count; spot++) {
       const miss = Math.abs(hypot2(parkingSpots.x[spot]! - x, parkingSpots.z[spot]! - z) - PATROL_START_DISTANCE);
-      if (spot === to || miss >= bestMiss) continue;
+      if (spot === to || miss >= bestMiss || !this.traffic.spotIsFree(spot)) continue;
       bestMiss = miss;
       best = spot;
     }

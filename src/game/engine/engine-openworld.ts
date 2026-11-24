@@ -23,7 +23,7 @@ import { chestMet, insidePlace, lookAtOf, LookRay, placeMet, type LookText, type
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { fillCommuterFeed } from "../ai/civilians/society-commuters.ts";
-import { carStandsNear, makeDriverDoors, groundUnderCars } from "./engine-openworld-doors.ts";
+import { clientCarSpot, makeDriverDoors, groundUnderCars } from "./engine-openworld-doors.ts";
 import { CarLook } from "./engine-openworld-car-look.ts";
 import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
@@ -35,6 +35,7 @@ import { Stoops } from "../world/openworld/openworld-stoops.ts";
 import { OpenWorldTraffic, type FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import type { CommuterFeed } from "../ai/openworld-traffic/traffic-sight.ts";
 import { AMBULANCE_CARS, KERB_CARS, MOVER_CARS, PATROL_CARS } from "../ai/openworld-traffic/traffic-constants.ts";
+import { carPoseAtSpot } from "../ai/openworld-traffic/traffic-look.ts";
 import type { TrafficPorts } from "../ai/openworld-traffic/traffic-ports.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
@@ -1177,8 +1178,15 @@ export class OpenWorldDirector {
     const host = this.ports.traffic;
     if (host === undefined) return;
     this.lights = host.makeLights();
-    this.kerb = buildParkingSpots(buildRoadNetwork(openWorldGeometry(LAYOUT)));
-    this.crowd!.driverDoors = makeDriverDoors(map.places, this.crowd!.state, this.kerb, groundUnderCars, (owner, x, z, yaw) => (this.traffic !== null ? this.traffic.carForClip(owner, x, z, yaw, this.ray.eyeX, this.ray.eyeZ) : carStandsNear(this.ports.cars(), x, z)));
+    const spots = buildParkingSpots(buildRoadNetwork(openWorldGeometry(LAYOUT)));
+    this.kerb = spots;
+    // The traffic builds the same table from the same layout, so its space numbers are these.
+    this.crowd!.driverDoors = makeDriverDoors(map.places, this.crowd!.state, spots, groundUnderCars, (owner, pose, door) => {
+      const spot = this.traffic !== null ? this.traffic.clipSpot(owner, pose.x, pose.z, pose.yaw, this.ray.eyeX, this.ray.eyeZ) : clientCarSpot(this.ports.cars(), spots, owner, door, pose);
+      if (spot < 0) return false;
+      carPoseAtSpot(spots, spot, owner, groundUnderCars, pose);
+      return true;
+    });
     if (client) return;
     const phone = this.ports.tier() === POPULATION_TIER.phone;
     const capacity = this.crowd!.state.capacity;

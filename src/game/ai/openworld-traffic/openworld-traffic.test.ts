@@ -790,7 +790,7 @@ describe("given kerb cars standing near the local player", () => {
     let spot = -1;
     for (let at = 0; at < spots.count; at++) if (spots.stays[at] !== 1 && (spot < 0 || hypot2(spots.x[at]!, spots.z[at]!) > hypot2(spots.x[spot]!, spots.z[spot]!))) spot = at;
     expect(hypot2(spots.x[spot]!, spots.z[spot]!), "control: the space is past KERB_KEEP of the player, where a car nobody holds is put away").toBeGreaterThan(KERB_KEEP);
-    expect(traffic.carForClip(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "a car stands for her").toBe(true);
+    expect(traffic.clipSpot(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "a car stands for her, at that space").toBe(spot);
     // The pool stands a put-away car at another kerb space in the same pass, so her car's id is no mark of it: what stands at her space is.
     const standsAtHerSpace = (): boolean => field.cars.some((car, id) => id > 0 && !car.stored && hypot2(car.group.position.x - spots.x[spot]!, car.group.position.z - spots.z[spot]!) < KERB_JITTER_SIDE + 0.1);
     let hers = -1;
@@ -799,15 +799,15 @@ describe("given kerb cars standing near the local player", () => {
     expect(field.colours[hers], "in her colour").toBe(residentColour(RESIDENT));
     expect(traffic.setCarDoor(RESIDENT, 1), "it is hers: her door is set").toBe(true);
     expect(field.doors[hers], "her door").toBe(1);
-    expect(traffic.carForClip(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "asked again: it is there").toBe(true);
-    expect(traffic.carForClip(RESIDENT + 1, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "the space is hers: refused to another").toBe(false);
+    expect(traffic.clipSpot(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "asked again: it is there").toBe(spot);
+    expect(traffic.clipSpot(RESIDENT + 1, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "the space is hers: refused to another").toBe(-1);
     runSeconds(field, traffic, clock, 1);
     expect(standsAtHerSpace(), "kept through the clip").toBe(true);
     runSeconds(field, traffic, clock, 5);
     expect(standsAtHerSpace(), "put away after the hold").toBe(false);
   });
 
-  // mutation: sed -i '/^    if (this.movers.hasTripFor(resident)) return false;/d' src/game/ai/openworld-traffic/openworld-traffic.ts
+  // mutation: sed -i '/^    if (this.movers.hasTripFor(resident)) return -1;/d' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when her car is on a trip and her clip starts at an empty unseen space, then no car is brought there and the space stays free", () => {
     const field = new FakeField();
     const traffic = makeTraffic(field, { movers: 1, kerb: 4 });
@@ -820,7 +820,7 @@ describe("given kerb cars standing near the local player", () => {
     const spots = traffic.parkingSpots;
     let spot = -1;
     for (let at = 0; at < spots.count; at++) if (spots.stays[at] !== 1 && (spot < 0 || hypot2(spots.x[at]!, spots.z[at]!) > hypot2(spots.x[spot]!, spots.z[spot]!))) spot = at;
-    expect(traffic.carForClip(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "no car stands for her: hers is on the road").toBe(false);
+    expect(traffic.clipSpot(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "no car stands for her: hers is on the road").toBe(-1);
     runSeconds(field, traffic, clock, 1);
     expect(field.cars.some((car, id) => id > 0 && !car.stored && hypot2(car.group.position.x - spots.x[spot]!, car.group.position.z - spots.z[spot]!) < KERB_JITTER_SIDE + 0.1), "nothing stands at that space").toBe(false);
     expect(traffic["context"].taken[spot], "the space stays free").toBe(0);
@@ -845,10 +845,15 @@ describe("given kerb cars standing near the local player", () => {
     traffic["context"].taken[at] = 1;
   }
 
+  /** The space the clip for `resident` at `at` is drawn at, -1 when it is not drawn. */
+  function clipSpaceAt(traffic: OpenWorldTraffic, resident: number, at: number): number {
+    const spots = traffic.parkingSpots;
+    return traffic.clipSpot(resident, spots.x[at]!, spots.z[at]!, spots.yaw[at]!, 0, 0);
+  }
+
   /** Whether the clip for `resident` at `at` is drawn. */
   function clipAt(traffic: OpenWorldTraffic, resident: number, at: number): boolean {
-    const spots = traffic.parkingSpots;
-    return traffic.carForClip(resident, spots.x[at]!, spots.z[at]!, spots.yaw[at]!, 0, 0);
+    return clipSpaceAt(traffic, resident, at) >= 0;
   }
 
   /** The pool car that stands at space `at`, -1 for none. */
@@ -890,7 +895,7 @@ describe("given kerb cars standing near the local player", () => {
     expect([context.taken[spot], context.taken[own]].join("/"), "hers held, her old one free").toBe("1/0");
   });
 
-  // mutation: sed -i '/^    if (this.movers.hasTripFor(resident)) return false;/d' src/game/ai/openworld-traffic/openworld-traffic.ts
+  // mutation: sed -i '/^    if (this.movers.hasTripFor(resident)) return -1;/d' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when her car is on a trip and her claim is at another space, then no clip is drawn and neither her claim nor the holder of the clip's space has moved", () => {
     const field = new FakeField();
     const traffic = makeTraffic(field, { movers: 1, kerb: 4 });
@@ -910,7 +915,7 @@ describe("given kerb cars standing near the local player", () => {
     expect(carAtSpace(field, traffic, spot), "no car was brought").toBe(-1);
   });
 
-  // mutation: sed -i 's/    if (!this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS)) return false;/    this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS);/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  // mutation: sed -i 's/      if (this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS)) {/      if (this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS) || true) {/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when the clip's space is one the player's car is at, so no car may be brought, then no clip is drawn and no claim has moved", () => {
     const { field, traffic, clock } = kerbWorld();
     runSeconds(field, traffic, clock, 4);
@@ -930,19 +935,79 @@ describe("given kerb cars standing near the local player", () => {
   });
 
   // mutation: sed -i '/^    if (standing\[own\] !== STANDING.none || standing\[spot\] !== STANDING.none) return false;/d' src/game/ai/openworld-traffic/openworld-traffic.ts
-  it("when a car stands at her claimed space, then her clip at another space is not drawn and no claim has moved", () => {
+  it("when a car stands at her claimed space and her pick is another resident's empty claim, then her clip is drawn at the space her car stands in, no claim has moved and no car is brought to her pick", () => {
     const { field, traffic, clock } = kerbWorld();
     runSeconds(field, traffic, clock, 4);
     const { spot, own } = twoSpaces(traffic);
     const RESIDENT = 7;
     const OTHER = 9;
     expect(clipAt(traffic, RESIDENT, own), "control: a car is brought to her claimed space").toBe(true);
-    expect(carAtSpace(field, traffic, own), "control: it stands there").toBeGreaterThan(0);
+    const hers = carAtSpace(field, traffic, own);
+    expect(hers, "control: it stands there").toBeGreaterThan(0);
     claim(traffic, OTHER, spot);
-    expect(clipAt(traffic, RESIDENT, spot), "no clip: her car stands elsewhere").toBe(false);
+    expect(clipSpaceAt(traffic, RESIDENT, spot), "the clip is where her car stands").toBe(own);
     const context = traffic["context"];
     expect([context.residentSpot[RESIDENT], context.residentSpot[OTHER]].join("/"), "no claim moved").toBe(`${own}/${spot}`);
-    expect(carAtSpace(field, traffic, spot), "no car was brought").toBe(-1);
+    expect(carAtSpace(field, traffic, spot), "no car was brought to her pick").toBe(-1);
+    expect(carAtSpace(field, traffic, own), "her own car, not another").toBe(hers);
+  });
+
+  // mutation: sed -i 's/ <= SPACE_OCCUPIED_M) return false;/ <= -1) return false;/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when the player's own car is parked in a kerb space, then that space is not free for a lease, and the next one is", () => {
+    const { field, traffic } = kerbWorld();
+    const { spot, own } = twoSpaces(traffic);
+    const spots = traffic.parkingSpots;
+    expect(traffic.spotIsFree(spot), "control: empty before").toBe(true);
+    field.cars[0]!.stand(spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!);
+    expect(traffic.spotIsFree(spot), "the player's car is in it").toBe(false);
+    expect(traffic.spotIsFree(own), "another space is free").toBe(true);
+  });
+
+  describe("given two residents of one place whose picks are one space", () => {
+    /** Residents 1 and 5 pick the same of the four spaces by their door: 1 holds it, and 5's car has taken another. */
+    function collidingResidents() {
+      const field = quietField();
+      const feed = emptyFeed(8);
+      const traffic = makeTraffic(field, { movers: 0, kerb: 4 }, feed, [homeAt(KERB_HOME.x, KERB_HOME.z)]);
+      const clock = new Clock();
+      feed.parked.count = 2;
+      for (const [at, resident] of [1, 5].entries()) {
+        feed.parked.resident[at] = resident;
+        feed.parked.place[at] = 0;
+      }
+      runSeconds(field, traffic, clock, 1);
+      const near = new Int32Array(KERB_CANDIDATES);
+      const pick = near[1 % kerbSpotsNear(traffic.parkingSpots, KERB_HOME.x, KERB_HOME.z, near)]!;
+      const fallback = residentSpace(traffic, 5);
+      expect(residentSpace(traffic, 1), "control: 1 holds the pick").toBe(pick);
+      expect(fallback, "control: 5's car is at another space").not.toBe(pick);
+      return { field, traffic, clock, pick, fallback };
+    }
+
+    it("when both get into their cars, then each clip is drawn beside her own car: 1's at the pick, 5's at the space her car took, in her colour, her door opening", () => {
+      const { field, traffic, pick, fallback } = collidingResidents();
+      expect(clipSpaceAt(traffic, 1, pick), "1's clip").toBe(pick);
+      expect(clipSpaceAt(traffic, 5, pick), "5's clip, asked at the brain's pick").toBe(fallback);
+      const first = carAtSpace(field, traffic, pick);
+      const second = carAtSpace(field, traffic, fallback);
+      expect(first, "a car stands at the pick").toBeGreaterThan(0);
+      expect(second, "a car stands at the fallback").toBeGreaterThan(0);
+      expect(field.colours[first], "1's colour at the pick").toBe(residentColour(1));
+      expect(field.colours[second], "5's colour at the fallback").toBe(residentColour(5));
+      expect(traffic.setCarDoor(5, 1), "5's door is set").toBe(true);
+      expect(field.doors[second], "on her own car").toBe(1);
+      expect(field.doors[first], "not on 1's").not.toBe(1);
+    });
+
+    it("when 5's clip is asked again, then it is the same space and the same car: no second car is brought", () => {
+      const { field, traffic, pick, fallback } = collidingResidents();
+      expect(clipSpaceAt(traffic, 1, pick), "1's clip").toBe(pick);
+      expect(clipSpaceAt(traffic, 5, pick), "5's clip").toBe(fallback);
+      const second = carAtSpace(field, traffic, fallback);
+      expect(clipSpaceAt(traffic, 5, pick), "5's clip again").toBe(fallback);
+      expect(carAtSpace(field, traffic, fallback), "the same car").toBe(second);
+      expect(residentSpace(traffic, 5), "her claim has not moved").toBe(fallback);
+    });
   });
 
   /** Every kerb car of the pool standing (after 4 s), an empty unseen space far off, and the eye at the first kerb car: its cars' ids nearest the eye first, and a way to make a car seen. */
@@ -962,7 +1027,7 @@ describe("given kerb cars standing near the local player", () => {
     const seen = new Set<number>();
     Object.assign(context.sight, { hideGrace: 1, unseenFor: (sightId: number) => (seen.has(sightId) ? 0 : Infinity) });
     const see = (id: number): void => void seen.add(context.sightBase + context.movers + id - kerb.first);
-    const bring = (): boolean => traffic.carForClip(7, traffic.parkingSpots.x[spot]!, traffic.parkingSpots.z[spot]!, traffic.parkingSpots.yaw[spot]!, eyeX, eyeZ);
+    const bring = (): boolean => traffic.clipSpot(7, traffic.parkingSpots.x[spot]!, traffic.parkingSpots.z[spot]!, traffic.parkingSpots.yaw[spot]!, eyeX, eyeZ) >= 0;
     return { field, traffic, spot, ids, see, bring };
   }
 

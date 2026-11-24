@@ -1,3 +1,4 @@
+import { hypot2 } from "../../kernel/physics-core.js";
 import { hash01 } from "../../kernel/scalar.ts";
 import { CAR_STYLES } from "../../vehicle/car-variants.ts";
 import { carDoorSpot, type DoorSpot } from "../civilians/civilian-car-door.ts";
@@ -41,6 +42,8 @@ type TrafficSize = { movers: number; kerb: number; patrol: number; ambulance: nu
 
 /** Crowd seconds a clip holds the kerb car brought for it: the clip's 2.5 s and the walk off. */
 const CLIP_HOLD_SECONDS = 4;
+/** A car within this far (m) of a kerb space's middle occupies it (a lease put there would stand on it). */
+const SPACE_OCCUPIED_M = 2.5;
 
 /**
  * The open world's cars: real cars of the field that drive its streets (ambient traffic, residents' commutes, patrols), stop at the signals and park in the kerb spaces, and real cars that
@@ -223,23 +226,36 @@ export class OpenWorldTraffic {
     return true;
   }
 
-  /** Whether resident `resident`'s car stands at the kerb space at (x, z, yaw) for a get-in or get-out clip drawn now: one the traffic holds as hers there, or a kerb car brought to that space if it is empty, hers to take and unseen (`KerbCars.bring`). False: the clip is not drawn. */
-  carForClip(resident: number, x: number, z: number, yaw: number, eyeX: number, eyeZ: number): boolean {
+  /**
+   * The kerb space resident `resident`'s car stands in for a get-in or get-out clip drawn now, -1 when the clip is not drawn. (x, z, yaw) is the space the brain puts her car in: it is hers when her car stands there, or when nothing
+   * visibly moves to make it so and a kerb car can be brought to it unseen (`KerbCars.bring`). Her claim may be another space (her pick was a car's when she parked): the clip is then at her claim (`clipAtClaim`).
+   */
+  clipSpot(resident: number, x: number, z: number, yaw: number, eyeX: number, eyeZ: number): number {
     const { residentSpot, taken } = this.context;
     const spot = spotAt(this.parkingSpots, x, z, yaw);
-    if (spot < 0 || resident < 0 || resident >= RESIDENT_CAPACITY) return false;
+    if (spot < 0 || resident < 0 || resident >= RESIDENT_CAPACITY) return -1;
     const own = residentSpot[resident]!;
     // The player took her car: no car of hers stands anywhere (and `CARLESS` is no space to move a claim from).
-    if (own === CARLESS) return false;
-    if (own === spot && this.carIdOf(resident) >= 0) return true;
-    if (own !== spot && (own === -1 ? taken[spot] === 1 : !this.claimMovable(own, spot))) return false;
-    if (this.movers.hasTripFor(resident)) return false;
-    if (!this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS)) return false;
-    if (own !== spot && own !== -1) this.moveClaim(own, spot, resident);
-    residentSpot[resident] = spot;
-    this.claimPlace[resident] = -1;
-    taken[spot] = 1;
-    return true;
+    if (own === CARLESS) return -1;
+    if (own === spot && this.carIdOf(resident) >= 0) return spot;
+    if (this.movers.hasTripFor(resident)) return -1;
+    if (own === spot || (own === -1 ? taken[spot] !== 1 : this.claimMovable(own, spot))) {
+      if (this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS)) {
+        if (own !== spot && own !== -1) this.moveClaim(own, spot, resident);
+        residentSpot[resident] = spot;
+        this.claimPlace[resident] = -1;
+        taken[spot] = 1;
+        return spot;
+      }
+    }
+    return own >= 0 && own !== spot ? this.clipAtClaim(resident, own, spot, eyeX, eyeZ) : -1;
+  }
+
+  /** Her claimed space `own` when her pick `spot` is not hers to take: where her car stands, or, with a car standing at her pick (so it cannot be hers), where one is brought. */
+  private clipAtClaim(resident: number, own: number, spot: number, eyeX: number, eyeZ: number): number {
+    if (this.carIdOf(resident) >= 0) return own;
+    if (this.context.standing[spot] === STANDING.none) return -1;
+    return this.kerb.bring(own, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS) ? own : -1;
   }
 
   /** The resident whose claim holds `spot`, -1 when none does. */
@@ -301,6 +317,18 @@ export class OpenWorldTraffic {
   /** The nearest kerb space to (x, z) no car holds. -1 when none is. */
   nearestSpot(x: number, z: number): number {
     return nearestFreeSpot(this.parkingSpots, x, z, this.context.taken);
+  }
+
+  /** Whether nothing stands at kerb space `spot` and none holds it (a resident's claim, a trip's end): no pool car, and no other car of the field either (a player's, a guest's, a wreck). Once a lease, not per step. */
+  spotIsFree(spot: number): boolean {
+    if (this.context.standing[spot] !== STANDING.none || this.context.taken[spot] !== 0) return false;
+    const spots = this.parkingSpots;
+    const cars = this.context.ports.cars();
+    for (let id = 0; id < cars.length; id++) {
+      const car = cars[id]!;
+      if (!car.stored && hypot2(car.group.position.x - spots.x[spot]!, car.group.position.z - spots.z[spot]!) <= SPACE_OCCUPIED_M) return false;
+    }
+    return true;
   }
 
   /**

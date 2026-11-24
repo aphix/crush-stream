@@ -11,11 +11,13 @@ const TRAFFIC_RESIDENT = 9;
 /** A traffic with kerb spaces along x = 0, 40, 110, 200 and 300 m, a patrol-sized lease at car 1 and a driven car at index 2. */
 function fakeTraffic() {
   const calls: string[] = [];
+  const occupied = new Set<number>();
   const leased: LeasedCar = { index: PATROL_CAR_INDEX, arrived: false, driver: null };
   const driven: LeasedCar = { index: TRAFFIC_CAR_INDEX, arrived: false, driver: null };
   const sirens = (carIndex: number, on: boolean): void => void calls.push(`sirens ${carIndex} ${on}`);
   const traffic: TrafficApi = {
     parkingSpots: { count: 5, x: [0, 40, PATROL_START_DISTANCE, 200, 300], z: [0, 0, 0, 0, 0] },
+    spotIsFree: (spot) => !occupied.has(spot),
     snaps: [blankAiCar(0), blankAiCar(1), blankAiCar(2)],
     patrolPool: 2,
     driverDoorSpotOf: () => false,
@@ -39,7 +41,7 @@ function fakeTraffic() {
     endEvade: (carIndex) => void calls.push(`endEvade ${carIndex}`),
     residentOf: (carIndex) => (carIndex === TRAFFIC_CAR_INDEX ? TRAFFIC_RESIDENT : -1),
   };
-  return { traffic, calls, leased, driven, sirens };
+  return { traffic, calls, leased, driven, sirens, occupied };
 }
 
 describe("the patrol cars' cars come from the traffic's pool", () => {
@@ -48,6 +50,20 @@ describe("the patrol cars' cars come from the traffic's pool", () => {
     const ports = new TrafficPatrolPorts(traffic, sirens);
     expect(ports.lease(0, 0), "the first slot").toBe(0);
     expect(calls[0], "from the 110 m space to space 0, urgent, for no resident").toBe("spawn -1 2 0 true");
+  });
+
+  it("starts the lease from the free space nearest a patrol start away: a space with a car in it or held is passed over", () => {
+    const { traffic, calls, sirens, occupied } = fakeTraffic();
+    occupied.add(2);
+    const ports = new TrafficPatrolPorts(traffic, sirens);
+    expect(ports.lease(0, 0), "a lease").toBe(0);
+    expect(calls[0], "from the 40 m space, not the 110 m one a car stands in").toBe("spawn -1 1 0 true");
+    occupied.add(1);
+    occupied.add(3);
+    expect(new TrafficPatrolPorts(traffic, sirens).lease(0, 0), "the lease is from the last free space").toBe(0);
+    expect(calls[1], "from the 300 m space").toBe("spawn -1 4 0 true");
+    occupied.add(4);
+    expect(new TrafficPatrolPorts(traffic, sirens).lease(0, 0), "no free space: no lease").toBe(-1);
   });
 
   it("drives the leased car through its handle and gives it back when let go", () => {
