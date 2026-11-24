@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { pooledCar } from "../../contact/crash-scenarios.test-util.ts";
 import { DOOR, type Frontage, STOOP } from "../../world/openworld/openworld-facade-solids.ts";
 import { Stoops } from "../../world/openworld/openworld-stoops.ts";
 import { harness, NODE_SPACING, runFor, STEP_SECONDS, type Harness } from "./crime-fixture.test-util.ts";
@@ -31,6 +32,22 @@ describe("given a foot cop standing on a rowhome's stoop and others on the sidew
     const run = stoopRun();
     runFor(run, 2 * STEP_SECONDS);
     for (let blow = 0; blow < 3; blow++) run.scene.punchCop(DOOR_X - 1, 0, 1, 0, run.now);
+    const strikes = run.scene.takeCopStrikes();
+    expect(strikes.length, "one throw").toBe(1);
+    expect(strikes[0]!.y, "where the thrown cop starts (m)").toBeCloseTo(STOOP.sill, 2);
+  });
+});
+
+describe("given a guest whose host punched down the cop on a rowhome's landing", () => {
+  it("when it throws him from the host's knock, then he starts at the sill's height, as the host's throw of him does", () => {
+    const run = harness([DOOR_X, DOOR_X + 3, DOOR_X], { authority: false });
+    run.scene.stoops = new Stoops([HOUSE], [DOOR_NODE]);
+    const car = pooledCar(0);
+    car.group.position.set(DOOR_X + 20, 0, 0);
+    run.cars.push(car);
+    runFor(run, 2 * STEP_SECONDS);
+    run.scene.hearCopDown(0, run.now);
+    runFor(run, 2 * STEP_SECONDS);
     const strikes = run.scene.takeCopStrikes();
     expect(strikes.length, "one throw").toBe(1);
     expect(strikes[0]!.y, "where the thrown cop starts (m)").toBeCloseTo(STOOP.sill, 2);

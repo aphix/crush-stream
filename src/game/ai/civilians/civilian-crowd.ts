@@ -619,12 +619,17 @@ export class CivilianCrowd {
     this.postBatch();
   }
 
+  /** Where a throw of `resident` starts at (x, z): the ground and the stoop step she was last drawn on (`feetY`), so she is not thrown from inside the steps. */
+  private groundUnder(resident: number, x: number, z: number): number {
+    return activeGround().heightAt(x, z) + this.poses.feetY[resident]!;
+  }
+
   /** The player's blow fells `resident` (a knock-out): hidden, thrown along (dirX, dirZ), the knock in the log. */
   knockOut(resident: number, seconds: number, dirX: number, dirZ: number): void {
     if (!this.authority || this.poses.shown[resident] === 0) return;
     const x = this.poses.x[resident]!;
     const z = this.poses.z[resident]!;
-    this.knockDown(resident, seconds, felled(resident, x, activeGround().heightAt(x, z), z, dirX, dirZ, blankStrike()));
+    this.knockDown(resident, seconds, felled(resident, x, this.groundUnder(resident, x, z), z, dirX, dirZ, blankStrike()));
     // A punch lands between steps: posted now, the brain hides her before the next step's poses (as `noteWallHit` posts), not a frame after.
     this.postBatch();
   }
@@ -634,7 +639,7 @@ export class CivilianCrowd {
     if (!this.authority || this.poses.shown[resident] === 0) return;
     const x = this.poses.x[resident]!;
     const z = this.poses.z[resident]!;
-    const strike = felled(resident, x, activeGround().heightAt(x, z), z, dirX, dirZ, blankStrike());
+    const strike = felled(resident, x, this.groundUnder(resident, x, z), z, dirX, dirZ, blankStrike());
     strike.vx = Math.fround(dirX * speed);
     strike.vz = Math.fround(dirZ * speed);
     this.knockDown(resident, seconds, strike);
@@ -710,7 +715,7 @@ export class CivilianCrowd {
     const dx = x[victim]! - x[striker]!;
     const dz = z[victim]! - z[striker]!;
     const far = hypot2(dx, dz);
-    return felled(victim, x[victim]!, activeGround().heightAt(x[victim]!, z[victim]!), z[victim]!, far > 0 ? dx / far : 0, far > 0 ? dz / far : 1, out);
+    return felled(victim, x[victim]!, this.groundUnder(victim, x[victim]!, z[victim]!), z[victim]!, far > 0 ? dx / far : 0, far > 0 ? dz / far : 1, out);
   }
 
   /** Car `carIndex` (velocity (vx, vz), `carSpeed`) coming at the civilian (toX, toZ from it) is noted for `raiseDangers` (`comingAt`: a car driving down the street is not). */
@@ -806,7 +811,7 @@ export class CivilianCrowd {
         nearest = carIndex;
       }
       if (nearest < 0) continue;
-      this.struck.push(fell(cars[nearest]!, nearest, resident, this.pose.x, activeGround().heightAt(this.pose.x, this.pose.z), this.pose.z, this.pose.dirX, this.pose.dirZ, blankStrike()));
+      this.struck.push(fell(cars[nearest]!, nearest, resident, this.pose.x, this.groundUnder(resident, this.pose.x, this.pose.z), this.pose.z, this.pose.dirX, this.pose.dirZ, blankStrike()));
     }
     this.heardKnocks = waiting;
   }

@@ -288,10 +288,12 @@ export class CrimeScene {
     }
   }
 
+  /** A guest's throw of the cop the host's knock named: from where he is drawn (the host's record, lifted by `liftHeard`: the host throws him from there too), else from where the law has him. */
   private throwFromNearest(cop: number, cars: readonly DeformableCar[]): void {
     const { walkers } = this.law;
-    const x = walkers.x[cop]!;
-    const z = walkers.z[cop]!;
+    const drawn = this.copPoses.shown[cop] === 1;
+    const x = drawn ? this.copPoses.x[cop]! : walkers.x[cop]!;
+    const z = drawn ? this.copPoses.z[cop]! : walkers.z[cop]!;
     let nearest = -1;
     let nearestGap = Infinity;
     for (let carIndex = 0; carIndex < cars.length; carIndex++) {
@@ -301,7 +303,7 @@ export class CrimeScene {
       nearest = carIndex;
     }
     if (nearest < 0) return;
-    this.copStrikes.push(fell(cars[nearest]!, nearest, cop, x, activeGround().heightAt(x, z), z, detSin(walkers.yaw[cop]!), detCos(walkers.yaw[cop]!), blankStrike()));
+    this.copStrikes.push(fell(cars[nearest]!, nearest, cop, x, drawn ? this.copGround(cop) : activeGround().heightAt(x, z), z, detSin(walkers.yaw[cop]!), detCos(walkers.yaw[cop]!), blankStrike()));
   }
 
   /** A car ran a red light at (x, z). A cop who saw it (in range and in sight past the buildings, on foot or in a car) sends a patrol car after it; true when one was sent. */
