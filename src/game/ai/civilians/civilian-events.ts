@@ -187,11 +187,22 @@ function forEachHousemate(state: CityState, home: number, except: number, act: (
   }
 }
 
+/** A wrecked place shuts for `CLOSED_DAYS`: its staff are laid off, and everyone in it (or on the way to it, who decides on arriving) decides again at once, so no stay planned before the wreck goes on inside a shut place. */
 function closePlace(state: CityState, place: number, tick: number): void {
   setClosedUntil(state, place, tick + CLOSED_DAYS * TICKS_PER_GAME_DAY);
   for (let resident = 0; resident < state.capacity; resident++) {
-    if (intAt(state, resident, RESIDENT_INT.alive) === 0 || intAt(state, resident, RESIDENT_INT.work) !== place) continue;
-    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.flags] |= FLAG.laidOff;
+    if (intAt(state, resident, RESIDENT_INT.alive) === 0) continue;
+    const base = resident * RESIDENT_INT_STRIDE;
+    const flags = state.ints[base + RESIDENT_INT.flags]!;
+    if (state.ints[base + RESIDENT_INT.place] === place && (flags & FLAG.custody) === 0) {
+      const decideAt = Math.max(state.ints[base + RESIDENT_INT.arriveTick]!, tick);
+      if (state.ints[base + RESIDENT_INT.nextDecisionTick]! > decideAt) {
+        state.ints[base + RESIDENT_INT.nextDecisionTick] = decideAt;
+        markDirty(state, resident);
+      }
+    }
+    if (state.ints[base + RESIDENT_INT.work] !== place) continue;
+    state.ints[base + RESIDENT_INT.flags] |= FLAG.laidOff;
     noteEvent(state, resident, EVENT_CODE.workplaceClosed, place, tick);
   }
 }
