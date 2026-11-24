@@ -38,6 +38,8 @@ const testCases = [
   { it: "when the lobby has its players and the viewer is a guest, then the chip says it waits for the host", change: { gate: { min: 2, kind: "race", course: "oval", playlist: [], players: 2 } }, expected: "Room K7M2QX9P · 2/8 · waiting for the host" },
   { it: "when a public lobby has its players and counts down, then the chip counts down to the start", change: { public: "race", lobby: 9, gate: { min: 2, kind: "race", course: "oval", playlist: [], players: 2 } }, expected: "Joined · 2/8 · starts in 9 s" },
   { it: "when a campaign is between rounds, then the chip counts down to the next round", change: { public: "campaign", nextIn: 41 }, expected: "Joined · 2/8 · next round in 41 s" },
+  { it: "when a guest is in an open-world room, then the chip says the open world, not that he waits for the host: the city has no Go", change: { gate: { min: 1, kind: "openworld", course: "openworld", playlist: [], players: 2 } }, expected: "Room K7M2QX9P · 2/8 · open world" },
+  { it: "when a host is alone in its open-world room, then the chip says the open world, not that it is ready to go", change: { role: "host", peers: [], gate: { min: 1, kind: "openworld", course: "openworld", playlist: [], players: 1 } }, expected: "Room K7M2QX9P · 1/8 · open world" },
 ] as const satisfies readonly { it: string; change: Partial<NetStatus>; expected: string }[];
 
 describe("given a session's status", () => {

@@ -29,6 +29,8 @@ export function sessionText(status: NetStatus, seconds = true): string {
   if (status.nextIn !== null) return `${where} · ${players}/${ROOM_MAX} · ${seconds ? `next round in ${status.nextIn} s` : "between rounds"}`;
   const gate = status.gate;
   if (gate) {
+    // The open world has no Go and no count to wait for: its lobby is the game.
+    if (gate.kind === "openworld") return `${where} · ${players}/${ROOM_MAX} · open world`;
     const need = gate.min - gate.players;
     const more = `${need} more${status.role === "host" && players === 1 ? (need === 1 ? " player" : " players") : ""}`;
     if (need > 0) return status.role === "host" && players === 1 ? `Waiting for ${more}` : `${where} · ${players}/${ROOM_MAX} · waiting for ${more}`;
