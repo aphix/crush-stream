@@ -289,11 +289,11 @@ export function planRoom(state: CityState, resident: number, place: number, work
   const walkIn = Math.sqrt(inX * inX + inZ * inZ) * perMetre;
   const walkOn = Math.sqrt(onX * onX + onZ * onZ) * perMetre;
   const stay = AISLE_WALK[WALK.stay]!;
-  ROOM.buy = Math.min(ROOM.buy, stay);
-  const spare = stay - ROOM.buy;
-  const fit = walkIn + walkOn > spare ? Math.max(0, spare) / (walkIn + walkOn) : 1;
+  // The walks come first: a stay too short for them squeezes them, never the walk in to nothing (she would pop in at her lane); the buying takes what is left.
+  const fit = walkIn + walkOn > stay ? stay / (walkIn + walkOn) : 1;
   ROOM.walkIn = walkIn * fit;
   ROOM.walkOn = walkOn * fit;
+  ROOM.buy = Math.min(ROOM.buy, Math.max(0, stay - ROOM.walkIn - ROOM.walkOn));
   return true;
 }
 
