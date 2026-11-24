@@ -17,8 +17,6 @@ const LEAN = 0.03;
 const QUIET_S = 0.07;
 /** Fixed-step reads of the frame: the tilt is taken by an eased share per step (`TILT_SEAT_TIME` 0.05 s), 99 % of it after these. */
 const TILT_CALLS = 60;
-/** The spin (rad/s) of a truck climbing a slab, long after its last contact row. */
-const CLIMB_SPIN = 2;
 /** Sim seconds of quiet past `PLANT_QUIET` (0.2). */
 const PLANTED_S = 0.25;
 
@@ -95,14 +93,5 @@ describe("given a quiet wreck whose masses lean against its level frame", () => 
     lean(s);
     for (let i = 0; i < TILT_CALLS; i++) s.d.followGroup(s.group, s.vel, s.omega, STEP);
     expect(Math.abs(s.group.rotation.x - planted), "the pitch the lean added to the frame (rad)").toBeLessThan(1e-6);
-  });
-
-  it("when the wreck has been quiet 0.07 s but its frame still turns at 2 rad/s (a truck climbing a slab), then the frame keeps the pose it has", () => {
-    const s = levelWreck();
-    for (let i = 0; i < QUIET_S * FINE_HZ + 1; i++) stepWreck(s, STEP);
-    lean(s);
-    s.omega.set(0, 0, CLIMB_SPIN);
-    for (let i = 0; i < TILT_CALLS; i++) s.d.followGroup(s.group, s.vel, s.omega, STEP);
-    expect(Math.abs(s.group.rotation.x), "the frame's pitch (rad)").toBeLessThan(1e-6);
   });
 });

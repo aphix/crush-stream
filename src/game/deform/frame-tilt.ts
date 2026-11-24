@@ -8,8 +8,6 @@ export const TILT_SEAT_QUIET = 0.045;
 export const TILT_SEAT_TIME = 0.05;
 /** The most (rad) one call turns the frame about either axis: a plane through a few lifts is not a pose. */
 const TILT_SEAT_MAX = 0.05;
-/** A frame spinning faster than this (rad/s) is not at rest: a truck climbing a slab pitches at 2 rad/s long after its last contact row, and the tilt and the planted hubs' ride there carried its hubs into the slab and pitched it over on its nose. */
-export const AT_REST_SPIN = 0.3;
 
 const _centre = new THREE.Vector3();
 const _turned = new THREE.Vector3();
@@ -18,10 +16,9 @@ const _dq = new THREE.Quaternion();
 /**
  * The frame takes the tilt its body masses have in it (mass-weighted plane through their lifts, `local.y - rest.y` over rest x, z): the rigid step poses the frame
  * from tyres and hull while the cloud keeps its heights, which reads as lifted wing and rail points. It turns about the masses' centroid so none moves in the world.
- * Returns whether it turned; `group`'s world matrix is then updated, the caller reads the masses' locals again. A frame spinning at `spin` over `AT_REST_SPIN` is not at rest: it keeps its pose.
+ * Returns whether it turned; `group`'s world matrix is then updated, the caller reads the masses' locals again.
  */
-export function seatTilt(masses: readonly MassNode[], group: THREE.Object3D, share: number, spin: THREE.Vector3): boolean {
-  if (spin.lengthSq() > AT_REST_SPIN * AT_REST_SPIN) return false;
+export function seatTilt(masses: readonly MassNode[], group: THREE.Object3D, share: number): boolean {
   let mass = 0;
   let rx = 0;
   let rz = 0;

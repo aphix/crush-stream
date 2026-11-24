@@ -395,33 +395,3 @@ describe("given a wreck after a squeeze's deep crush is over, one hub coasted 0.
     expect(off, `the hub stands ${off.toFixed(3)} m in plan off where the deep crush left it`).toBeLessThanOrEqual(HUB_KEPT_M);
   });
 });
-
-/** How far (m) the cell stands off its seat along the car's x, and the step (s) one read takes: the seat follows it at `SEAT_SPEED` (1 m/s). */
-const CELL_OFF_M = 0.05;
-const SEAT_READ_S = 0.01;
-/** The spin (rad/s) of a truck climbing a slab, long after its last contact row. */
-const CLIMB_SPIN = 2;
-
-/** How far (m) along x the first planted hub moves in one read of a planted wreck whose cell stands off its seat, the frame turning at `spin` rad/s about the world z. */
-function hubRide(spin: number): number {
-  const d = wreck();
-  const group = new THREE.Group();
-  group.updateMatrixWorld();
-  d.stepStructure(PLANT_QUIET + 0.05, new THREE.Quaternion());
-  const cell = d.masses.find((q) => q.name === "cell")!;
-  cell.world.x = cell.rest.x + CELL_OFF_M;
-  const hub = d.masses.find((q) => q.hub && !q.popped)!;
-  const before = hub.world.x;
-  d.followGroup(group, new THREE.Vector3(), new THREE.Vector3(0, 0, spin), SEAT_READ_S);
-  return hub.world.x - before;
-}
-
-describe("given a planted wreck whose cell stands 5 cm off its seat", () => {
-  it("when its frame is read, then its planted hubs ride the seat step: they move 1 cm with it", () => {
-    expect(hubRide(0), "the hub's move along x (m)").toBeCloseTo(SEAT_READ_S, 6);
-  });
-
-  it("when its frame is read while it turns at 2 rad/s (a truck climbing a slab), then its planted hubs stay where they stand", () => {
-    expect(hubRide(CLIMB_SPIN), "the hub's move along x (m)").toBe(0);
-  });
-});
