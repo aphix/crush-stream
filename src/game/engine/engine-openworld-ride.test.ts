@@ -18,8 +18,9 @@ const SHUT_RAD = 0.02;
 const HELD_CREEP_M = 0.5;
 const DROVE_OFF_M = 3;
 const BESIDE_DOOR_M = 1.5;
-/** How far (m) out from his own car's door a parked car is set. */
+/** How far (m) out from his own car's door a parked car is set, and how far behind that door's line: the rig sets cars facing across the street, and from the start place the corner's bollards (at -71.1, -29.6) stand 3.4 m ahead of a car set level with his door, so two seconds of driving stopped on them at 2.2 m. Set back, the car has the street's width ahead. */
 const SIDE_M = 5;
+const BEHIND_M = 4;
 /** How far (m) out from his driver's door a neighbour stands in a room's line of cars: inside the door's 2.6 m clearance, its body clear of his. */
 const NEIGHBOUR_OUT_M = 1.5;
 /** The player's own actor, and another player's. */
@@ -39,7 +40,7 @@ describe("given the real engine in the open world, its player on foot with an em
     for (let index = 1; index < rig.cars().length; index++) {
       if (!world().canEnter(index) || table().takenMask(index) !== 0) continue;
       world().adopt(index);
-      const spot = rig.beside(own, SIDE_M, 0);
+      const spot = rig.beside(own, SIDE_M, -BEHIND_M);
       rig.place(index, spot.x, spot.z);
       return index;
     }
