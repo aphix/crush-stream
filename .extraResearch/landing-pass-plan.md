@@ -112,7 +112,11 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
     this pass added reads the hatchback's third drop at 47.6 mm against 40.9 at most without the ridge lines (the same at
     the union's head, with the gates): a todoRow in `stack-column.test.ts`; the SUV and the truck keep the row.
 - Reviews are kept in `~/crash-wt/landing/reviews/<Lane>-review.json`. A lane's commits written after its review get a reviewer
-  too, before the gate.
+  too, before the gate. An audit at the end found commits that had reached the union with none (the derby unstick, the seven
+  hub-creep picks, DeformSeat's, BarRoom's and GuestEdge's commits after their reviews, Main's own): two reviewers read them
+  all (`Union-main-commits-review.json`, `Union-audit-review.json`): every one stands, nothing blocks the landing.
+- The old working folder `play-handoff/` was checked once more against the union (`~/crash-wt/landing/OldFindings-scout.json`):
+  all 17 priority 0 and 1 findings of its lane reviews are fixed in the code; its fact sheets hold nothing owed.
 - Speed measurements owed (the worker, a quiet hour): PerfPath, CageWasm, LooseBatch (a browser derby with many torn parts).
 - **The worker.** `~/crash-wt/.worker-off` is set. humm-tauri asked at 20:56Z to keep heavy runs off it until their done
   mail (a timing run of theirs, about 70 minutes). After it: mail first, one job at a time, silence is no.
@@ -154,13 +158,17 @@ Still open, each a lane of its own when memory allows:
 - **A stacked car's belly 10 to 15 cm into the roof under it** (found by ContactRows at -0.6 m along a sedan's roof): the roof
   surface the sim reads (`CarSurfaces.sync`, `cage.fields.top` as last published) stands under the cage's top there. A lane
   prints, along that line, each sample's place in the patch box, the height the surface reads and `cage.fields.top`.
-- **Small leftovers from the reviews** (one sweep lane before the gate): a guest that never heard a record for a cop throws
-  him at the map's origin if he goes down within 2 s of the join (`crime-scene.ts` `throwFromNearest`: a per-cop heard bit);
-  the far kinds row should check each course's own biome table (`scenery-far-flag.test.ts`); a row that a rigid exchange on
-  a leaning, rolling wreck adds no kinetic energy (`move-as-one-body.test.ts`: today's row has no exchange);
-  `docs/UNIFIED_CONTACT.md` line 559 (the pitched over-read reads 0.500 m since `bandGrazes`); the office meeting-room chairs
-  that no aisle reaches (nothing walks to them today); a medic is never named by a guest's hook; medics are not seen by
-  traffic.
+- **Small leftovers from the reviews**, for one lane after this landing (the first four change the simulation, so they come
+  with a REPLAY entry and a digest re-derivation): one "stands at rest" test for the frame's tilt, the planted hubs' ride and
+  the hub hold, computed once a pass (today: spin for two, hub height for the third, `standsOnHubs` once a held hub);
+  `REST_SPIN` is a third copy of `REST_SPEED`'s value (one constant in `kernel/constants.ts`); the monster at 38 and 40 km/h
+  ends with its front hubs inside the slab, on `main` too (todo rows); the derby lift-off judged by how far the escape moved
+  the car, not by its top speed; then drawing and tests only: the hold's re-round of the normals limited to what the hold
+  rewrote; a guest's car's interior fitted after `adoptHubPlaces` (one frame late today); the stand-spot walk row choosing
+  seats by the venue table; the doorway rows labelled as guards; a civilian or cop drawn as a figure is named by a guest at
+  speed 0 (`engine-openworld-named.ts` `personAt`); `net/codec.ts`'s `MSG` comment omits `bodies` and `foot`; the office
+  meeting-room chairs no aisle reaches (nothing walks to them); a medic is never named by a guest's hook; medics are not
+  seen by traffic; `LooseBatch`'s rows were never seen red (before it merges).
 - **Not looked at:** a shot at a dummy's first-use cost (`pickDoll` builds 0.6 MB of tables on a mesh's first shot; no row
   bounds a warm shot); 21 of 22 open-world engine test files boot phone-class (60 residents, 1 cruiser, 3 bodies), so arrest
   rides with the cops' own cars are exercised by one file only; Needle's worker path in a production build, never run in a
