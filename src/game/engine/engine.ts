@@ -496,7 +496,7 @@ export class CrashEngine extends EngineGarage {
         now: () => performance.now() / 1000,
         self: () => this.ownCar(),
         guest: () => this.net.client,
-        face: (dx, dz) => this.onFoot.faceToward(dx, dz),
+        face: (dx, dz) => this.onFoot.steer.faceToward(dx, dz),
         layGun: (x, y, z, out) => this.layGun(x, y, z, out),
         sendAct: (kind, arg, eye, dir, name) => this.net.sendAct(kind, arg, eye, dir, name),
         seatedCar: (actor) => this.desk.table.carOf(actor),

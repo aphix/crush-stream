@@ -104,3 +104,5 @@ export const CAR_NUDGE_SPEED = 1;
 export const WALKER_BEARING_STEPS = 1024;
 /** A resident is in at most one push event per this many crowd seconds (a game hour): the log is 512 triples on the wire. */
 export const PUSH_LOCKOUT_SECONDS = 60;
+/** The pusher, striker or partner of an event that was no civilian: a player's walker, a car, or nobody. */
+export const NOT_A_CIVILIAN = -1;

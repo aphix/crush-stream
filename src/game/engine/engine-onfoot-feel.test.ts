@@ -111,7 +111,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(stop.metres, "metres to a stand").toBeLessThanOrEqual(STOP_WITHIN_M);
   });
 
-  // mutation: sed -i 's/^      this.smoothSide = intent.strafe;/      this.smoothSide = 0;/' src/game/engine/engine-onfoot.ts
+  // mutation: sed -i 's/^      this.smoothSide = intent.strafe;/      this.smoothSide = 0;/' src/game/engine/engine-onfoot-steer.ts
   it("when he gets out and holds forward and right from a stand with the view held still, then his heading is that diagonal off the view's from the first frame and never curves", () => {
     rig.getIn();
     rig.getOut();

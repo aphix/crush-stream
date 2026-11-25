@@ -89,7 +89,7 @@ describe("given the real engine on the open world, the player on foot on the par
     expect(rig.engine["onFoot"].prompt(), "the prompt").toBe("Under arrest");
   });
 
-  // mutation: sed -i 's/    this.ledX = x;//' src/game/engine/engine-onfoot.ts
+  // mutation: sed -i 's/    this.ledX = x;//' src/game/engine/engine-onfoot-steer.ts
   it("when his cop leads him five metres from his car, then his walker walks there on its own", () => {
     busted();
     const target = rig.beside(car(), LED_M, 0);
@@ -196,7 +196,7 @@ describe("given the real engine on the open world, the player on foot on the par
       expect(rig.phase(), "back at the wheel").toBe("inCar");
     });
 
-    // mutation: sed -i -e 's/^    const ahead = -detSin(view.orbitAngle);/    const ahead = view.look.x - this.host.camera.position.x;/' -e 's/^    const side = -detCos(view.orbitAngle);/    const side = view.look.z - this.host.camera.position.z;/' src/game/engine/engine-onfoot.ts
+    // mutation: sed -i -e 's/^    const ahead = -detSin(view.orbitAngle);/    const ahead = view.look.x - this.host.camera.position.x;/' -e 's/^    const side = -detCos(view.orbitAngle);/    const side = view.look.z - this.host.camera.position.z;/' src/game/engine/engine-onfoot-steer.ts
     it("when he is set down with forward and right held and the view held still, then his heading keeps one way off the view's through the camera's blend in from the patrol car, and he walks 45 degrees right of where the camera looks", () => {
       busted();
       law().taken(1);

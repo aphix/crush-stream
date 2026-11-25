@@ -67,7 +67,7 @@ describe("given a host crowd with the bodega's dog", () => {
     expect(struck[0]!.guard, "the dog struck").toBe(dog);
     expect(crowd.poses.shown[dog], "hidden").toBe(0);
     expect(loggedPairs(crowd), "the knock logged").toContain(`${EVENT_KIND.knock}:${dog}`);
-    expect(crowd["ambulanceDue"][dog], "no ambulance call due for it, whoever is about").toBe(Infinity);
+    expect(crowd.aftermath["ambulanceDue"][dog], "no ambulance call due for it, whoever is about").toBe(Infinity);
     const until = seconds + AMBULANCE_DELAY_SECONDS * 2;
     for (; seconds < until; seconds += 1) crowd.step(seconds, [], true);
     expect(loggedPairs(crowd), "no ambulance").not.toContain(`${EVENT_KIND.ambulance}:${dog}`);
