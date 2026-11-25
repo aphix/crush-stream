@@ -310,6 +310,15 @@ describe(`given a sedan built round and then crushed by a ${GENTLE_KPH} km/h wal
     expect(still > 500 && still < crushed.body.geometry.getAttribute("normal").count - 500, `${still} vertices stayed in place`).toBeTruthy();
   });
 
+  it("when a tyre hold has its shells drawn round again three times with no skin written between, then the body's drawn normals stay the ones the written frame drew", () => {
+    const normals = crushed.body.geometry.getAttribute("normal").array;
+    const drawn = Float32Array.from(normals);
+    for (let k = 0; k < 3; k++) crushed["roundHeldShells"]();
+    let worst = 0;
+    for (let i = 0; i < drawn.length; i++) worst = Math.max(worst, Math.abs(normals[i]! - drawn[i]!));
+    expect(worst, "the most a drawn normal's component moved").toBeLessThan(1e-5);
+  });
+
   it("when the crashed car is reset, then it is drawn with the intact car's normals again", () => {
     crushed.resetVisual();
     expect(largestGap(shellsOf(crushed).map(normalsOf), shellsOf(intact).map(normalsOf))).toBe(0);
