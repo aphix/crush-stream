@@ -63,6 +63,16 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 - **Landed 2026-11-25 (about 00:30Z):** `main` = `play/union` (NET 73, REPLAY 254), fast-forwarded from 5989b47a0 after the
   gate below, and pushed to the Windows mount (`scripts/wsl-push.sh`); the owner pushes to GitHub. What follows in this
   section is the record of how it got there; sections 4 to 6 hold what is still open.
+- **A REGRESSION ON `main`, FIX WRITTEN AND NOT YET RUN (2026-11-25, 03:20Z).** The first landing's shading fix (TiltDraw,
+  b92dab303) re-rounds a near car's shells after a tyre hold that re-lifted the skin on a frame the skin was not written, and
+  it rounds normals that are already rounded: measured on `main` with a sedan tapped at 10 km/h, one such re-round moves a
+  drawn normal's component by up to 0.70, five by 1.14. A crushed car near the camera whose wheels keep moving can have its
+  shading drift frame by frame until its skin is next written. The old branch's own fix of the same hole (eb0fca73d) said
+  rounding is not idempotent and recomputed the shell's raw normals first; the lane and two reviews missed it, and Main found
+  it by reading that old commit. The fix is on branch `play/HoldRound` (b9d0836ef, worktree `~/worktrees/HoldRound`,
+  `vehicle/held-round.ts`): typecheck, lint and boundaries clean, NOT RUN (the box was over its swap line and humm-tauri had
+  not answered). To land it: run `vehicle/contour-smoothing.test.ts` (its new row must be green, and red on `main`'s
+  `car.ts`), `car-tyre-skin.test.ts`, `skin-lod.test.ts`, then the `vehicle` folder; a reviewer; then fast-forward.
 - **Second landing, 2026-11-25 (about 03:00Z): the crash cam's follow-up** (lane ReelView2, reviewed five times, the last
   with no finding; camera and effects only: no simulation, replay or wire change). The reel and the live crash cam test their
   line to a second point under the aim for every kind of hit (`present/hit-foot.ts`, `engine/reel-hit-foot.ts`); a live
