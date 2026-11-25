@@ -10,7 +10,7 @@ import type { ReelHud, SaveResult, ViewBox } from "../match/types.ts";
 import { mulberry32 } from "../world/placements.ts";
 import { AFTERS, OPENERS, pickShot, RUN_INS, ShotCam, type Shot as PickedShot, type ShotKind } from "../present/shot-cam.ts";
 import { CINE, type Sight } from "../present/spectate-cam.ts";
-import { aimSink, crashCamEnd, CUTS, hitAim, laterHits, type CrashCam, type CrashHold } from "../present/engine-cine.ts";
+import { aimSink, crashCamEnd, CUTS, hitAim, hitFoot, laterHits, type CrashCam, type CrashHold } from "../present/engine-cine.ts";
 import { overheadPose } from "../present/highlight-cam.ts";
 import { ClipSim, NO_RIDE, type ReplayScene } from "./engine-replay.ts";
 import { SPARK_MIN_IMPULSE, TIMELINE_HZ } from "./constants.ts";
@@ -253,6 +253,7 @@ type Solo = Prepared & { startAt: number; back: (ended: boolean) => void; passes
 const NO_CARS: readonly DeformableCar[] = [];
 const _c = new THREE.Vector3();
 const _n = new THREE.Vector3();
+const _foot = new THREE.Vector3();
 
 /**
  * The results reel (docs/HIGHLIGHTS.md): from `startAt` (this browser's `performance.now()` seconds) it loops
@@ -711,9 +712,11 @@ export class ReelDirector {
     const cam = this.shotCam;
     cam.frame(shot, car, this.host.sight(car), clip.x, clip.z, sim.cars);
     if (!shot.hit) return;
-    // The shot the cars meet in: its spot must see where they will meet (the record says where), else it is the chase.
+    // The shot the cars meet in: its spot must see where they will meet (the record says where) and the lowest point the reel judges there, else it is the chase.
     const still = this.host.still();
-    if (!cam.sees(still, hitAim(_c, clip.x, sim.cars[clip.firstA]!.group.position.y, clip.z, still))) cam.found = false;
+    this.firstHit(p);
+    hitFoot(_foot, _c.x, _c.y, _c.z, still);
+    if (!cam.sees(still, hitAim(_c, clip.x, sim.cars[clip.firstA]!.group.position.y, clip.z, still)) || !cam.sees(still, _foot)) cam.found = false;
   }
 
   /** Clip `p`'s first impact: `_c` its recorded point (its height from the record, `ClipHit.y`, not the first car's: the crash cam begins well before the hit, with the car still on its way up a kicker), `_n` the flat line the cars meet along (the car's heading if it hit alone). */
@@ -755,7 +758,7 @@ export class ReelDirector {
       l.thrown[k] = thrown ? 1 : 0;
       if (thrown) l.at[k]!.set(x, y, z);
       else hitAim(l.at[k]!, x, y, z, s);
-      l.sink[k] = thrown ? 0 : aimSink(l.at[k]!, y);
+      l.sink[k] = thrown ? 0 : aimSink(l.at[k]!, hitFoot(_foot, x, y, z, s));
     };
     for (let k = 1; k < clip.hits.length; k++) {
       const h = clip.hits[k]!;

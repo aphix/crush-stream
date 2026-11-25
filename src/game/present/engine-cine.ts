@@ -63,6 +63,7 @@ const _v = new THREE.Vector3();
 const _side = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 const _eye = new THREE.Vector3();
+const _foot = new THREE.Vector3();
 /** The hit holds still: `camUsable`'s target velocity for a crash-cam eye. */
 const STILL = { x: 0, y: 0, z: 0 };
 /** Crash cam: it aims this high (m) over the ground at the impact. */
@@ -126,9 +127,21 @@ export function hitAim(out: THREE.Vector3, x: number, y: number, z: number, sigh
   return out.set(x, (g === NO_FLOOR ? y : Math.max(g, y)) + AIM_UP, z);
 }
 
-/** How far (m) a hit's own point (its height `y` over `AIM_UP`) sits under its aim `at`: `hitAim` aims over the road, not over a car sunk into it (0.11 m at a city wall hit), so a line that clears the aim can pass under the lip of a wall that hides the hit. */
-export function aimSink(at: THREE.Vector3, y: number): number {
-  return Math.max(0, at.y - (y + AIM_UP));
+/** A contact's recorded height is its overlapping nodes' mean, up to this far (m) over the car's origin. */
+const CONTACT_ABOVE_ORIGIN = 0.7;
+/** The sight's own tolerance (`CLEAR.pad` is 0.25 m): a foot this near the aim is the same point. */
+const SINK_MIN = 0.01;
+
+/** The lowest point the reel may judge a hit at (x, z), recorded at height `y`: `AIM_UP` over the car's origin, which sits no lower than the road or the car and no more than `CONTACT_ABOVE_ORIGIN` under `y`. */
+export function hitFoot(out: THREE.Vector3, x: number, y: number, z: number, sight: Sight | null): THREE.Vector3 {
+  const g = sight ? sight.ground.heightAt(x, z, y + 1) : 0;
+  return out.set(x, Math.max(g === NO_FLOOR ? y : Math.min(g, y), y - CONTACT_ABOVE_ORIGIN) + AIM_UP, z);
+}
+
+/** How far (m) a hit's `foot` (`hitFoot`) sits under its aim `at` (`hitAim`); 0 under `SINK_MIN`. */
+export function aimSink(at: THREE.Vector3, foot: THREE.Vector3): number {
+  const drop = at.y - foot.y;
+  return drop > SINK_MIN ? drop : 0;
 }
 
 /** `camUsable` for an eye on the hit at `at`, whose own point sits `sink` m under it (`aimSink`): the line to that point is clear too. */
@@ -190,9 +203,9 @@ export class CrashPick {
     this.s = null;
   }
 
-  /** Spend up to `units` `camUsable` calls (about 0.15 ms each) on the search; true when it is finished. */
+  /** Spend up to `units` `camUsable` calls (about 0.15 ms each) on the search, a hit with a foot under its aim costing two (the second sight line); true when it is finished. */
   run(units: number): boolean {
-    for (; this.s && units > 0; units--) this.step();
+    for (; this.s && units > 0; units -= this.sink > 0 ? 2 : 1) this.step();
     return this.s === null;
   }
 
@@ -381,7 +394,7 @@ export class CrashCam {
     this.camN.normalize();
     // On a course the pick runs over the lead-in frames (`direct`): no eye on any cut until it is done.
     this.camReach.fill(sight ? 0 : 1);
-    if (sight) this.pick.begin(sight, this.camAt, this.camN, this.camReach, TURNS.length, aimSink(this.camAt, contact.y));
+    if (sight) this.pick.begin(sight, this.camAt, this.camN, this.camReach, TURNS.length, aimSink(this.camAt, hitFoot(_foot, contact.x, contact.y, contact.z, sight)));
     else this.pick.cancel();
     this.camT = 0;
     this.held = -1;
@@ -404,7 +417,7 @@ export class CrashCam {
     hitAim(this.nextAt, contact.x, contact.y, contact.z, sight);
     this.nextN.set(normal.x, 0, normal.z);
     if (this.nextN.lengthSq() < 1e-6) this.nextN.copy(this.camN);
-    this.retarget(this.nextN.normalize(), sight, aimSink(this.nextAt, contact.y));
+    this.retarget(this.nextN.normalize(), sight, aimSink(this.nextAt, hitFoot(_foot, contact.x, contact.y, contact.z, sight)));
   }
 
   /** The pick for the axis at `nextAt` (its own point `sink` m under it, `aimSink`) along `n`, run over the next frames by `direct`, which moves the cam onto it once it is done. */
