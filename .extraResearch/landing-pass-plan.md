@@ -71,9 +71,11 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
   `present`, `engine` and `scenes` test folders (438 files) and the seven long files of `engine` and `present`, green but
   one new row of its own that read 2 cuts against 3 once: the row left the hitting car 3 m over the flat-ground hit and at
   the hit on the deck, and at four of sixteen car headings the car hides one cut's eye; staged with the car at the hit in
-  both cases it reads the same at all sixteen. The rest of the gate was not run again (nothing outside those folders
-  imports the changed files). One of Main's runs there was ended by a SIGTERM that was neither its memory cap nor Main's;
-  the sender is not found (humm-tauri asked).
+  both cases it reads the same at all sixteen. The `contact` and `match` folders, which also import the changed
+  `scenes/engine-props.ts`, were run after the landing: green (52 files). Not run again: the rest of the gate; the `vehicle`,
+  `deform` and `world` folders use `contact/crash-scenarios.test-util.ts`, which imports that file (the change there adds a
+  `wall` flag to the strongest contact, cleared each step). One of Main's runs was ended by a SIGTERM that was neither its
+  memory cap nor Main's; the sender is not found (humm-tauri asked).
 - `play/union` (`~/worktrees/land`, NET 73, REPLAY 254). Merged, each reviewed (its later commits too), static checks clean
   and its own test files green on the union: PerfPath, SmallCuts, CopStoops, GuestEdge, BarRoom, ContactRows, DeformSeat,
   ShutPlaces, CarsSeePlayers, Sweep, HubRules, KerbClaims, and three fixes of reds the gate found: ReplayTilt (97fe97786),
