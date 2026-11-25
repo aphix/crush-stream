@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { WALL_HIT } from "../present/hit-foot.ts";
+import { CAR_HIT, WALL_HIT, type HitSource } from "../present/hit-foot.ts";
 import { Ground, setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
@@ -62,4 +62,33 @@ describe("given the real engine's sandbox, a car against a wall on flat ground a
     expect(flat, "cuts with an eye on flat ground").toBeGreaterThan(0);
     expect(deck, "cuts with an eye on the deck").toBe(flat);
   });
+
+  /** The height (m) a hit's debris starts at, read off the emitter after the sandbox begins its cinematic at height `y` with `source`: the debris leaves 0.08 m over where it is asked to start. */
+  const debrisStart = (y: number, source: Readonly<HitSource>): { debris: number; sparksLow: number; sparksHigh: number } => {
+    engine["debris"].reset();
+    engine["sparks"].reset();
+    engine["beginCinematic"](new THREE.Vector3(SPOT.x, y, SPOT.z), new THREE.Vector3(1, 0, 0), 12, false, source);
+    const debris = engine["debris"].snapshot().items;
+    const sparks = engine["sparks"].snapshot().items.map((spark) => spark.y);
+    expect(debris.length, "debris pieces thrown").toBeGreaterThan(0);
+    expect(sparks.length, "sparks thrown").toBeGreaterThan(0);
+    return { debris: debris[0]!.y, sparksLow: Math.min(...sparks), sparksHigh: Math.max(...sparks) };
+  };
+
+  const effectCases = [
+    { it: "when a car meets a wall with its origin on flat ground, then its debris and sparks start 0.4 m over the origin", y: 0, source: WALL_HIT, expectedStart: 0.4 },
+    { it: "when a car meets a wall with its origin on the deck 3 m up, then its debris and sparks start 0.4 m over the origin", y: DECK_HEIGHT, source: WALL_HIT, expectedStart: DECK_HEIGHT + 0.4 },
+    { it: "when two cars meet at a contact 0.5 m up, then their debris and sparks start at the contact", y: 0.5, source: CAR_HIT, expectedStart: 0.5 },
+    { it: "when two cars meet at a contact on the deck 3.5 m up, then their debris and sparks start at the contact", y: DECK_HEIGHT + 0.5, source: CAR_HIT, expectedStart: DECK_HEIGHT + 0.5 },
+  ];
+  for (const testCase of effectCases) {
+    it(testCase.it, () => {
+      setGround(testCase.y >= DECK_HEIGHT ? new Deck() : null);
+      const start = debrisStart(testCase.y, testCase.source);
+      setGround(null);
+      expect(start.debris, "the debris's start height (m)").toBeCloseTo(testCase.expectedStart + 0.08, 3);
+      expect(start.sparksLow, "the lowest spark's start (m)").toBeGreaterThanOrEqual(testCase.expectedStart - 1e-6);
+      expect(start.sparksHigh, "the highest spark's start (m)").toBeLessThanOrEqual(testCase.expectedStart + 0.12 + 1e-6);
+    });
+  }
 });
