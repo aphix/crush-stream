@@ -65,9 +65,17 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
   section is the record of how it got there; sections 4 to 6 hold what is still open.
 - `play/union` (`~/worktrees/land`, NET 73, REPLAY 254). Merged, each reviewed (its later commits too), static checks clean
   and its own test files green on the union: PerfPath, SmallCuts, CopStoops, GuestEdge, BarRoom, ContactRows, DeformSeat,
-  ShutPlaces, CarsSeePlayers, Sweep, HubRules, KerbClaims; their worktrees are removed. Under them: ae0007683 (a derby driver
-  that cannot get rolling lifts off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251). The crash digests
-  were re-derived once (`whole-digest`, `car-smooth`). The six `// mutation:` comments the pass had added are stripped.
+  ShutPlaces, CarsSeePlayers, Sweep, HubRules, KerbClaims, and three fixes of reds the gate found: ReplayTilt (97fe97786),
+  TiltDraw (b92dab303 with Main's near-car gate) and ReelView (a8f7ad5f1); their worktrees are removed. Under them: ae0007683
+  (a derby driver that cannot get rolling lifts off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251). The
+  crash digests were re-derived once (`whole-digest`, `car-smooth`). The six `// mutation:` comments the pass had added are
+  stripped.
+- **Landed with a cost not measured** (the owner's rule is never worse for performance): PerfPath's two cuts are bit-equal by
+  review and its micro-bench read about 23 % on `projectPath`, but the whole simulation's speed with them was not measured;
+  the crash cam's second sight line on a sunk hit (ReelView) runs on each of a pick's samples outside its budget and was not
+  timed (lane ReelView2 counts it in the budget and has timed the pick: 1.4 to 1.9 times for a car-to-car hit); the tyre
+  hold's re-round of the shells' normals on a near car (TiltDraw) was not timed. All three are measured with CageWasm and
+  LooseBatch when the worker is ours.
 - **The gate runs on this box** (the worker is not ours: see below), on a detached tree `~/worktrees/gate-union`:
   `~/crash-wt/local-gate.sh <tree> <log dir> [first] [last]` runs the worker gate's own 14 shards (8 of parity, app and
   scripts without the GL file; 6 of the long AI suite), one vitest at a time with two workers under a 4 GB cap; logs and
