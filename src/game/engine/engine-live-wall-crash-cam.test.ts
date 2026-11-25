@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { WALL_HIT } from "../present/engine-cine.ts";
+import { WALL_HIT } from "../present/hit-foot.ts";
 import { Ground, setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";

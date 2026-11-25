@@ -7,7 +7,7 @@ import city from "../world/tracks/city.json" with { type: "json" };
 import { phaseClock } from "../match/phase.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
-import { aimSink, hitFoot } from "../present/engine-cine.ts";
+import { aimSink, hitFoot } from "../present/hit-foot.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import type { World } from "../world/race-world.test-util.ts";
 import { FLIGHT_S, ReelDirector, type ReelHost } from "./engine-highlights.ts";
