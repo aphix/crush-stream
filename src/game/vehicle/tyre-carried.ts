@@ -178,9 +178,16 @@ export function findCaps(c: Carried, tyre: { r: number; halfW: number }, gap: nu
   for (let p = 0; p < cap.length; p++) {
     const y = rep[p]! * 3 + 1;
     cap[p] = Math.max(ownLift[p]!, Math.max(rest[y]!, tyreTop) - written[y]!);
-    if (lift[p]! > cap[p]!) lift[p] = cap[p]!;
+    if (lift[p]! > cap[p]!) lowerToCap(c, p);
   }
   forgetTouched(c);
+  carryLift(c, false);
+}
+
+/** Point `p`'s lift is cut to its cap, and it is owed a carry: the points above it stand at least their `drop` short of its capped lift, not of the one it had. */
+function lowerToCap(c: Carried, p: number): void {
+  c.lift[p] = c.cap[p]!;
+  c.dirty[p] = 1;
 }
 
 /** Every point is capped: none is owed one. */
@@ -189,18 +196,22 @@ function forgetTouched(c: Carried): void {
   c.touchedN = 0;
 }
 
-/** Lowers to its `cap` the lift of each point `carryLift` touched since the last cap (every other lift is as `findCaps` left it, under its cap). */
+/**
+ * Lowers to its `cap` the lift of each point `carryLift` touched since the last cap (every other lift is as `findCaps` left it, under its cap), then carries from the points it lowered.
+ * The cap cuts what a carry raised a point by, never the order the carry keeps: rows the crush wrote stacked at one spot under a tyre's top stay over one another by their `drop`, not all on the cap.
+ */
 export function capAtRest(c: Carried): void {
   const { lift, cap, touched } = c;
   for (let k = 0; k < c.touchedN; k++) {
     const p = touched[k]!;
-    if (lift[p]! > cap[p]!) lift[p] = cap[p]!;
+    if (lift[p]! > cap[p]!) lowerToCap(c, p);
   }
   forgetTouched(c);
+  carryLift(c, false);
 }
 
-/** Every lift and push carried up the mesh's edges, lowest point first: the higher end of an edge stands at most its `drop` short of the lower end's. Only from points `dirty` (raised since they last carried): lifts only rise within a hold, so a point that has not risen has nothing new to carry. */
-export function carryLift(c: Carried): void {
+/** Every lift and push carried up the mesh's edges, lowest point first: the higher end of an edge stands at most its `drop` short of the lower end's. `record`: list the points it raises for the next cap (a carry from capped points is not capped again). Only from points `dirty` (raised since they last carried): lifts only rise within a hold, so a point that has not risen has nothing new to carry. */
+export function carryLift(c: Carried, record = true): void {
   const { start, to, drop, lift, push, pushDir, dirty, dirtyWords, mark, touched } = c;
   for (let word = 0; word < dirtyWords.length; word++) {
     if (dirtyWords[word] === 0) continue;
@@ -211,7 +222,7 @@ export function carryLift(c: Carried): void {
       const up = lift[p]!;
       const out = push[p]!;
       if (up <= 0 && out <= 0) continue;
-      if (mark[p] === 0) {
+      if (record && mark[p] === 0) {
         mark[p] = 1;
         touched[c.touchedN++] = p;
       }
@@ -221,7 +232,7 @@ export function carryLift(c: Carried): void {
         if (carried > lift[q]!) {
           lift[q] = carried;
           dirty[q] = 1;
-          if (mark[q] === 0) {
+          if (record && mark[q] === 0) {
             mark[q] = 1;
             touched[c.touchedN++] = q;
           }

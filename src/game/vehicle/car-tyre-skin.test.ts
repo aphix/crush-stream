@@ -295,6 +295,69 @@ describe("given a pickup whose fender point a crush carries into its front tyre,
   });
 });
 
+/** A column's written points stand over the tyre's top at this plan spot: on the hub's line across, this share of the radius ahead of it. */
+const COLUMN_AHEAD = 0.1;
+/** The lowest written point of the column stands this far (m) over the hub, and each next one its rest rise higher: all inside the tyre, under its top. */
+const COLUMN_BASE_M = 0.05;
+/** A step of the column rises at least this far (m) at rest, and is steeper than 1 : 1.5 along the skin, so the hold's own drop is the share of the rise it keeps (`ROW_KEEP`). */
+const COLUMN_RISE_M = 0.04;
+const COLUMN_STEEP = 1.5;
+/** Of the written spacing between two column points, the least the drawn skin keeps: the hold's `ROW_KEEP` (0.1), less rounding. */
+const COLUMN_KEEPS = 0.09;
+
+/** Three welded points of a crushed fender that stand one over another at one spot inside the tyre, their written spacing their rest rise: their drawn heights (m, car frame, lowest first) after the hold, and their written ones. */
+function columnHeld(): { drawn: number[]; written: number[] } {
+  const car = buildCar("sedan", "sedan");
+  const mesh = car["body"] as THREE.Mesh;
+  const lift = CLASSES[carClass(car)].lift;
+  car.group.updateMatrixWorld(true);
+  const skin = new TyreSkin(car.frame, mesh, car.deform.restSkin, true);
+  skin.hold(car.group, car.wheels, 0, lift, true);
+  const toCar = new THREE.Matrix4().multiplyMatrices(car.group.matrixWorld.clone().invert(), mesh.matrixWorld);
+  const hub = car.wheels[FRONT_RIGHT_WHEEL]!.getWorldPosition(new THREE.Vector3()).applyMatrix4(car.group.matrixWorld.clone().invert());
+  const { weld, start, to } = skin["edges"] as { weld: Int32Array; start: Int32Array; to: Int32Array };
+  const rep = (skin["neighbours"] as { rep: Int32Array }).rep;
+  const over = skin["over"][FRONT_RIGHT_WHEEL]!;
+  const rest = car.deform.restSkin;
+  const restY = (p: number): number => rest[rep[p]! * 3 + 1]!;
+  const steep = (p: number, q: number): boolean => {
+    const rise = restY(q) - restY(p);
+    return rise >= COLUMN_RISE_M && Math.hypot(rest[rep[q]! * 3]! - rest[rep[p]! * 3]!, rise, rest[rep[q]! * 3 + 2]! - rest[rep[p]! * 3 + 2]!) <= COLUMN_STEEP * rise;
+  };
+  let chain: number[] | null = null;
+  for (let p = 0; p < start.length - 1 && chain === null; p++) {
+    for (let e = start[p]!; e < start[p + 1]! && chain === null; e++) {
+      const q = to[e]!;
+      for (let f = start[q]!; f < start[q + 1]! && chain === null; f++) {
+        const r = to[f]!;
+        if (steep(p, q) && steep(q, r) && [p, q, r].every((x) => !Number.isNaN(over[rep[x]!]!))) chain = [p, q, r];
+      }
+    }
+  }
+  must(chain !== null, "fixture: three welded points over the front-right tyre, one steeply over the next");
+  const written = chain.map((p) => COLUMN_BASE_M + restY(p) - restY(chain![0]!));
+  const positions = mesh.geometry.getAttribute("position");
+  const place = new THREE.Vector3();
+  for (const [k, p] of chain.entries()) {
+    place.set(hub.x, hub.y + written[k]!, hub.z + COLUMN_AHEAD * car.frame.rig.tyre.r).applyMatrix4(toCar.clone().invert());
+    for (let v = 0; v < positions.count; v++) if (weld[v] === p) positions.setXYZ(v, place.x, place.y, place.z);
+  }
+  skin.hold(car.group, car.wheels, 0, lift, true);
+  const drawn = chain.map((p) => place.fromBufferAttribute(positions, rep[p]!).applyMatrix4(toCar).y - hub.y);
+  return { drawn, written };
+}
+
+describe("given a column of crushed fender points written one over another at one spot inside a sedan's front tyre", () => {
+  it("when the skin is held off the tyres, then the column is drawn in its written order, each point at least a tenth of its written spacing over the one below", () => {
+    const { drawn, written } = columnHeld();
+    for (const k of [1, 2]) {
+      const spacing = written[k]! - written[k - 1]!;
+      const apart = drawn[k]! - drawn[k - 1]!;
+      expect(apart, `point ${k} stands ${(apart * 1000).toFixed(1)} mm over point ${k - 1}, of ${(spacing * 1000).toFixed(0)} mm written`).toBeGreaterThanOrEqual(COLUMN_KEEPS * spacing);
+    }
+  });
+});
+
 /** Owner: interior and engine shapes showed through a crushed hatch's bonnet. A corner hit folds the bonnet down onto the dash and the bay (drawn once the bonnet springs open). */
 const HOOD_COVER_KPH = [55, 65, 70] as const;
 /** The share of the car's width on the wall, from its left: the struck corner folds the bonnet down. */
