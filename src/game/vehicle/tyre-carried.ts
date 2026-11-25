@@ -12,6 +12,9 @@ const CARRIED_MIN = 0.01;
 /** How far (m) over a tyre's surface a carried vertex must come to be held: the skin a lift there moves with a frame's crush to spare; all of `REACH` held every crushed nose point and doubled the hold. */
 const CARRIED_REACH = 0.1;
 
+/** Bytes of a hold's `dirty` read at once to pass the clean ones: few of a hold's points are dirty. */
+export const DIRTY_WORD = Uint32Array.BYTES_PER_ELEMENT;
+
 /** `v` to the nearest multiple of `step`. */
 export function onGrid(v: number, step: number): number {
   return Math.round(v / step) * step;
@@ -44,6 +47,9 @@ export type Carried = {
   scratch: Int32Array;
   /** Per welded rest point, the most lift `capAtRest` lets it keep this hold (`findCaps`). */
   cap: Float64Array;
+  /** The vertices written `CARRIED_MIN` off their rest (the first `movedN`, ascending), listed each time the skin is written: the only ones a tyre can carry. */
+  moved: Int32Array;
+  movedN: number;
   written: Float32Array;
   rest: Float32Array;
   liftable: Uint8Array;
@@ -53,20 +59,42 @@ export type Carried = {
   ownLift: Float32Array;
   lift: Float32Array;
   rep: Int32Array;
+  push: Float32Array;
+  pushDir: Float32Array;
+  dirty: Uint8Array;
+  dirtyWords: Uint32Array;
+  start: Int32Array;
+  to: Int32Array;
+  drop: Float32Array;
+  /** The points `carryLift` processed or raised since the last cap (the first `touchedN`, each once by `mark`): the only ones a cap can lower. */
+  touched: Int32Array;
+  touchedN: number;
+  mark: Uint8Array;
 };
 
 /** The carried set's buffers for a skin of `vertices` vertices and `points` welded points, over the hold's tables `tables`. */
-export function newCarried(vertices: number, points: number, tables: Pick<Carried, "written" | "rest" | "liftable" | "over" | "wheelNow" | "heldAt" | "ownLift" | "lift" | "rep">): Carried {
-  return { restInside: new Uint8Array(vertices), at: [], n: new Int32Array(4), scratch: new Int32Array(vertices), cap: new Float64Array(points), ...tables };
+export function newCarried(vertices: number, points: number, tables: Omit<Carried, "restInside" | "at" | "n" | "scratch" | "cap" | "moved" | "movedN" | "touched" | "touchedN" | "mark">): Carried {
+  return { restInside: new Uint8Array(vertices), at: [], n: new Int32Array(4), scratch: new Int32Array(vertices), cap: new Float64Array(points), moved: new Int32Array(vertices), movedN: 0, touched: new Int32Array(points), touchedN: 0, mark: new Uint8Array(points), ...tables };
+}
+
+/** Lists into `c.moved` the vertices written `CARRIED_MIN` off their rest, ascending; how many. */
+function listMoved(c: Carried): number {
+  const { written, rest, moved } = c;
+  let n = 0;
+  for (let v = 0, i = 0; i < written.length; v++, i += 3) {
+    if (Math.abs(written[i]! - rest[i]!) + Math.abs(written[i + 1]! - rest[i + 1]!) + Math.abs(written[i + 2]! - rest[i + 2]!) >= CARRIED_MIN) moved[n++] = v;
+  }
+  return n;
 }
 
 /**
  * Each standing tyre's carried set, from the skin as last written and the wheels now (`wheelNow`): the vertices the crush carried to within `CARRIED_REACH` over the tyre's top half
  * (a fender resting farther ahead, carried back onto the tyre, stood through it unheld), held at `REACH` so they keep the full gap; only a vertex written `CARRIED_MIN` off its rest
- * counts, and none while the skin is uncrushed. The last set is put back first, so the set never depends on what earlier holds read. Returns the wheels (bit w) whose set changed.
+ * counts, and none while the skin is uncrushed. The last set is put back first, so the set never depends on what earlier holds read. Returns the wheels (bit w) whose set changed. `skinWritten`: the skin was written since the last call, so the vertices it moved are listed again.
  */
-export function admitCarried(c: Carried, tyre: { r: number; halfW: number }, count: number, gone: number, crushed: boolean): number {
-  const { written, rest, restInside, liftable, scratch: next } = c;
+export function admitCarried(c: Carried, tyre: { r: number; halfW: number }, count: number, gone: number, crushed: boolean, skinWritten: boolean): number {
+  const { written, restInside, liftable, scratch: next, moved } = c;
+  if (crushed && skinWritten) c.movedN = listMoved(c);
   const e = c.wheelNow;
   let changed = 0;
   for (let w = 0; w < count; w++) {
@@ -98,7 +126,9 @@ export function admitCarried(c: Carried, tyre: { r: number; halfW: number }, cou
       const hy = e[o + 4]!;
       const hz = e[o + 5]!;
       // Plan test first: `FALL` carries the tyre's surface on past the tread, where most of a crushed nose stands under it.
-      for (let v = 0, i = 0; i < written.length; v++, i += 3) {
+      for (let m = 0; m < c.movedN; m++) {
+        const v = moved[m]!;
+        const i = v * 3;
         const dx = written[i]! - hx;
         const dz = written[i + 2]! - hz;
         const ahead = dx * fx + dz * fz;
@@ -106,7 +136,6 @@ export function admitCarried(c: Carried, tyre: { r: number; halfW: number }, cou
         const dy = written[i + 1]! - hy;
         const along = dx * ax + dy * ay + dz * az;
         if (Math.abs(along) >= reach || !Number.isNaN(over[v]!) || (restInside[v]! >> w) & 1) continue;
-        if (Math.abs(written[i]! - rest[i]!) + Math.abs(written[i + 1]! - rest[i + 1]!) + Math.abs(written[i + 2]! - rest[i + 2]!) < CARRIED_MIN) continue;
         const up = ux * dx + uy * dy + uz * dz;
         if (up > 0 && up - Math.sqrt(r * r - ahead * ahead) + FALL * Math.max(0, Math.abs(along) - halfW) < CARRIED_REACH) next[n++] = v;
       }
@@ -125,11 +154,11 @@ export function admitCarried(c: Carried, tyre: { r: number; halfW: number }, cou
 }
 
 /**
- * Each point's cap (`cap`): no carried, sag or levelled lift raises it over the higher of where it rested and the standing tyres' top plus `gap` over them; its own tyre lift stays whole.
+ * Each point's cap (`cap`): no carried, sag or levelled lift raises it over the higher of where it rested and the standing tyres' top plus `gap` over them; its own tyre lift stays whole. Each lift is lowered to its cap as it is found.
  * One top for every point keeps the cap rising with rest height, so it keeps the rest order `carryLift` holds: a per-point tyre folded rows the crush moved over a tyre.
  */
 export function findCaps(c: Carried, tyre: { r: number; halfW: number }, gap: number, wheels: number, gone: number): void {
-  const { cap, ownLift, rest, written, heldAt, rep } = c;
+  const { cap, ownLift, rest, written, heldAt, rep, lift } = c;
   let tyreTop = -Infinity;
   for (let w = 0; w < wheels; w++) {
     if ((gone >> w) & 1) continue;
@@ -140,11 +169,61 @@ export function findCaps(c: Carried, tyre: { r: number; halfW: number }, gap: nu
   for (let p = 0; p < cap.length; p++) {
     const y = rep[p]! * 3 + 1;
     cap[p] = Math.max(ownLift[p]!, Math.max(rest[y]!, tyreTop) - written[y]!);
+    if (lift[p]! > cap[p]!) lift[p] = cap[p]!;
   }
+  forgetTouched(c);
 }
 
-/** Lowers each point's lift to its `cap`. */
+/** Every point is capped: none is owed one. */
+function forgetTouched(c: Carried): void {
+  for (let k = 0; k < c.touchedN; k++) c.mark[c.touched[k]!] = 0;
+  c.touchedN = 0;
+}
+
+/** Lowers to its `cap` the lift of each point `carryLift` touched since the last cap (every other lift is as `findCaps` left it, under its cap). */
 export function capAtRest(c: Carried): void {
-  const { lift, cap } = c;
-  for (let p = 0; p < lift.length; p++) if (lift[p]! > cap[p]!) lift[p] = cap[p]!;
+  const { lift, cap, touched } = c;
+  for (let k = 0; k < c.touchedN; k++) {
+    const p = touched[k]!;
+    if (lift[p]! > cap[p]!) lift[p] = cap[p]!;
+  }
+  forgetTouched(c);
+}
+
+/** Every lift and push carried up the mesh's edges, lowest point first: the higher end of an edge stands at most its `drop` short of the lower end's. Only from points `dirty` (raised since they last carried): lifts only rise within a hold, so a point that has not risen has nothing new to carry. */
+export function carryLift(c: Carried): void {
+  const { start, to, drop, lift, push, pushDir, dirty, dirtyWords, mark, touched } = c;
+  for (let word = 0; word < dirtyWords.length; word++) {
+    if (dirtyWords[word] === 0) continue;
+    // A byte set below by an earlier point of this word is read here, after it.
+    for (let p = word * DIRTY_WORD; p < (word + 1) * DIRTY_WORD; p++) {
+      if (dirty[p] === 0) continue;
+      dirty[p] = 0;
+      const up = lift[p]!;
+      const out = push[p]!;
+      if (up <= 0 && out <= 0) continue;
+      if (mark[p] === 0) {
+        mark[p] = 1;
+        touched[c.touchedN++] = p;
+      }
+      for (let e = start[p]!; e < start[p + 1]!; e++) {
+        const q = to[e]!;
+        const carried = up - drop[e]!;
+        if (carried > lift[q]!) {
+          lift[q] = carried;
+          dirty[q] = 1;
+          if (mark[q] === 0) {
+            mark[q] = 1;
+            touched[c.touchedN++] = q;
+          }
+        }
+        const carriedOut = out - drop[e]!;
+        if (carriedOut > push[q]!) {
+          push[q] = carriedOut;
+          dirty[q] = 1;
+          for (let a = 0; a < 3; a++) pushDir[q * 3 + a] = pushDir[p * 3 + a]!;
+        }
+      }
+    }
+  }
 }

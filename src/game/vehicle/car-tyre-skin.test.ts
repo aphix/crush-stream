@@ -269,6 +269,18 @@ describe("given a pickup whose fender point a crush carries into its front tyre,
     seated.skin.hold(seated.car.group, seated.car.wheels, 0, seated.lift, false, [], false, seatsAt(SEATS_BEFORE));
     assertHeldAlike(heldBothWays(seated, Float32Array.from(seated.skin["written"]), false, seatsAt(SEATS_AFTER)), "the front-right hub seat moved back across a centimetre gridline");
   });
+
+  it("when it is held again after only a hub seat moved, then the vertices the crush moved are not listed again, and when the skin is written they are", () => {
+    const { car, lift, skin } = carriedIn();
+    const carried = skin["carried"];
+    expect(carried.movedN, "fixture: the crush moved some vertices").toBeGreaterThan(0);
+    carried.moved[0] = -1;
+    const seats = Float64Array.from({ length: 8 }, (_, k) => (k === FRONT_RIGHT_WHEEL * 2 + 1 ? SEATS_AFTER + SEATS_AFTER : 0));
+    skin.hold(car.group, car.wheels, 0, lift, false, [], false, seats);
+    expect(carried.moved[0], "a hold that only the seat changed: the list stands").toBe(-1);
+    skin.hold(car.group, car.wheels, 0, lift, true, [], false, seats);
+    expect(carried.moved[0], "a hold of a written skin lists them again").not.toBe(-1);
+  });
 });
 
 /** Owner: interior and engine shapes showed through a crushed hatch's bonnet. A corner hit folds the bonnet down onto the dash and the bay (drawn once the bonnet springs open). */

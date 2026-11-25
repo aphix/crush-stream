@@ -6,7 +6,7 @@ import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import type { CarFrame } from "./car-rig.ts";
 import type { PartSeat } from "./part-geometry.ts";
 import { INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
-import { admitCarried, capAtRest, clearOver, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, REACH, type Carried } from "./tyre-carried.ts";
+import { admitCarried, capAtRest, carryLift, clearOver, DIRTY_WORD, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, REACH, type Carried } from "./tyre-carried.ts";
 
 /** How far (m) a held skin point stands over the tyre: the triangles between held points sag under their chords (edges up to 25 cm over a tyre). */
 const TYRE_GAP = 0.05;
@@ -43,8 +43,8 @@ const SAG_LIFT_FROM = 0.25;
 const SAG_PASSES = 4;
 /** Rounding of the rest frame (m), rebuilt from matrices. */
 const REST_SLACK = 1e-3;
-/** The step (m, and in unit rotation components) a wheel's or a part's pose under the skin is read to (`onGrid`): the sag pass lifts up to twice a shortfall, so a millimetre drew the skin 3.3 mm off a hold found every frame (bar 2 mm). Read on a grid, not against where the last hold read it, the hold is a function of the pose now, however often it is drawn. */
-const WHEEL_SLACK = 5e-4;
+/** The step (m, and in unit rotation components) a wheel's or a part's pose under the skin is read to (`onGrid`), so the hold is a function of the pose now however often it is drawn. Rounding leaves a pose at most half a step (5e-4) off, the bound the hold's hysteresis kept: the sag pass lifts up to twice a shortfall, so a millimetre of hysteresis drew the skin 3.3 mm off a hold found every frame (bar 2 mm); a finer grid only re-found the hold more often. */
+const WHEEL_STEP = 1e-3;
 /** The step (m) a wreck's drawn hub seat travel is read to before its over-set is found (`onGrid`): a third of the 3 cm gap the body paint keeps, while a crush carrying a hub 2 mm a frame finds it again every few frames, not each. */
 const SEAT_STEP = 0.01;
 /** The entries a wheel's `overTris` buffer starts with (ints): it doubles when a search needs more, and is then kept. */
@@ -223,8 +223,6 @@ function sagFloor(pos: Float32Array, a: number, b: number, c: number, ya: number
   const toC = gx * (pos[c]! - cx) + gy * (yc - cy) + gz * (pos[c + 2]! - cz);
   return clear + Math.min(toA, toB, toC);
 }
-/** Bytes of `TyreSkin.dirty` read at once to pass the clean ones: few of a hold's points are dirty. */
-const DIRTY_WORD = Uint32Array.BYTES_PER_ELEMENT;
 
 /**
  * The share of two skin points' rest height apart that a lift under the lower one leaves between them: a held point lifts the skin resting above it, less
@@ -460,7 +458,7 @@ export class TyreSkin {
     this.liftedBefore = new Int32Array(rest.length / 3);
     this.near = new Int32Array((2 * rest.length) / 3);
     this.sagSkin = { serial: 0, weld: this.edges.weld, liftable: this.liftable, sagFree: this.sagFree, rest, lift: this.lift, dirty: this.dirty, overTris: this.overTris, overTrisN: this.overTrisN, sagRead: this.sagRead, heldAt: this.heldAt, restHub: this.restHub, restScale: this.overFor, sagTop: this.sagTop, fade: this.fade };
-    this.carried = newCarried(rest.length / 3, points, { written: this.written, rest, liftable: this.liftable, over: this.over, wheelNow: this.wheelNow, heldAt: this.heldAt, ownLift: this.ownLift, lift: this.lift, rep: this.neighbours.rep });
+    this.carried = newCarried(rest.length / 3, points, { written: this.written, rest, liftable: this.liftable, over: this.over, wheelNow: this.wheelNow, heldAt: this.heldAt, ownLift: this.ownLift, lift: this.lift, rep: this.neighbours.rep, push: this.push, pushDir: this.pushDir, dirty: this.dirty, dirtyWords: this.dirtyWords, start: this.edges.start, to: this.edges.to, drop: this.edges.drop });
   }
 
   /** The skin as last written, before this hold lifted any of it; null until a hold has read one. */
@@ -632,7 +630,7 @@ export class TyreSkin {
       this.crushed = movedOffRest(this.written, this.rest);
     }
     if (fresh || wheelMoved || overFound) {
-      const changed = admitCarried(this.carried, this.frame.rig.tyre, wheels.length, gone, this.crushed);
+      const changed = admitCarried(this.carried, this.frame.rig.tyre, wheels.length, gone, this.crushed, fresh);
       for (let w = 0; w < wheels.length; w++) if ((changed >> w) & 1) this.indexOver(w);
     }
     // An uncrushed skin has nothing crushed under it to stand over.
@@ -684,9 +682,8 @@ export class TyreSkin {
       this.needOver(pos, w, scale);
     }
     this.ownLift.set(this.lift);
-    this.carryLift();
+    carryLift(this.carried);
     findCaps(this.carried, this.frame.rig.tyre, this.pushSide ? BODY_TYRE_GAP : TYRE_GAP, wheelCount, out);
-    capAtRest(this.carried);
     this.liftSaggingSkin(pos, wheelCount, out);
     this.levelLift(pos);
     const held = this.applyLift(pos);
@@ -715,7 +712,7 @@ export class TyreSkin {
         } else quiet |= 1 << w;
       }
       if (!sagged) return;
-      this.carryLift();
+      carryLift(this.carried);
       // The sag passes read the lifts as capped: capped after them, a triangle lifted by a corner the cap then lowered sagged back into the tyre.
       capAtRest(this.carried);
     }
@@ -811,7 +808,7 @@ export class TyreSkin {
     return n;
   }
 
-  /** Reads the poses of the shown parts of `under` in the mesh's frame to `WHEEL_SLACK` (`partsShown` of them); true when any differs from `partPoseAt`, or one came or went, and then keeps them there. */
+  /** Reads the poses of the shown parts of `under` in the mesh's frame to `WHEEL_STEP` (`partsShown` of them); true when any differs from `partPoseAt`, or one came or went, and then keeps them there. */
   private notePartPoses(group: THREE.Object3D, under: readonly PartSeat[]): boolean {
     let n = 0;
     for (const seat of under) {
@@ -823,7 +820,7 @@ export class TyreSkin {
       }
       const at = n * 16;
       _part.poses.set(_seat.multiplyMatrices(_mesh, matrixIn(group, seat, _seat)).elements, at);
-      for (let k = at; k < at + 16; k++) _part.poses[k] = onGrid(_part.poses[k]!, WHEEL_SLACK);
+      for (let k = at; k < at + 16; k++) _part.poses[k] = onGrid(_part.poses[k]!, WHEEL_STEP);
       n++;
     }
     let moved = n !== this.partsShown;
@@ -839,7 +836,7 @@ export class TyreSkin {
     this.dirty.fill(0);
     for (let pass = 0; pass < SAG_PASSES && count > 0; pass++) {
       if (!this.liftOverParts(pos, count)) break;
-      this.carryLift();
+      carryLift(this.carried);
     }
     this.partFloor.set(this.lift);
   }
@@ -1161,11 +1158,11 @@ export class TyreSkin {
     return false;
   }
 
-  /** Records wheel `w`'s axle and hub (`e`, null for a wheel gone, NaN) to `WHEEL_SLACK` in `wheelNow`; true when they differ (or came or went) from the hold that last read them (`heldAt`). */
+  /** Records wheel `w`'s axle and hub (`e`, null for a wheel gone, NaN) to `WHEEL_STEP` in `wheelNow`; true when they differ (or came or went) from the hold that last read them (`heldAt`). */
   private noteWheel(w: number, e: ArrayLike<number> | null): boolean {
     let moved = false;
     for (let k = 0; k < HELD_ELEMENTS.length; k++) {
-      const v = e ? onGrid(e[HELD_ELEMENTS[k]!]!, WHEEL_SLACK) : NaN;
+      const v = e ? onGrid(e[HELD_ELEMENTS[k]!]!, WHEEL_STEP) : NaN;
       const at = w * HELD_ELEMENTS.length + k;
       const was = this.heldAt[at]!;
       if (v !== was && !(Number.isNaN(v) && Number.isNaN(was))) moved = true;
@@ -1224,37 +1221,6 @@ export class TyreSkin {
       // Under the hub a point cannot reach the top: a bumper the crush drove into the tyre's front was lifted 0.45 m over it for a frame.
       lift[p] = Math.max(lift[p]!, Math.min(1, Math.max(0, height / (UPPER_FADE * r))) * (1 - leave) * rise * this.fade[w]!);
       dirty[p] = 1;
-    }
-  }
-
-  /** Every lift and push carried up the mesh's edges, lowest point first: the higher end of an edge stands at most its `drop` short of the lower end's. Only from points `dirty` (raised since they last carried): lifts only rise within a hold, so a point that has not risen has nothing new to carry. */
-  private carryLift(): void {
-    const { start, to, drop } = this.edges;
-    const { lift, push, pushDir, dirty, dirtyWords } = this;
-    for (let word = 0; word < dirtyWords.length; word++) {
-      if (dirtyWords[word] === 0) continue;
-      // A byte set below by an earlier point of this word is read here, after it.
-      for (let p = word * DIRTY_WORD; p < (word + 1) * DIRTY_WORD; p++) {
-        if (dirty[p] === 0) continue;
-        dirty[p] = 0;
-        const up = lift[p]!;
-        const out = push[p]!;
-        if (up <= 0 && out <= 0) continue;
-        for (let e = start[p]!; e < start[p + 1]!; e++) {
-          const q = to[e]!;
-          const carried = up - drop[e]!;
-          if (carried > lift[q]!) {
-            lift[q] = carried;
-            dirty[q] = 1;
-          }
-          const carriedOut = out - drop[e]!;
-          if (carriedOut > push[q]!) {
-            push[q] = carriedOut;
-            dirty[q] = 1;
-            for (let a = 0; a < 3; a++) pushDir[q * 3 + a] = pushDir[p * 3 + a]!;
-          }
-        }
-      }
     }
   }
 }
