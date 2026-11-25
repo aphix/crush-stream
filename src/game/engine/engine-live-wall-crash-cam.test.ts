@@ -33,10 +33,15 @@ describe("given the real engine's sandbox, a car against a wall on flat ground a
     setGround(null);
   });
 
-  /** The crash cam's cuts that have an eye after the sandbox begins its cinematic on a wall hit at the car's height `y`, as the step hands it over. */
+  /**
+   * The crash cam's cuts that have an eye after the sandbox begins its cinematic on a wall hit at the car's height `y`, as the step hands it over.
+   * The hitting car stands at the hit in both cases: the crash cam's sight counts the cars, so a car left 3 m over a flat-ground hit (where the row
+   * before this one put it) hid nothing there and could hide an eye on the deck, whichever way the scene's seed had turned it.
+   */
   const cutsWithAnEye = (y: number): number => {
     const crash = engine["cine"].crash;
     crash.reset();
+    engine["world"].cars[0]!.group.position.set(SPOT.x, y, SPOT.z);
     engine["beginCinematic"](new THREE.Vector3(SPOT.x, y, SPOT.z), new THREE.Vector3(1, 0, 0), 12, true, WALL_HIT);
     crash["pick"].run(Infinity);
     return crash["camReach"].reduce((cuts, reach) => cuts + (reach > 0 ? 1 : 0), 0);
