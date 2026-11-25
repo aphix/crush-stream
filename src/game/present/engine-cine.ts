@@ -138,6 +138,9 @@ export type HitSource = { wall: boolean; under: number };
 /** A car-to-car hit with its car on the road: what a hit with no record of its source is taken for. */
 export const CAR_HIT: Readonly<HitSource> = { wall: false, under: 0 };
 
+/** A wall hit on the course or in the sandbox: its recorded height is the car's own origin. */
+export const WALL_HIT: Readonly<HitSource> = { wall: true, under: 0 };
+
 /** `out` as the source of a hit by the car at (x, y, z), a wall hit or not, on `sight`'s road. */
 export function hitSource(out: HitSource, sight: Sight, x: number, y: number, z: number, wall: boolean): HitSource {
   const g = sight.ground.heightAt(x, z, y + 1);
@@ -313,12 +316,13 @@ export function heldCut(s: Sight, at: THREE.Vector3, n: THREE.Vector3, reach: Fl
  * The impacts of a clip's scope after its first that fall inside the crash cam's window, in time order (`n` of them): per
  * impact the wall second (into the crash cam) the held cam starts to look at it and the one it stops, where it lands (and how
  * far its own point sits under that, `aimSink`), and whether it is a driver thrown (1: the cam keeps its axis) rather than a crash (0: the axis moves onto it).
+ * `y`, `a` and `b`: the recorded height and the clip's cars of a crash (`b` -1: a wall hit), to read its sink again when the cam reaches it (`CrashHold.refresh`).
  */
-type LaterHits = { n: number; from: Float64Array; until: Float64Array; at: THREE.Vector3[]; sink: Float64Array; thrown: Uint8Array };
+type LaterHits = { n: number; from: Float64Array; until: Float64Array; at: THREE.Vector3[]; sink: Float64Array; y: Float64Array; a: Int32Array; b: Int32Array; thrown: Uint8Array };
 
 /** Room for `max` later impacts. */
 export function laterHits(max: number): LaterHits {
-  return { n: 0, from: new Float64Array(max), until: new Float64Array(max), at: Array.from({ length: max }, () => new THREE.Vector3()), sink: new Float64Array(max), thrown: new Uint8Array(max) };
+  return { n: 0, from: new Float64Array(max), until: new Float64Array(max), at: Array.from({ length: max }, () => new THREE.Vector3()), sink: new Float64Array(max), y: new Float64Array(max), a: new Int32Array(max).fill(-1), b: new Int32Array(max).fill(-1), thrown: new Uint8Array(max) };
 }
 
 const NO_LATER = laterHits(0);
@@ -328,7 +332,7 @@ const NO_LATER = laterHits(0);
  * itself before), the scene's solids round it, built when asked, until when (wall s into the crash cam) the hit itself
  * is still to come (`heldCut`'s `hit`), and the clip's later impacts of the window (`LaterHits`): it looks at each as it comes.
  */
-export type CrashHold = { target: THREE.Vector3; sight: () => Sight; hit: number; later: LaterHits };
+export type CrashHold = { target: THREE.Vector3; sight: () => Sight; hit: number; later: LaterHits; refresh?: (later: number) => void };
 
 const _aim = new THREE.Vector3();
 /** The points `holdAim` took the middle of, this frame (`n` of them). */
@@ -519,6 +523,7 @@ export class CrashCam {
         // Each later crash its own angle: the axis moves to it as its look begins (a thrown driver keeps the cut).
         for (; this.reached < l.n && l.from[this.reached]! <= t; this.reached++) {
           if (l.thrown[this.reached] === 1) continue;
+          hold.refresh?.(this.reached);
           this.nextAt.copy(l.at[this.reached]!);
           this.retarget(this.camN, s, l.sink[this.reached]!);
         }
@@ -692,11 +697,11 @@ export class Cinematics {
    * The first big impact of a crash run (fleet / barrier): punch, FOV kick and, unless the user framed the shot, the
    * crash cam, its cuts over a slow-mo held `hold` wall s. `sight` (a course): the crash cam stands on its ground and turns its axis so its eyes see the hit.
    */
-  impact(contact: THREE.Vector3, normal: THREE.Vector3, impulse: number, crashCam: boolean, sight: Sight | null, hold: number): void {
+  impact(contact: THREE.Vector3, normal: THREE.Vector3, impulse: number, crashCam: boolean, sight: Sight | null, hold: number, source: Readonly<HitSource> = CAR_HIT): void {
     if (this.tierNow === "off") return;
     const k = THREE.MathUtils.clamp(impulse / 30, 0.35, 1);
     this.kick(k);
-    if (crashCam) this.crash.begin(contact, normal, sight, hold);
+    if (crashCam) this.crash.begin(contact, normal, sight, hold, source);
   }
 
   /** The crash cam alone, started apart from the impact (a reel's cut lands before its hit does). */

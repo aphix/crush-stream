@@ -103,4 +103,20 @@ describe("given the clip of a car driven into the rear of two standing cars, who
     expect(asked.length, "points the spot was asked about").toBe(2);
     expect(asked[1]!.y, "the second point's height against the first's (m)").toBeCloseTo(asked[0]!.y, 6);
   });
+
+  it("when the car of a later impact has been left 0.11 m under the road by the crash before it, then the sink read as the cam reaches that impact is 0.11 m deeper than the one read before the first crash", () => {
+    const director = playedToImpact();
+    const later = director["hold"].later;
+    expect(later.n, "later impacts of the window").toBeGreaterThan(0);
+    const sight = w.race.courseSight()!;
+    const at = later.at[0]!;
+    const before = later.sink[0]!;
+    const car = director["cur"]!.sim.cars[later.a[0]!]!;
+    const road = sight.ground.heightAt(car.group.position.x, car.group.position.z, car.group.position.y + 1);
+    car.group.position.y = road - 0.11;
+    director["hold"].refresh!(0);
+    const lowered = aimSink(at, hitFoot(new THREE.Vector3(), at.x, later.y[0]!, at.z, sight, { wall: later.b[0]! < 0, under: 0.11 }));
+    expect(later.sink[0], "the sink read again (m)").toBeCloseTo(lowered, 6);
+    expect(later.sink[0]! - before, "deeper than before (m)").toBeCloseTo(0.11, 1);
+  });
 });

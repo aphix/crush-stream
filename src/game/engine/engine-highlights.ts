@@ -10,7 +10,7 @@ import type { ReelHud, SaveResult, ViewBox } from "../match/types.ts";
 import { mulberry32 } from "../world/placements.ts";
 import { AFTERS, OPENERS, pickShot, RUN_INS, ShotCam, type Shot as PickedShot, type ShotKind } from "../present/shot-cam.ts";
 import { CINE, type Sight } from "../present/spectate-cam.ts";
-import { aimSink, CAR_HIT, crashCamEnd, CUTS, hitAim, hitFoot, hitSource, laterHits, type CrashCam, type CrashHold, type HitSource } from "../present/engine-cine.ts";
+import { aimSink, crashCamEnd, CUTS, hitAim, hitFoot, hitSource, laterHits, type CrashCam, type CrashHold, type HitSource } from "../present/engine-cine.ts";
 import { overheadPose } from "../present/highlight-cam.ts";
 import { ClipSim, NO_RIDE, type ReplayScene } from "./engine-replay.ts";
 import { SPARK_MIN_IMPULSE, TIMELINE_HZ } from "./constants.ts";
@@ -301,7 +301,7 @@ export class ReelDirector {
   private readonly flight = { ax: 0, az: 0, bx: 0, bz: 0, u: 0 };
   private readonly shotCam = new ShotCam();
   /** What the held crash cam asks about the clip's focus car (`crashHold`). */
-  private readonly hold: CrashHold = { target: new THREE.Vector3(), sight: () => this.host.sight(this.focus()!), hit: 0, later: laterHits(2 * MAX_HITS) };
+  private readonly hold: CrashHold = { target: new THREE.Vector3(), sight: () => this.host.sight(this.focus()!), hit: 0, later: laterHits(2 * MAX_HITS), refresh: (later) => this.refreshSink(later) };
   /** Every live car's visibility when the reel took them. */
   private shown: boolean[] | null = null;
   /** What `people` hands out, written in place each frame. */
@@ -757,7 +757,7 @@ export class ReelDirector {
     l.n = 0;
     const end = crashCamEnd(tl.hold);
     const s = this.host.still();
-    const add = (w: number, x: number, y: number, z: number, thrown: boolean, source: Readonly<HitSource>): void => {
+    const add = (w: number, x: number, y: number, z: number, thrown: boolean, a: number, b: number): void => {
       if (w >= end || l.n === l.at.length) return;
       let k = l.n++;
       for (; k > 0 && l.until[k - 1]! > w + HIT_KEEP; k--) {
@@ -766,23 +766,38 @@ export class ReelDirector {
         l.at[k]!.copy(l.at[k - 1]!);
         l.sink[k] = l.sink[k - 1]!;
         l.thrown[k] = l.thrown[k - 1]!;
+        l.y[k] = l.y[k - 1]!;
+        l.a[k] = l.a[k - 1]!;
+        l.b[k] = l.b[k - 1]!;
       }
       l.from[k] = w - HIT_LEAD;
       l.until[k] = w + HIT_KEEP;
       l.thrown[k] = thrown ? 1 : 0;
+      l.y[k] = y;
+      l.a[k] = a;
+      l.b[k] = b;
       if (thrown) l.at[k]!.set(x, y, z);
       else hitAim(l.at[k]!, x, y, z, s);
-      l.sink[k] = thrown ? 0 : aimSink(l.at[k]!, hitFoot(_foot, x, y, z, s, source));
+      l.sink[k] = thrown ? 0 : aimSink(l.at[k]!, hitFoot(_foot, x, y, z, s, this.sourceOf(p, a, b)));
     };
     for (let k = 1; k < clip.hits.length; k++) {
       const h = clip.hits[k]!;
-      add(wallAt(tl, shownFrom(clip, h.t)) - tl.impact, h.x, h.y, h.z, false, this.sourceOf(p, h.a, h.b));
+      add(wallAt(tl, shownFrom(clip, h.t)) - tl.impact, h.x, h.y, h.z, false, h.a, h.b);
     }
     for (const x of clip.ejections) {
       if (!x.own) continue;
       let at = 0;
       for (let i = 0; i <= x.step; i++) at += clip.h[i]!;
-      add(wallAt(tl, at) - tl.impact, x.e.pos.x, x.e.pos.y, x.e.pos.z, true, CAR_HIT);
+      add(wallAt(tl, at) - tl.impact, x.e.pos.x, x.e.pos.y, x.e.pos.z, true, -1, -1);
     }
+  }
+
+  /** Later impact `k`'s sink read again from its car as it stands now, as the held cam begins to look at it: a first crash can leave a wreck lower than it drove. */
+  private refreshSink(k: number): void {
+    const p = this.cur;
+    if (!p) return;
+    const l = this.hold.later;
+    const at = l.at[k]!;
+    l.sink[k] = aimSink(at, hitFoot(_foot, at.x, l.y[k]!, at.z, this.host.still(), this.sourceOf(p, l.a[k]!, l.b[k]!)));
   }
 }

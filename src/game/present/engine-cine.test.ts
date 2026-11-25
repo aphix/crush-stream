@@ -233,6 +233,41 @@ describe("given a reel's crash camera in an open field holding the crane, and tw
   });
 });
 
+describe("given a reel's crash camera holding a cut with a later crash 2.0 s into its window", () => {
+  const open: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0.6, rim: Infinity, occ: [] };
+  const camera = new THREE.PerspectiveCamera();
+
+  it("when the held cam has not yet begun to look at that crash, then its sink is not read, and once it has, the crash's is read once and a thrown driver's never", () => {
+    const cam = new CrashCam(false);
+    cam.begin(new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(1, 0, 0), open, SLOMO_HOLD);
+    const later = laterHits(2);
+    later.n = 2;
+    for (let k = 0; k < 2; k++) {
+      later.from[k] = 2.0;
+      later.until[k] = 3.0;
+      later.at[k]!.set(0, 1, 6 * k);
+      later.thrown[k] = k;
+    }
+    const read: number[] = [];
+    const hold = {
+      target: new THREE.Vector3(0, 0.55, 0),
+      sight: () => open,
+      hit: 0.3,
+      later,
+      refresh: (k: number) => {
+        read.push(k);
+        later.sink[k] = 0.5;
+      },
+    };
+    for (let i = 0; i < 18; i++) cam.direct(camera, 0.1, true, hold);
+    expect(cam.camT, "the cam is before the crash's look").toBeLessThan(2.0);
+    expect(read.length, "reads before the look").toBe(0);
+    for (let i = 0; i < 8; i++) cam.direct(camera, 0.1, true, hold);
+    expect(cam.camT, "the cam is past the crash's look").toBeGreaterThan(2.0);
+    expect(read.join(","), "the sinks read after it: the crash, not the driver").toBe("0");
+  });
+});
+
 /** The crash cam's lens on each cut: bumper, crane, long lens. */
 const LENS = { bumper: 34, crane: 46, long: 21 };
 const SCHEDULES = [

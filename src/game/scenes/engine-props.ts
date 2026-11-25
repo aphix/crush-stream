@@ -48,7 +48,7 @@ function clipAxis(src: Float64Array, n: number, axis: number, sign: number, limi
   return m;
 }
 
-export type ContactHit = { impulse: number; contact: THREE.Vector3; normal: THREE.Vector3 };
+export type ContactHit = { impulse: number; contact: THREE.Vector3; normal: THREE.Vector3; /** A wall or prop hit, its contact at the car's own origin height (`HitSource`). */ wall?: boolean };
 
 export type LampPole = {
   group: THREE.Group;
@@ -94,6 +94,8 @@ export class StrongestContact {
   impulse = 0;
   contact: THREE.Vector3 | null = null;
   normal: THREE.Vector3 | null = null;
+  /** The offered hit was a wall hit (`ContactHit.wall`). */
+  wall = false;
   private readonly contactAt = new THREE.Vector3();
   private readonly normalAt = new THREE.Vector3();
 
@@ -101,6 +103,7 @@ export class StrongestContact {
     this.impulse = 0;
     this.contact = null;
     this.normal = null;
+    this.wall = false;
   }
 
   offer(hit: ContactHit): void {
@@ -108,6 +111,7 @@ export class StrongestContact {
     this.impulse = hit.impulse;
     this.contact = this.contactAt.copy(hit.contact);
     this.normal = this.normalAt.copy(hit.normal);
+    this.wall = hit.wall === true;
   }
 }
 

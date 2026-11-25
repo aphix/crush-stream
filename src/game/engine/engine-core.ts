@@ -25,7 +25,7 @@ import { drawnStyle, type CarStyleId } from "../vehicle/car-variants.ts";
 import { armKill, assignClass, carClass, HANDLING, killClass, STYLE_CLASS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { DRIVER_CARS, TIMES_OF_DAY, type DriverCar } from "../match/types.ts";
 import { WorldStage, makeLamp } from "../present/engine-world.ts";
-import { Cinematics } from "../present/engine-cine.ts";
+import { CAR_HIT, Cinematics, type HitSource } from "../present/engine-cine.ts";
 import { DaylightEnv } from "../present/daylight-env.ts";
 import { loadHdrEnv, STUDIO_ENV_URL } from "../present/look-env.ts";
 import { CarDetail } from "../present/car-detail.ts";
@@ -782,13 +782,13 @@ export abstract class EngineCore {
     this.fudgedAt = this.elapsedWall;
     this.fudgeContact(_v.set(p.x, p.y, p.z), _n.set(p.nx, 0, p.nz), strength);
   }
-  /** The crash's hit: slow-mo, kick, flash and burst; `crashCam` overrides the sandbox's rule for the crash cam (the reel always wants it). */
-  protected beginCinematic(contact: THREE.Vector3, normal: THREE.Vector3, impulse: number, crashCam?: boolean): void {
+  /** The crash's hit: slow-mo, kick, flash and burst; `crashCam` overrides the sandbox's rule for the crash cam (the reel always wants it). `source`: what the contact's height records (`HitSource`). */
+  protected beginCinematic(contact: THREE.Vector3, normal: THREE.Vector3, impulse: number, crashCam?: boolean, source: Readonly<HitSource> = CAR_HIT): void {
     beginImpact(this.clock, this.autoSlomo);
     this.impactKph = impulse * 3.6;
     this.view.kick(this.carCount);
     const rigScene = this.rigScene;
-    this.cine.impact(contact, normal, impulse, crashCam ?? (!rigScene && this.autoSlomo && this.clock.userTimeScale == null && this.seat.mode === "global" && !this.view.userFramed), this.crashSight(), this.clock.hold);
+    this.cine.impact(contact, normal, impulse, crashCam ?? (!rigScene && this.autoSlomo && this.clock.userTimeScale == null && this.seat.mode === "global" && !this.view.userFramed), this.crashSight(), this.clock.hold, source);
     this.impactLight.position.copy(contact);
     this.impactLight.position.y = 0.8;
     this.impactLightLife = 0.35;
