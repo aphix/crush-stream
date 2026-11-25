@@ -60,19 +60,38 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 
 ## 3. State
 
-- **Landed 2026-11-25 (about 00:30Z):** `main` = `play/union` (NET 73, REPLAY 254), fast-forwarded from 5989b47a0 after the
-  gate below, and pushed to the Windows mount (`scripts/wsl-push.sh`); the owner pushes to GitHub. What follows in this
-  section is the record of how it got there; sections 4 to 6 hold what is still open.
-- **A REGRESSION ON `main`, FIX WRITTEN AND NOT YET RUN (2026-11-25, 03:20Z).** The first landing's shading fix (TiltDraw,
-  b92dab303) re-rounds a near car's shells after a tyre hold that re-lifted the skin on a frame the skin was not written, and
-  it rounds normals that are already rounded: measured on `main` with a sedan tapped at 10 km/h, one such re-round moves a
-  drawn normal's component by up to 0.70, five by 1.14. A crushed car near the camera whose wheels keep moving can have its
-  shading drift frame by frame until its skin is next written. The old branch's own fix of the same hole (eb0fca73d) said
-  rounding is not idempotent and recomputed the shell's raw normals first; the lane and two reviews missed it, and Main found
-  it by reading that old commit. The fix is on branch `play/HoldRound` (b9d0836ef, worktree `~/worktrees/HoldRound`,
-  `vehicle/held-round.ts`): typecheck, lint and boundaries clean, NOT RUN (the box was over its swap line and humm-tauri had
-  not answered). To land it: run `vehicle/contour-smoothing.test.ts` (its new row must be green, and red on `main`'s
-  `car.ts`), `car-tyre-skin.test.ts`, `skin-lod.test.ts`, then the `vehicle` folder; a reviewer; then fast-forward.
+- **NOW (2026-11-25, 07:45Z).** `main` = Windows mount, NET 73, REPLAY 254; the owner pushes to GitHub. Branch to land from is
+  `play/next` (worktree `~/worktrees/land`); `play/union` is left behind (it holds a merge and its revert). Gates ran on the
+  worker (`~/crash-wt/union-gate.sh`, three jobs, about 30 minutes; the GL file, parity, `build:node` and the secret scan
+  locally); the only reds were the three accepted race rows and `scripts/headless-canvas.test.mjs` on the worker (no GL
+  binary there; green locally).
+  - Landed today, each reviewed and gated: the hold's re-round from raw normals (HoldRound: the shading regression of the
+    first landing, on `main` about six hours); `civilian-crowd.ts` 865 to 509 lines and `engine-onfoot.ts` 669 to 574
+    (CrowdSplit); the cage's plan raster and plan field in the WASM kernel (CageWasm: bit-equal, digests identical; speed
+    1 % better inside a 6 % spread: no gain shown, not worse); the on-foot test rigs' fixed scene seed and four small test
+    and comment fixes (TestTidy); a crashed car the reset emptied is not skinned again when the camera nears it (TyreHold's
+    first port, d498838af).
+  - **Measured and NOT landed: LooseBatch** (torn parts in one batch). Real Chromium, RTX 4080 over D3D12,
+    `WEBGL_multi_draw` present, a 24-car derby, arms alternated: draw calls a frame median 116 to 125 without it and 117 to
+    121 with it, mean and peak higher with it (peak 185 to 208 against 206 to 278); frame rate no gain inside a wide spread.
+    Numbers and the script: `~/crash-wt/landing/perf-measurements-2026-11-25.md`, `loose-ab.mjs`. Its branch stays unmerged.
+  - **Held for the owner: TyreHold's ports 2 and 3** (`play/TyreHold` 632937fdf, reviewed: merge): a fender a crush carries
+    onto a tyre no longer shows through it (76 mm), and the hold reads poses on a grid so the drawn lift no longer depends
+    on which earlier frame a hold read. Cost after the lane's fix: +2.4 % of a crash-phase frame (3.003 to 3.075 ms, five-car
+    Fleet, 8 alternated readings; +10 % before the fix), and the pose grid is 1 mm, so the lift over a slowly moving wheel
+    steps by about 3 mm where it stepped 1.6 mm. A settled wreck's skin does not move (0 of 1200 car-frames). The owner's
+    rule is never worse for performance: his call, or the lane removes the rest of the cost first.
+  - **The skin stack is ported and NOT mergeable yet** (`play/SkinStack`, eight commits, order 3560a129f, 1fc490df0,
+    fdcd9af75, 1681f8cb5, 6e78dd888, 73dd1661a, 8939ab1f7, fd5d0ae8c; kernel rebuilt, parity green). They are simulation
+    changes (the cage reads the skin tables: `whole-digest` moves from the first port, `SIM_DIGEST_BY_STYLE` from the second):
+    each needs a REPLAY entry and the digests re-derived once. Two rows red: `car-smooth.test.ts` "body normals" (sedan,
+    police: the tyre hold flattens the sedan's front fender ring onto one plane once the engine fade lowers those points;
+    stays red with TyreHold's branch laid over), and `skin-stretch.test.ts` pickup 120 km/h 40 % overlap, 2.66 against 2.5
+    (the A-pillar top, where the cell's and the bonnet's reach meet). Review of the first three: the new skin-zone logic
+    must move out of `deform-rig.ts` (calls only there). Next: one lane for the two red rows and the move, then review,
+    digests, REPLAY, full gate.
+  - Speed of PerfPath's two cuts in a whole race: still not measured (one attempt timed out).
+- **First landing, 2026-11-25 (about 00:30Z):** `main` fast-forwarded from 5989b47a0 after the gate recorded below.
 - **Second landing, 2026-11-25 (about 03:00Z): the crash cam's follow-up** (lane ReelView2, reviewed five times, the last
   with no finding; camera and effects only: no simulation, replay or wire change). The reel and the live crash cam test their
   line to a second point under the aim for every kind of hit (`present/hit-foot.ts`, `engine/reel-hit-foot.ts`); a live
