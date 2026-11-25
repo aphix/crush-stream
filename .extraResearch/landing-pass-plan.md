@@ -63,6 +63,17 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 - **Landed 2026-11-25 (about 00:30Z):** `main` = `play/union` (NET 73, REPLAY 254), fast-forwarded from 5989b47a0 after the
   gate below, and pushed to the Windows mount (`scripts/wsl-push.sh`); the owner pushes to GitHub. What follows in this
   section is the record of how it got there; sections 4 to 6 hold what is still open.
+- **Second landing, 2026-11-25 (about 03:00Z): the crash cam's follow-up** (lane ReelView2, reviewed five times, the last
+  with no finding; camera and effects only: no simulation, replay or wire change). The reel and the live crash cam test their
+  line to a second point under the aim for every kind of hit (`present/hit-foot.ts`, `engine/reel-hit-foot.ts`); a live
+  sandbox wall hit on raised ground has its crash-cam cuts again (a regression of the first landing, on `main` for about
+  three hours); a wall hit's sparks, debris and smoke start 0.4 m over the car as before. Run on its final tree: the
+  `present`, `engine` and `scenes` test folders (438 files) and the seven long files of `engine` and `present`, green but
+  one new row of its own that read 2 cuts against 3 once: the row left the hitting car 3 m over the flat-ground hit and at
+  the hit on the deck, and at four of sixteen car headings the car hides one cut's eye; staged with the car at the hit in
+  both cases it reads the same at all sixteen. The rest of the gate was not run again (nothing outside those folders
+  imports the changed files). One of Main's runs there was ended by a SIGTERM that was neither its memory cap nor Main's;
+  the sender is not found (humm-tauri asked).
 - `play/union` (`~/worktrees/land`, NET 73, REPLAY 254). Merged, each reviewed (its later commits too), static checks clean
   and its own test files green on the union: PerfPath, SmallCuts, CopStoops, GuestEdge, BarRoom, ContactRows, DeformSeat,
   ShutPlaces, CarsSeePlayers, Sweep, HubRules, KerbClaims, and three fixes of reds the gate found: ReplayTilt (97fe97786),
@@ -112,15 +123,11 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
       the aim and not for the car. Fixed in the camera (a8f7ad5f1, reviewed: merge, merged): an eye sees a hit only if its
       line is also clear to the hit's own point under the aim (`aimSink`, `seesHit`, in the pick and in a held cut's later
       impacts). The three reel-view files and `engine-cine-courses.ai-long-run.ts` green on the landing head.
-      What that fix left, introduced or exposed by this landing, is lane ReelView2's (branch `play/ReelView2`, on `main`,
-      reviewed three times: merge; lands after its last two items and one run of the `present` and `engine` folders and
-      the four long camera files): the second point for every kind of hit (`hitFoot`: a wall hit records the car's own
-      origin, a car-to-car hit the contact 0.3 to 0.7 m over it; a car sunk under the road), in the pick, a held cut's later
-      impacts and the shot camera; the extra sight line counted in the pick's budget (measured on a loaded box: a
-      car-to-car pick takes 1.4 to 1.9 times as long, city 1.10 to 2.06 ms; per-frame work bounded as before); the
-      per-commit chain staged at 7 m beside the 16 m one. Its last two items: a LIVE sandbox wall hit on raised ground has
-      had no crash-cam cut since the first fix (its contact is recorded at y 0.4 whatever the ground: a regression that is
-      on `main` at 88f489ab4), and a later hit's car depth is read before the first crash.
+      What that fix left, introduced or exposed by the first landing, was lane ReelView2's, landed since (above): the
+      second point for every kind of hit (`hitFoot`: a wall hit records the car's own origin, a car-to-car hit the contact
+      0.3 to 0.7 m over it; a car sunk under the road), in the pick, a held cut's later impacts and the shot camera; the
+      extra sight line counted in the pick's budget (measured on a loaded box: a car-to-car pick takes 1.4 to 1.9 times as
+      long, city 1.10 to 2.06 ms; per-frame work bounded as before); the per-commit chain staged at 7 m beside the 16 m one.
     - The GL file (`scripts/detail-spec-aa.test.mjs`, `DISPLAY=:0`): green at 9641f9303. `build:node`: built on the landing
       head. Secret scan: clean.
     - After the gate's tree was cut the only source change is the camera fix (four files under `present/` and `engine/`);
