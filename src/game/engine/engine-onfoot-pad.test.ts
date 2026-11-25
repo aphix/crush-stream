@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hypot2 } from "../kernel/physics-core.js";
 import { blankPad, PAD_BUTTON, readPad, type PadSource, type TouchPad } from "../vehicle/gamepad.ts";
 import { blankWalkIntent, readWalkIntent } from "./engine-walk-input.ts";
-import { OnFootDirector } from "./engine-onfoot.ts";
+import { OnFootSteer } from "./engine-onfoot-steer.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 import { wrapAngle } from "../present/walker-math.ts";
 
@@ -24,8 +24,8 @@ describe("given the pad's one dead zone and curve on foot", () => {
     const state = blankPad();
     readPad(stickPad(raw), state);
     const intent = readWalkIntent(new Set(), state, noTouch, blankWalkIntent());
-    // mutation: sed -i 's/CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) \* Math.min(1, reach)/CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) * Math.min(1, reach) ** 1.5/' src/game/engine/engine-onfoot.ts
-    return OnFootDirector.prototype["pace"].call(null as never, intent, hypot2(intent.forward, intent.strafe));
+    // mutation: sed -i 's/CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) \* Math.min(1, reach)/CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) * Math.min(1, reach) ** 1.5/' src/game/engine/engine-onfoot-steer.ts
+    return OnFootSteer.prototype["pace"].call(null as never, intent, hypot2(intent.forward, intent.strafe));
   };
 
   it("when the left stick is pushed 0.25, 0.5, 0.75 and all the way, then he walks 0.87, 1.40, 2.29 and 3.50 m/s", () => {
@@ -76,7 +76,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(rig.engine["onFoot"].footView, "B again: the follow").toBe("follow");
   });
 
-  // mutation: sed -i 's/^const INTENT_SECONDS = 0.08;/const INTENT_SECONDS = 1e-9;/' src/game/engine/engine-onfoot.ts
+  // mutation: sed -i 's/^const INTENT_SECONDS = 0.08;/const INTENT_SECONDS = 1e-9;/' src/game/engine/engine-onfoot-steer.ts
   it("when D is pressed while W is held, then his heading has turned by less than 0.6 rad three frames later, and by 0.7 rad or more half a second later", () => {
     if (rig.phase() !== "onFoot") rig.getOut();
     rig.engine["keys"].add("KeyW");

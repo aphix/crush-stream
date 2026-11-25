@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { DriverSeat } from "../vehicle/car-drive.ts";
 import type { Ejection } from "../vehicle/ejection.ts";
@@ -11,7 +11,6 @@ import type { DriverLook } from "../present/driver-look.ts";
 import { OnFootFlow, type OnFootRefusal, type OnFootSense, type OnFootStep } from "../present/onfoot-flow.ts";
 import type { FootHud } from "../hud/hud-store.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
-import { RUN_SPEED, SPRINT_SPEED, WALK_SPEED } from "../present/walker-locomotion.ts";
 import type { OnFootView } from "../present/walker-camera.ts";
 import { OnFootCamera } from "./onfoot-camera.ts";
 import type { Sight } from "../present/spectate-cam.ts";
@@ -19,7 +18,7 @@ import { doorBlocked, doorInReach, doorSpot, inPlay } from "./onfoot-doors.ts";
 import { entrySeat, SEAT_DRIVER } from "../vehicle/car-seats.ts";
 import { OnFootRide, type OnFootDesk } from "./engine-onfoot-ride.ts";
 import { SEAT_KEYS } from "./engine-keys.ts";
-import { blankWalkIntent, readWalkIntent, type WalkIntent } from "./engine-walk-input.ts";
+import { OnFootSteer } from "./engine-onfoot-steer.ts";
 import { OnFootArms, type Gun } from "./engine-onfoot-arms.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import type { BodyMotion } from "../net/body-codec.ts";
@@ -89,18 +88,8 @@ const VIEW_BUTTON = 1 << PAD_BUTTON.east;
 const RESET_BUTTON = 1 << PAD_BUTTON.down;
 const SWALLOWED_BUTTONS = BACK_BUTTON | VIEW_BUTTON | (1 << PAD_BUTTON.lb) | (1 << PAD_BUTTON.rb) | RESET_BUTTON;
 
-/** The slowest speed (m/s) a push that clears the pad's own dead zone asks for; the pad reader (`gamepad.ts`) owns the one dead zone and curve. */
-const CREEP_SPEED = 0.8;
-/** A push below this (the reader's output, 0 inside its dead zone) does not move him. */
-const WALK_STOP = 0.01;
-/** The keys' direction eases to a new one over about this long (s), so a corner is turned, not snapped. */
-const INTENT_SECONDS = 0.08;
-/** Firing at a target off his facing turns him to it, and holds him turning (not walking) this long (s): his facing turns at most 8 rad/s, so a half turn is done well inside it. */
-const FIRE_TURN_S = 0.6;
 /** Seconds a refusal stays on the prompt. */
 const REFUSAL_SECONDS = 2;
-/** Led by the law he walks at `WALK_SPEED` (a hair over the cop's escort pace) to where his cop leads him, and stands once within this far (m) of it. */
-const LED_REACH = 0.5;
 /** The open world's refusal for a car with no seat he may take, any door of it. */
 const OW_NO_CAR_TEXT = "Walk up to a car's door";
 
@@ -125,7 +114,6 @@ export class OnFootDirector {
   readonly flow = new OnFootFlow();
   readonly arms = new OnFootArms({ armed: () => this.armed(), punch: () => this.punch(), land: () => this.landPunch(), captured: () => this.host.mouseCaptured(), capture: (on) => this.host.captureMouse(on), shoot: (gun) => this.shoot(gun), hook: () => this.host.hook() });
   private readonly host: OnFootHost;
-  private readonly intent = blankWalkIntent();
   private readonly sense: OnFootSense = { car: -1, speed: 0, doorBlocked: false };
   private readonly speed = new Float64Array(1);
   private readonly strike = blankStrike();
@@ -134,22 +122,15 @@ export class OnFootDirector {
   private refusalLeft = 0;
   /** Whether his car's door is in reach this frame, for the prompt. */
   private reach = false;
-  /** Where his cop leads him while the law has him on foot (`lead`). */
-  private ledX = 0;
-  private ledZ = 0;
+  /** Steers the walker: the controls, the law's lead and a turn for a shot. */
+  readonly steer: OnFootSteer;
   /** The seats side of his trip: the door, a passenger's seat, what he waits for the host to answer (`OnFootRide`). */
   private readonly ride: OnFootRide;
-  /** The walk direction the keys ask for, eased (`INTENT_SECONDS`); not seeded while he stands still. */
-  private smoothAhead = 0;
-  private smoothSide = 0;
-  private intentSeeded = false;
-  /** The heading he turns to for a shot (`faceToward`), and the seconds that turn still holds him. */
-  private turnHeading = 0;
-  private turnLeft = 0;
 
   constructor(host: OnFootHost) {
     this.host = host;
     this.cam = new OnFootCamera(host);
+    this.steer = new OnFootSteer(host, this.arms);
     this.ride = new OnFootRide({ seat: host.seat, desk: () => host.desk(), adopt: (index) => host.adopt(index) });
   }
 
@@ -197,13 +178,6 @@ export class OnFootDirector {
   /** Whether his shots are aimed through the view's centre (the mouse is captured, aim is held or he looks through his own eyes) rather than the cursor. */
   aimsAtCentre(): boolean {
     return this.arms.aiming || this.host.mouseCaptured() || this.footView === "first";
-  }
-
-  /** He turns to face the level direction (dx, dz) of a target behind him for a shot, and stands while he does; a turn in progress is not started again by the shots that follow. */
-  faceToward(dx: number, dz: number): void {
-    if (this.turnLeft > 0) return;
-    this.turnHeading = detAtan2(dx, dz);
-    this.turnLeft = FIRE_TURN_S;
   }
 
   /** One shot of `gun` along the aim: the view's centre when `aimsAtCentre`, else the cursor's ray. */
@@ -254,8 +228,7 @@ export class OnFootDirector {
 
   /** His cop leads him to (x, z): his walker walks there until a patrol car takes him. */
   lead(x: number, z: number): void {
-    this.ledX = x;
-    this.ledZ = z;
+    this.steer.lead(x, z);
   }
 
   /** Patrol car `carIndex` has him aboard: his walker is gone from the street and the camera follows the car. */
@@ -491,7 +464,7 @@ export class OnFootDirector {
     }
     const { ragdolls } = this.host;
     if (flow.phase === "arrested") {
-      this.walkLed();
+      this.steer.walkLed();
       return;
     }
     if (!ragdolls.walker.active || this.lost()) {
@@ -500,27 +473,13 @@ export class OnFootDirector {
       return;
     }
     if (flow.phase === "onFoot") {
-      if (this.host.available()) this.walk(wallDt);
+      if (this.host.available()) this.steer.walk(wallDt, this.armed());
       else ragdolls.walker.command = 0;
       this.runDown();
     } else ragdolls.walker.command = 0;
     const car = flow.car;
     this.finish(flow.tick(wallDt), car);
     this.reach = flow.phase === "onFoot" && ragdolls.walkerTorso(_torso) && this.carInReach(this.host.cars()) >= 0;
-  }
-
-  /** In custody on foot (no patrol car has him yet): his walker walks to where his cop leads him, whatever he presses. */
-  private walkLed(): void {
-    const { ragdolls } = this.host;
-    const walker = ragdolls.walker;
-    if (!walker.active || !ragdolls.walkerTorso(_torso)) return;
-    if (hypot2(this.ledX - _torso.x, this.ledZ - _torso.z) < LED_REACH) {
-      walker.command = 0;
-      return;
-    }
-    walker.heading = detAtan2(this.ledX - _torso.x, this.ledZ - _torso.z);
-    walker.command = WALK_SPEED;
-    walker.ask();
   }
 
   /** A car moving fast enough over a man on his feet (`runsDown`, the lawn guards' and the VIP's rule) throws him with the same launch (`fell`): he goes ragdoll. One who already lies is not thrown again (a guest's body is judged the same, `OpenWorldPlayers.step`): a car that reaches him moves him as a solid does. */
@@ -537,60 +496,6 @@ export class OnFootDirector {
       ragdolls.knockWalker(fell(cars[i]!, i, -1, _torso.x, ground, _torso.z, detSin(walker.facing), detCos(walker.facing), this.strike));
       return;
     }
-  }
-
-  /** The speed (m/s) a push of `reach` (0 to 1) asks for: Boost sprints, the walk control holds a walk, else the push walks from a creep up to a run along the reader's curve. */
-  private pace(intent: WalkIntent, reach: number): number {
-    if (intent.sprint) return SPRINT_SPEED;
-    if (intent.walk) return WALK_SPEED;
-    return CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) * Math.min(1, reach);
-  }
-
-  /**
-   * The stick and keys, relative to the view, into the walker's heading and speed. The view's way is the orbit's yaw (the eye stands at (sin, cos) of it behind
-   * him), not the drawn camera's position: that eases in after the climb out, so a held direction read from it would curve with the blend.
-   */
-  private walk(wallDt: number): void {
-    const { view, ragdolls, keys, pad, touch } = this.host;
-    const walker = ragdolls.walker;
-    const intent = readWalkIntent(keys, pad, touch, this.intent, this.armed());
-    const reach = hypot2(intent.forward, intent.strafe);
-    const ahead = -detSin(view.orbitAngle);
-    const side = -detCos(view.orbitAngle);
-    this.turnLeft = Math.max(0, this.turnLeft - wallDt);
-    if (this.turnLeft > 0 && !this.arms.aiming) {
-      walker.heading = this.turnHeading;
-      walker.command = 0;
-      this.intentSeeded = false;
-      return;
-    }
-    if (this.arms.aiming) {
-      // Aiming: he faces where the camera looks and walks forward only, at no more than a walk.
-      walker.heading = detAtan2(ahead, side);
-      walker.command = intent.forward > 0.5 ? Math.min(this.pace(intent, reach), WALK_SPEED) : 0;
-      if (reach >= WALK_STOP) walker.ask();
-      this.intentSeeded = false;
-      return;
-    }
-    if (reach < WALK_STOP) {
-      walker.command = 0;
-      this.intentSeeded = false;
-      return;
-    }
-    if (!this.intentSeeded || walker.state !== "stand") {
-      this.smoothAhead = intent.forward;
-      this.smoothSide = intent.strafe;
-      this.intentSeeded = true;
-    } else {
-      const ease = 1 - Math.exp(-wallDt / INTENT_SECONDS);
-      this.smoothAhead += (intent.forward - this.smoothAhead) * ease;
-      this.smoothSide += (intent.strafe - this.smoothSide) * ease;
-    }
-    const x = ahead * this.smoothAhead - side * this.smoothSide;
-    const z = side * this.smoothAhead + ahead * this.smoothSide;
-    walker.heading = detAtan2(x, z);
-    walker.command = this.pace(intent, reach);
-    walker.ask();
   }
 
   private finish(step: OnFootStep, car: number): void {
@@ -631,7 +536,7 @@ export class OnFootDirector {
 
   /** The trip's camera is over: the car's view back, his head drawn again. */
   private endView(): void {
-    this.intentSeeded = false;
+    this.steer.unseed();
     this.cam.end();
   }
 

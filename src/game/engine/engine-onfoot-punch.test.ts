@@ -115,7 +115,7 @@ describe("given the real engine in the open world, its player on foot", () => {
     }
   });
 
-  // mutation: sed -i 's/^    if (this.arms.aiming) {/    if (false) {/' src/game/engine/engine-onfoot.ts
+  // mutation: sed -i 's/^    if (this.arms.aiming) {/    if (false) {/' src/game/engine/engine-onfoot-steer.ts
   it("when aim is held, then he turns to the camera's forward and a sideways key does not move him; forward walks him at no more than walking pace", () => {
     rig.getOut();
     const keys = rig.engine["keys"];
