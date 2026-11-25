@@ -42,6 +42,9 @@ export interface SkinDynamic {
 type Exports = TyreSagExports & {
   skin_shape: (...args: number[]) => void;
   normals: (...args: number[]) => void;
+  /** The cage fit's plan raster and plan field. */
+  cage_rasterise: (...args: number[]) => void;
+  plan_field: (...args: number[]) => void;
 };
 
 function isExports(e: WebAssembly.Exports): e is Exports {
@@ -49,7 +52,9 @@ function isExports(e: WebAssembly.Exports): e is Exports {
     e.memory instanceof WebAssembly.Memory &&
     typeof e.skin_shape === "function" &&
     typeof e.normals === "function" &&
-    typeof e.sag_pass === "function"
+    typeof e.sag_pass === "function" &&
+    typeof e.cage_rasterise === "function" &&
+    typeof e.plan_field === "function"
   );
 }
 
@@ -96,7 +101,8 @@ export class SkinTables {
 
 export class SkinKernel {
   private readonly sets = new Map<string, SkinTables>();
-  private readonly ex: Exports;
+  /** The instance's exports, for the cage kernel's own calls. */
+  readonly ex: Exports;
   /** Cars skinned so far (`run` calls) and the vertices they carried: the bench reads the difference over its window, a count free of timer noise. */
   calls = 0;
   verts = 0;
@@ -106,6 +112,14 @@ export class SkinKernel {
   constructor(ex: Exports) {
     this.ex = ex;
     this.tyre = new TyreSagArena(ex);
+  }
+
+  /** A new 8-byte aligned block of `bytes` at the memory's end (never freed: the caller keeps it); detaches `memory.buffer`. Returns its byte address. */
+  alloc(bytes: number): number {
+    const mem = this.ex.memory;
+    const at = mem.buffer.byteLength;
+    mem.grow(Math.ceil(((bytes + 7) & ~7) / WASM_PAGE_BYTES));
+    return at;
   }
 
   /** The style's tables, placed on first use; `build` runs only then. */

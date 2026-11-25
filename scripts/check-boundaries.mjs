@@ -44,6 +44,7 @@ const SCENE_GRAPH = /^(Mesh|InstancedMesh|SkinnedMesh|Object3D|Scene|Group|Line|
 // Per-frame entry points (the frame flow in docs/ARCHITECTURE.md) and the per-pair/per-slice
 // queries they call. Their bodies allocate nothing.
 const HOT = {
+  "src/game/vehicle/cage-kernel.ts": ["rasteriseInKernel", "planFieldInKernel"],
   "src/game/net/body-codec.ts": ["clearBodyFrame", "addBodyRecord", "addHidden", "writeBodyFrame", "readBodyFrame", "copyBodyFrame", "writeFoot", "readFoot", "recordBytes", "recordIsSound", "packArms", "weaponOfArms", "shotsOfArms"],
   "src/game/net/body-wire.ts": ["send", "take", "sendFoot", "takeFoot"],
   "src/game/engine/openworld-players.ts": ["clearRows", "hearFoot", "step", "strike", "stagger", "writeRecords", "feed", "away", "obey", "footOut", "sightOf", "refreshLooks", "lookHash", "placeOf", "setOwnWeapon", "noteShot", "readArms", "holdAt", "seenSpeedOf"],
