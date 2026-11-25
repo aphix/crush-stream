@@ -39,3 +39,34 @@ describe("given five Fleet cars that crushed their noses into each other at 20-3
     }
   });
 });
+
+describe("given a Fleet car that crashed, vaporized off the disc and came back", () => {
+  let engine: CrashEngine;
+  beforeAll(async () => {
+    stubBrowser();
+    engine = await bootEngine({ hud: new HudStore(), pacer: true });
+  });
+  afterAll(() => {
+    engine.dispose();
+    setGround(null);
+  });
+
+  it("when the camera brings it near while it is gone and it respawns, then it is drawn whole while gone and after", () => {
+    engine["applyShare"](decodeShare(FLEET), false);
+    const cars = engine["live"]();
+    const rest = cars.map((c) => snapshotRest(c));
+    for (let f = 0; f < 3 * FRAME_HZ; f++) engine.advance(FRAME, { frameDt: FRAME });
+    const i = cars.findIndex((c) => c.crashed);
+    expect(i, "a car crashed").toBeGreaterThanOrEqual(0);
+    const car = cars[i]!;
+    engine.setVaporized(i, true);
+    car.setNearView(false);
+    car.setNearView(true);
+    for (let f = 0; f < 10; f++) engine.advance(FRAME, { frameDt: FRAME });
+    expect(worstSkinStretch(car, rest[i]!), "its body while gone, over rest").toBeLessThan(1.001);
+    engine.respawnOnDisc(i);
+    for (let f = 0; f < 10; f++) engine.advance(FRAME, { frameDt: FRAME });
+    expect(car.group.visible && !car.vaporized, "it is back in play").toBe(true);
+    expect(worstSkinStretch(car, rest[i]!), "its body after the respawn, over rest").toBeLessThan(1.001);
+  });
+});
