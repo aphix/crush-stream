@@ -735,7 +735,7 @@ export class DeformableCar extends CarParts {
   setNearView(near: boolean): void {
     if (near === this.nearView) return;
     this.nearView = near;
-    if (near && this.crashed) this.deform.skinOwed = true;
+    if (near && this.crashed && this.deform.skinBaked) this.deform.skinOwed = true;
   }
 
   /** The engine's verdict that no camera sees this car (`holdDeferred`). */
@@ -793,7 +793,7 @@ export class DeformableCar extends CarParts {
     }
     this.bakeRestNormals(strength);
     this.paintRestNormals(SHELLS.filter((name) => !this.panelsFollow || !this.skinFollows(name)));
-    if (this.crashed) this.deform.skinOwed = true;
+    if (this.crashed && this.deform.skinBaked) this.deform.skinOwed = true;
   }
 
   /** Whether the shell is on the car and follows its dent (the body always; a lid or door until it is torn off). */
