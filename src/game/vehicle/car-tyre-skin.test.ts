@@ -1,3 +1,4 @@
+import { hypot2 } from "../kernel/physics-core.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { type CrashWorld, FREEWHEEL, launch, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -150,6 +151,40 @@ describe("given a pickup's skin of which one point is crushed into its front tyr
     );
     expect(under, "fixture: the corner starts deep under its target").toBeGreaterThan(10 * SAG_CLEAR_M);
     expect(over, `${(over * 1000).toFixed(1)} mm over its target`).toBeLessThanOrEqual(0.001);
+  });
+});
+
+/** How far (m) ahead of the front hub, at rest, the carried point stands at least, and how far across from it at most: the fender ahead of the tyre. */
+const CARRIED_AHEAD = 0.55;
+const CARRIED_ACROSS = 0.15;
+/** Where the crush leaves it (m, off the hub in the car's frame): inside the tyre, under its top. */
+const CARRIED_INTO = [0, 0.3, 0.05] as const;
+
+describe("given a pickup's fender point resting well ahead of its front tyre, which a crush carries back into the tyre", () => {
+  it("when the skin is held off the tyres, then the point stands 5 mm out of the tyre, as one that rested over it does", () => {
+    const car = buildCar("pickup", "truck");
+    const mesh = car["body"] as THREE.Mesh;
+    const skin = new TyreSkin(car.frame, mesh, car.deform.restSkin, true);
+    const lift = CLASSES[carClass(car)].lift;
+    car.group.updateMatrixWorld(true);
+    skin.hold(car.group, car.wheels, 0, lift, true);
+    const toCar = new THREE.Matrix4().multiplyMatrices(car.group.matrixWorld.clone().invert(), mesh.matrixWorld);
+    const hub = car.wheels[FRONT_RIGHT_WHEEL]!.getWorldPosition(new THREE.Vector3()).applyMatrix4(car.group.matrixWorld.clone().invert());
+    const positions = mesh.geometry.getAttribute("position");
+    const at = new THREE.Vector3();
+    const carried = Array.from({ length: positions.count }, (_, v) => v).find((v) => {
+      at.fromBufferAttribute(positions, v).applyMatrix4(toCar);
+      return Math.abs(at.x - hub.x) < CARRIED_ACROSS && at.z > hub.z + CARRIED_AHEAD && at.y > hub.y && Number.isNaN(skin["over"][FRONT_RIGHT_WHEEL]![v]!);
+    });
+    must(carried !== undefined, "fixture: a fender point ahead of the front-right hub that does not rest over its tyre");
+    at.fromBufferAttribute(positions, carried);
+    const into = new THREE.Vector3(hub.x + CARRIED_INTO[0], hub.y + CARRIED_INTO[1], hub.z + CARRIED_INTO[2]).applyMatrix4(toCar.clone().invert());
+    const rest = at.clone();
+    for (let v = 0; v < positions.count; v++) if (at.fromBufferAttribute(positions, v).distanceTo(rest) < 1e-6) positions.setXYZ(v, into.x, into.y, into.z);
+    skin.hold(car.group, car.wheels, 0, lift, true);
+    at.fromBufferAttribute(positions, carried).applyMatrix4(toCar);
+    const out = hypot2(at.y - hub.y, at.z - hub.z) - car.frame.rig.tyre.r;
+    expect(out, `the carried point stands ${(out * 1000).toFixed(1)} mm out of the tyre`).toBeGreaterThanOrEqual(CLEARANCE_M);
   });
 });
 

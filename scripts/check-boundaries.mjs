@@ -88,7 +88,7 @@ const HOT = {
   "src/game/scenes/figure-strike.ts": ["runsDown", "inCarFrame"],
   "src/game/vehicle/car.ts": ["syncPose", "stepBreakage", "updateSkin", "restPointOf", "surfaceAt", "cutAt", "scrape", "holdRewroteNormals", "roundHeldShells"],
   "src/game/vehicle/held-round.ts": ["roundHeld"],
-  "src/game/vehicle/car-tyre-skin.ts": ["takeNormalsRewritten"],
+  "src/game/vehicle/car-tyre-skin.ts": ["takeNormalsRewritten", "admitCarried", "indexOver", "findCaps", "capAtRest", "liftSaggingSkin"],
   "src/game/vehicle/paint-scrapes.ts": ["scrape", "slice", "commit", "runsOn", "append", "mergeNearest", "gap", "mergeInto"],
   "src/game/vehicle/car-parts.ts": ["syncAttachedParts", "advanceFlap", "poseParts", "followGlass", "evaluateBreakage", "stepLooseParts", "freeObjects"],
   "src/game/vehicle/loose-step.ts": ["stepLoose", "landOn"],
