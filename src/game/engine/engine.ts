@@ -22,6 +22,7 @@ import { groundMaterial, levelOrder } from "../scenes/ground-stack.ts";
 import { carClass, damageStage, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { makeJerseyBarrier, makePoolTexture } from "../present/engine-world.ts";
 import { Cinematics } from "../present/engine-cine.ts";
+import { CAR_HIT, WALL_HIT } from "../present/hit-foot.ts";
 import { setReliefDevice } from "../present/surface-relief.ts";
 import { FX_TIERS } from "../present/engine-post.ts";
 import { SKY_MODES } from "../present/sky-dome.ts";
@@ -876,7 +877,7 @@ export class CrashEngine extends EngineGarage {
       sight: (focus) => this.sceneSight(focus, true),
       still: () => this.sceneSight(null, false),
       clock: this.clock,
-      crash: (contact, normal) => this.cine.beginCrashCam(contact, normal, this.crashSight(), this.clock.hold),
+      crash: (contact, normal, source) => this.cine.beginCrashCam(contact, normal, this.crashSight(), this.clock.hold, source),
       impact: (contact, normal, closing) => this.beginCinematic(contact, normal, closing, false),
       hit: this.hitFx,
       fudge: (at, normal, strength) => this.fudgeContact(at, normal, strength),
@@ -1716,7 +1717,7 @@ export class CrashEngine extends EngineGarage {
     if (shot && shot.contactS !== null && this.clock.phase === "approach") {
       this.beginCinematic(shot.contactAt, shot.normal, shot.speedBefore);
     } else if (!this.derbyMode && !this.race.active && !this.showStack && !this.showLab && !struck(this.clock) && contact && normal && impulse > 0.4) {
-      this.beginCinematic(contact, normal, impulse);
+      this.beginCinematic(contact, normal, impulse, undefined, w.strongest.wall ? WALL_HIT : CAR_HIT);
     } else if ((this.derbyMode || this.race.active) && contact && normal && impulse > SPARK_MIN_IMPULSE && this.elapsedWall - this.sparkAt > 0.16 && this.witness.sees(contact, FX_REACH.sparks)) {
       this.sparkAt = this.elapsedWall;
       this.sparkShower(contact, normal, impulse);

@@ -786,7 +786,8 @@ export abstract class EngineScenes extends EngineMinigames {
   private offerWall(i: number, closing: number, x: number, z: number, nx: number, nz: number): void {
     this.noteHit(i, closing);
     this.wallHit.impulse = Math.max(closing, 0.5);
-    this.wallHit.contact.set(x, 0.4, z);
+    this.wallHit.contact.set(x, this.world.cars[i]!.group.position.y, z);
+    this.wallHit.wall = true;
     this.wallHit.normal.set(nx, 0, nz);
     this.world.strongest.offer(this.wallHit);
   }

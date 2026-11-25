@@ -21,6 +21,7 @@ import { GpuTimer } from "./gpu-timer.ts";
 import { SKIN_SSS } from "./dummy-shader.ts";
 import { fovFor, inFrame } from "./highlight-cam.ts";
 import { camUsable, sightLine, type Sight } from "./spectate-cam.ts";
+import { AIM_UP, aimSink, CAR_HIT, hitFoot, type HitSource } from "./hit-foot.ts";
 import type { Ultra } from "./ultra/ultra.ts";
 import { FX_REACH, type Witness } from "./witness.ts";
 import { NO_FLOOR } from "../world/ground.ts";
@@ -63,10 +64,9 @@ const _v = new THREE.Vector3();
 const _side = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 const _eye = new THREE.Vector3();
+const _foot = new THREE.Vector3();
 /** The hit holds still: `camUsable`'s target velocity for a crash-cam eye. */
 const STILL = { x: 0, y: 0, z: 0 };
-/** Crash cam: it aims this high (m) over the ground at the impact. */
-const AIM_UP = 0.55;
 /** Impact-axis turns (cos, sin) tried in order for a clear crash cam: as hit, reversed, then the quarter turns. */
 const TURNS = [
   [1, 0],
@@ -124,11 +124,6 @@ export function crashEye(out: THREE.Vector3, t: number, at: THREE.Vector3, n: TH
 export function hitAim(out: THREE.Vector3, x: number, y: number, z: number, sight: Sight | null): THREE.Vector3 {
   const g = sight ? sight.ground.heightAt(x, z, y + 1) : 0;
   return out.set(x, (g === NO_FLOOR ? y : Math.max(g, y)) + AIM_UP, z);
-}
-
-/** How far (m) a hit's own point (its height `y` over `AIM_UP`) sits under its aim `at`: `hitAim` aims over the road, not over a car sunk into it (0.11 m at a city wall hit), so a line that clears the aim can pass under the lip of a wall that hides the hit. */
-export function aimSink(at: THREE.Vector3, y: number): number {
-  return Math.max(0, at.y - (y + AIM_UP));
 }
 
 /** `camUsable` for an eye on the hit at `at`, whose own point sits `sink` m under it (`aimSink`): the line to that point is clear too. */
@@ -190,9 +185,9 @@ export class CrashPick {
     this.s = null;
   }
 
-  /** Spend up to `units` `camUsable` calls (about 0.15 ms each) on the search; true when it is finished. */
+  /** Spend up to `units` `camUsable` calls (about 0.15 ms each) on the search, a hit with a foot under its aim costing two (the second sight line); true when it is finished. */
   run(units: number): boolean {
-    for (; this.s && units > 0; units--) this.step();
+    for (; this.s && units > 0; units -= this.sink > 0 ? 2 : 1) this.step();
     return this.s === null;
   }
 
@@ -282,12 +277,13 @@ export function heldCut(s: Sight, at: THREE.Vector3, n: THREE.Vector3, reach: Fl
  * The impacts of a clip's scope after its first that fall inside the crash cam's window, in time order (`n` of them): per
  * impact the wall second (into the crash cam) the held cam starts to look at it and the one it stops, where it lands (and how
  * far its own point sits under that, `aimSink`), and whether it is a driver thrown (1: the cam keeps its axis) rather than a crash (0: the axis moves onto it).
+ * `y`, `a` and `b`: the recorded height and the clip's cars of a crash (`b` -1: a wall hit), to read its sink again when the cam reaches it (`CrashHold.refresh`).
  */
-type LaterHits = { n: number; from: Float64Array; until: Float64Array; at: THREE.Vector3[]; sink: Float64Array; thrown: Uint8Array };
+export type LaterHits = { n: number; from: Float64Array; until: Float64Array; at: THREE.Vector3[]; sink: Float64Array; y: Float64Array; a: Int32Array; b: Int32Array; thrown: Uint8Array };
 
 /** Room for `max` later impacts. */
 export function laterHits(max: number): LaterHits {
-  return { n: 0, from: new Float64Array(max), until: new Float64Array(max), at: Array.from({ length: max }, () => new THREE.Vector3()), sink: new Float64Array(max), thrown: new Uint8Array(max) };
+  return { n: 0, from: new Float64Array(max), until: new Float64Array(max), at: Array.from({ length: max }, () => new THREE.Vector3()), sink: new Float64Array(max), y: new Float64Array(max), a: new Int32Array(max).fill(-1), b: new Int32Array(max).fill(-1), thrown: new Uint8Array(max) };
 }
 
 const NO_LATER = laterHits(0);
@@ -297,7 +293,7 @@ const NO_LATER = laterHits(0);
  * itself before), the scene's solids round it, built when asked, until when (wall s into the crash cam) the hit itself
  * is still to come (`heldCut`'s `hit`), and the clip's later impacts of the window (`LaterHits`): it looks at each as it comes.
  */
-export type CrashHold = { target: THREE.Vector3; sight: () => Sight; hit: number; later: LaterHits };
+export type CrashHold = { target: THREE.Vector3; sight: () => Sight; hit: number; later: LaterHits; refresh?: (later: number) => void };
 
 const _aim = new THREE.Vector3();
 /** The points `holdAim` took the middle of, this frame (`n` of them). */
@@ -371,7 +367,7 @@ export class CrashCam {
    * The crash cam on a hit at `contact` along `normal`, its slow-mo held `hold` wall s. `sight` (a course): it stands on its
    * ground and turns its axis so its eyes see the hit.
    */
-  begin(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number): void {
+  begin(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number, source: Readonly<HitSource> = CAR_HIT): void {
     this.end = crashCamEnd(hold);
     hitAim(this.camAt, contact.x, contact.y, contact.z, sight);
     this.firstAt.copy(this.camAt);
@@ -381,7 +377,7 @@ export class CrashCam {
     this.camN.normalize();
     // On a course the pick runs over the lead-in frames (`direct`): no eye on any cut until it is done.
     this.camReach.fill(sight ? 0 : 1);
-    if (sight) this.pick.begin(sight, this.camAt, this.camN, this.camReach, TURNS.length, aimSink(this.camAt, contact.y));
+    if (sight) this.pick.begin(sight, this.camAt, this.camN, this.camReach, TURNS.length, aimSink(this.camAt, hitFoot(_foot, contact.x, contact.y, contact.z, sight, source)));
     else this.pick.cancel();
     this.camT = 0;
     this.held = -1;
@@ -397,14 +393,14 @@ export class CrashCam {
    * A later crash while it cuts (a sandbox pile-up): a fresh axis on that hit, its cuts starting over at once and ending as far
    * past the hit as a first crash's (`hold`: wall s from it to the hand-back). One before its crash's first cut has played is left to it.
    */
-  recut(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number): void {
+  recut(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number, source: Readonly<HitSource> = CAR_HIT): void {
     if (!this.cutting || this.camT < CUTS[1]) return;
     this.camT = CUTS[0];
     this.end = CUTS[0] + crashCamEnd(hold);
     hitAim(this.nextAt, contact.x, contact.y, contact.z, sight);
     this.nextN.set(normal.x, 0, normal.z);
     if (this.nextN.lengthSq() < 1e-6) this.nextN.copy(this.camN);
-    this.retarget(this.nextN.normalize(), sight, aimSink(this.nextAt, contact.y));
+    this.retarget(this.nextN.normalize(), sight, aimSink(this.nextAt, hitFoot(_foot, contact.x, contact.y, contact.z, sight, source)));
   }
 
   /** The pick for the axis at `nextAt` (its own point `sink` m under it, `aimSink`) along `n`, run over the next frames by `direct`, which moves the cam onto it once it is done. */
@@ -488,6 +484,7 @@ export class CrashCam {
         // Each later crash its own angle: the axis moves to it as its look begins (a thrown driver keeps the cut).
         for (; this.reached < l.n && l.from[this.reached]! <= t; this.reached++) {
           if (l.thrown[this.reached] === 1) continue;
+          hold.refresh?.(this.reached);
           this.nextAt.copy(l.at[this.reached]!);
           this.retarget(this.camN, s, l.sink[this.reached]!);
         }
@@ -661,16 +658,16 @@ export class Cinematics {
    * The first big impact of a crash run (fleet / barrier): punch, FOV kick and, unless the user framed the shot, the
    * crash cam, its cuts over a slow-mo held `hold` wall s. `sight` (a course): the crash cam stands on its ground and turns its axis so its eyes see the hit.
    */
-  impact(contact: THREE.Vector3, normal: THREE.Vector3, impulse: number, crashCam: boolean, sight: Sight | null, hold: number): void {
+  impact(contact: THREE.Vector3, normal: THREE.Vector3, impulse: number, crashCam: boolean, sight: Sight | null, hold: number, source: Readonly<HitSource> = CAR_HIT): void {
     if (this.tierNow === "off") return;
     const k = THREE.MathUtils.clamp(impulse / 30, 0.35, 1);
     this.kick(k);
-    if (crashCam) this.crash.begin(contact, normal, sight, hold);
+    if (crashCam) this.crash.begin(contact, normal, sight, hold, source);
   }
 
   /** The crash cam alone, started apart from the impact (a reel's cut lands before its hit does). */
-  beginCrashCam(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number): void {
-    if (this.tierNow !== "off") this.crash.begin(contact, normal, sight, hold);
+  beginCrashCam(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number, source: Readonly<HitSource> = CAR_HIT): void {
+    if (this.tierNow !== "off") this.crash.begin(contact, normal, sight, hold, source);
   }
 
   /** A later crash of a sandbox run: its own crash cam cut, if the cam is cutting (`CrashCam.recut`). */

@@ -191,7 +191,7 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
     sight,
     still: course,
     clock,
-    crash: (contact, normal) => crash.begin(contact, normal, withCars(course(), w.live()), clock.hold),
+    crash: (contact, normal, source) => crash.begin(contact, normal, withCars(course(), w.live()), clock.hold, source),
     impact: () => {},
     fudge: () => {},
     hit: () => {},
