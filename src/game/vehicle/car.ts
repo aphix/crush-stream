@@ -24,6 +24,7 @@ import { CLASS_HUBS, CLASS_LIFT, LID } from "./constants.ts";
 import { MAT, SCRATCH_CUT, TAKES_SCRATCH, type MaterialId } from "../kernel/material-ids.ts";
 import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
 import { passesFor, smoothingNow, smoothNormals } from "./normal-smooth.ts";
+import { roundHeld } from "./held-round.ts";
 import { SCRATCH_MIN_SLIP } from "./paint-scrapes.ts";
 import { rideSkin } from "./trim-ride.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
@@ -701,13 +702,13 @@ export class DeformableCar extends CarParts {
       if (this.deform.skinnedThisFrame) this.skinPanels();
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
     }
-    // A hold that re-lifted the skin on a frame it was not written rewrote the normals round the tyres flat: drawn round again, as a written skin is,
-    // on a near car only (a far one is drawn at strength 0 and is skinned and rounded when it comes near: `setNearView`).
+    // A hold that re-lifted the skin on a frame it was not written rewrote the normals round the tyres flat: those shells are drawn round again
+    // from their raw normals (`roundHeld`), on a near car only (a far one is drawn at strength 0 and is skinned and rounded when it comes near: `setNearView`).
     const heldRewrote = this.holdRewroteNormals();
     if (this.deform.skinnedThisFrame) {
       this.smoothDrawnSkin();
       if (this.panelsFollow) this.poseOpenShells();
-    } else if (heldRewrote && this.nearView) this.smoothDrawnSkin();
+    } else if (heldRewrote && this.nearView) this.roundHeldShells();
     if (this.panelsFollow) this.followGlass();
     if (this.hullHelper?.visible) this.updateHullHelper();
     this.settleCasters();
@@ -755,7 +756,15 @@ export class DeformableCar extends CarParts {
   protected override layOwedHold(): void {
     this.bodyTyres?.settle();
     if (!this.hoodOff()) this.hoodTyres?.settle();
-    if (this.holdRewroteNormals() && this.nearView) this.smoothDrawnSkin();
+    if (this.holdRewroteNormals() && this.nearView) this.roundHeldShells();
+  }
+
+  /** The shells a tyre hold lifts (the body, and the bonnet while it follows the skin) drawn round again after a hold with no skin written (`roundHeld`). */
+  private roundHeldShells(): void {
+    const strength = smoothingNow();
+    if (strength <= 0) return;
+    roundHeld(this.body.geometry, this.deform.restSkin, strength, this.drawnRest("body"));
+    if (this.panelsFollow && this.skinFollows("hood")) roundHeld(this.hood.geometry, this.hoodRest, strength, this.drawnRest("hood"));
   }
 
   /** Whether either tyre hold rewrote normals since this was last asked. */

@@ -310,6 +310,29 @@ describe(`given a sedan built round and then crushed by a ${GENTLE_KPH} km/h wal
     expect(still > 500 && still < crushed.body.geometry.getAttribute("normal").count - 500, `${still} vertices stayed in place`).toBeTruthy();
   });
 
+  // A wheel that moves re-lifts the skin over it on frames no skin is written (the tyre hold), and the lifted shells are drawn round again.
+  // Rounding the already rounded normals moved them by 0.70 on the first such frame and 1.12 by the fourth; from raw normals they come back
+  // within 0.001 of the written frame's each time the wheel is back where it was (the hold's local and the whole recompute differ that much).
+  it("when a front wheel bobs 4 mm up and back down twice with no skin written, then with the wheel back in place the body is drawn with the written frame's normals, within 0.005", () => {
+    const normals = crushed.body.geometry.getAttribute("normal").array;
+    const drawn = Float32Array.from(normals);
+    const wheel = crushed.wheels[0]!;
+    let worst = 0;
+    let lifted = 0;
+    for (let k = 0; k < 4; k++) {
+      crushed.deform.skinnedThisFrame = false;
+      wheel.position.y += k % 2 === 0 ? 0.004 : -0.004;
+      crushed.group.updateMatrixWorld(true);
+      crushed.updateSkin();
+      let gap = 0;
+      for (let i = 0; i < drawn.length; i++) gap = Math.max(gap, Math.abs(normals[i]! - drawn[i]!));
+      if (k % 2 === 0) lifted = Math.max(lifted, gap);
+      else worst = Math.max(worst, gap);
+    }
+    expect(lifted, "the control: the raised wheel's hold redrew normals").toBeGreaterThan(0.01);
+    expect(worst, "the most a drawn normal's component is off with the wheel back in place").toBeLessThan(0.005);
+  });
+
   it("when the crashed car is reset, then it is drawn with the intact car's normals again", () => {
     crushed.resetVisual();
     expect(largestGap(shellsOf(crushed).map(normalsOf), shellsOf(intact).map(normalsOf))).toBe(0);
