@@ -180,6 +180,7 @@ Treat model-written prose as leads, not facts; cite the listed sources.
 | `perplexity/2026-11-22-gta-online-ragdoll-and-ped-sync.md` | Nothing published on how GTA Online or Red Dead Online send a ragdoll (netplay) |
 | `perplexity/2026-11-22-gta-sa-decompilation-melee-and-knockdown.md` | Not found: the reversed source's fight task is calls by address; verified there instead: door and seat are separate and a driver in by the far door is slid over (`TASK_SIMPLE_CAR_SHUFFLE`) (netplay) |
 | `landing-pass-plan.md` | The plan in flight (Main keeps it current): what is unlanded on `play/union`, the lanes and their goals, the binding lane, review, gate and landing rules, the open-world and host/guest items still open, and which commits of the old branches are real fixes that never reached `main` (landing pass, 2026-11-24) |
+| `sim-law-proposals.md` | For the owner: the three simulation-law changes that sit on old branches (the crush impulse as the energy of the slice's travel; shape-match goals with no net force or turn; a wreck read at every second cage point) and one finding with no fix (a rigid hit can add energy to a tumbling wreck): what each changes, the old commits' own measurements, what a player would see, the risk, and a recommendation (landing pass, 2026-11-25) |
 
 ## Papers (`papers/`)
 
