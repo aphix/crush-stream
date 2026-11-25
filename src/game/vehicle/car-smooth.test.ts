@@ -1755,7 +1755,7 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Then 0.13, so the cage's A-pillar box keeps the dummies' roof proxy off the windshield: 2fc92389 -> d4d091d3; police d97239fa -> 26d74836.
   // Again for the tail widened to the reference's plan: d4d091d3 -> 03293d37; police 26d74836 -> bb93a908.
   // Again for the cage's rear header box's top onto the rear glass's (`rearHeaderRise` -0.03: it stood 7 cm over the drawn deck), the cage hood's dome (`hood.cageCrown`: its centre line was 4-5 cm under the drawn crown) and the C-post as the drawn sail's own loft (`cPillar.cageSail`: the box left the cage 10-16 cm under the sail's top): 42c41ed3... -> 5d7bb2e6....
-  { id: "sedan", digest: "f07374f780b5347820d3b58e04847ad4ea83e8d2e739aa3a2845a4db98029d15" },
+  { id: "sedan", digest: "ef096cd80c9fd10ce42c96e7113ba08c601d723ffde53396f453acf0aaaf0ccd" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
@@ -1763,18 +1763,18 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Again for its rear glass base and gate top dropped to the reference's (.94 -> .905): bd7135b8... -> b9336649....
   // Again for its quarter glass's rear edge leaning forward to the reference's (top z -1.07 -> -.96, belt -1.174 -> -1.15) and its roof's rear lip tucked over the D-pillars (`roofEnds.rear` .019, flush): b9336649... -> 5a049815....
   // Again for its rear glass's top widened to the reference's (`wTop` .9 -> 1.0), its side frit slimmed (.05 -> .03) so the D-pillar narrows at the roof, and its roof rolling round into its side glass (`roofSection`): 5a049815... -> 6648aae3....
-  { id: "hatchback", digest: "5feab4d326b6edd7f5765e79e68129cb7813e962a3e0f9761fc2c7702c7b3a6f" },
+  { id: "hatchback", digest: "2838e41c00b02530a8287e1397fd099289baed9546c94628bc5ec549fcdfceae" },
   // The SUV's for its quarter glass running back to a slim D-post (rear edge belt -1.945 -> -1.995, top -1.67 -> -1.72): 367e3e9f... -> 94bad84a....
   // Again for its D-post's edges running near parallel (quarter top -1.72 -> -1.76, belt -1.995 -> -1.99; rear glass `wTop` .92 -> .96): 94bad84a... -> fa93839f....
   // The wagon's again for its cage's tail opened to the cargo floor (`cageTailCut`: the boot cut's rings held, the gate a 1 cm sheet with its top ring held): 86d39f74 -> f428bc2c; the other six styles are byte-identical.
-  { id: "wagon", digest: "fc1f831a126544aa83d99caab754fdec36a5caa6981a448043a920ce13142f7e" },
+  { id: "wagon", digest: "b828d205de2c01389211ecd139f7de5a3d34b42930f9c4d82ffae4054fd406e9" },
   // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above), and its drawn roof rolled onto the windshield's top (`roofEnds.front`).
   // Re-pinned for its rear glass's round outline (`rearGlass.roundOutline`): the frit's corner fans stand 1 cm in behind the pane as a backing, and the pane's drawn vertices are the glass panel's cage-skinned rest.
   // Re-pinned for its curved roof (`roofSection` .4/.6) and narrower rear glass top (`rearGlass.wTop` .92): the raked panes fall with the dome and the glass panel's cage-skinned rest moved.
   // Re-pinned for its belt's crest under the sail's foot dropped (profile z -1.49) and its quarter glass's point moved back (`quarter.zRearBot` -0.981, the belt's rear knots with it): the skin rows there and the glass panel's cage-skinned rest moved.
   // Re-pinned for its quarter glass's sill rising to the window's point (`belt.y` -0.981 .925) and its shoulder held level behind it (profile z -1.49 to -1.023 at .924-.93): the glass, its rail and the skin there moved.
   // Re-pinned for its haunch's crest (`shoulder`: the widest line 5-9 cm under the belt from the tail to the door), its quarter sill dipping behind the door and its roof's rear corner 2 cm wider (cabinHw .49/.50): 034d75e5 -> f8bbd431.
-  { id: "coupe", digest: "7c49e707cc0bd08f00d82b14523390ed8f0021153d46556a85b12f5b88e0d899" },
+  { id: "coupe", digest: "1dc928c5d5b32930a068a501b16a9c51c979817c05ff18d5fae21216012f7e00" },
   // The monster re-pinned for its thin bed rim (`tubWall` .04): the bed walls' top edge stands 2 cm further out in both builds.
   // Pickup and monster re-pinned for the roof ending at the windshield's top (`roofZ`/`windshieldTop` z .45); the pickup's solid cab corner (`quarter` -0.3) too.
   // The pickup re-pinned for its thin bed rim (`tubWall` .04), now its own proxy belt keeps the dummies' bed open; both trucks for the greenhouse's dome-following panes and posts.
@@ -1789,21 +1789,22 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // The pickup's again for its rear glass's bowed top standing just ahead of the roof's end (`rearGlass.top`), so none shows past it.
   // The pickup's again for its cab narrowed to the top plate's roof edge (profile cabinHw) and its rear glass's top narrowed inside the roof's end.
   // Again for its door run back to the side plate's seam (`door.aperture`) with the B and rear post boxes behind it (`bPillar`, `quarter`).
-  { id: "pickup", digest: "0f8b4950c81e8fb0fd66e89b55923b18a3e28fcdd377f093e689f87f7124dc1b" },
+  { id: "pickup", digest: "dbfc6f328afbec4962d63544969a94c3431443d39f3b634b75f7fa2db6333680" },
   // The police's again for its push bar's box in the cage, skinned to its bumper's two masses (`pushBarBox`, a part apart of its own): 64de4e9e... -> d088c1af...; then with its front doors (the bar's part between the bumpers and the doors): d088c1af... -> 9c06e568....
   // The police's again with the sedan's rear shoulder cage (`rearHeaderRise`, `hood.cageCrown`, `cPillar.cageSail`): 9097740d... -> aff89a24....
-  { id: "police", digest: "af5e812c9a1b692e784bb59e8ac38993b2a76bb9d398d9cdcd40d1a3dc12fe06" },
+  { id: "police", digest: "29c4d5e9af384ea9c9c387a7ca506d5fcc6fcf48204488345518a822f0b0c3fb" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
   // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.
   // Again for its roof's flatter crown and tighter edge roll (`roofSection` crown .75, blend .8), as the pickup's.
   // The monster's again for its bed gate hinged at its bottom edge (`boot.pivot` [.45, -2.3]): it dropped open from its top like a hatch; the gate panel's origin and its rest local to it moved: 18934885... -> fc41fe09....
   // The monster's again for its door's hinge run (`door.hingeRun` .2: the drawn skin's hinge end): the cage door follows the drawn skin, so its corners moved: 393f00cc... -> 54c38d76....
-  { id: "monster", digest: "237809c1ee465f0c9e8367a97fcc50e7e806d87a1545ac1dfce71c37da174367" },
+  { id: "monster", digest: "ae4b15df1b72552a7749a1058665d89fa13b9841c2acc96e3c9aa86d7f2e626e" },
   // Every style re-pinned with its bumpers in the cage (`CageSource.held`, `apart`), then with its front doors: both ride in the source's tail.
   // Again for each bumper's bottom corner held (`bumperCorner`, only the bumper panels' `held` bytes moved): sedan 5d7bb2e6 -> 178e9168, hatchback 27214b16 -> aaae2dbc, wagon 442af3ac -> 5a6baf21, coupe ac78d12f -> 9a5edd06, pickup 49d43ba4 -> a9a7c34b, police aff89a24 -> 39e40f45, monster 96ec5590 -> ecbb5d08.
   // Every style again with both header boxes' tops on their glass's top (no `rearHeaderRise`): sedan fcaaf74d -> bb44a2e8, hatchback 28c222e1 -> 26ba33eb, wagon 2b0ac6a8 -> 09731e56, coupe 4b351c02 -> 4cb16ddc, pickup e2bec359 -> 16925f61, police 1f500a0c -> 5d099f5b, monster 4fe1f433 -> 1f6c24c5.
   // Every style again with the hood's crease ring held in the decimation (`creaseRing`, the ridge a crushed hood folds into): its cage hood top ring stays, the lids' tables moved.
   // Sedan and police again for the cage's crowned hood lid resting on the deck edge (12 mm under the plain lid's edge) and their hull holding the shoulder-top points at the rear half of the hood's span (`lidSection`, `fenderShoulderHold`): sedan 04e3ac5a -> f07374f7, police 06273598 -> af5e812c; the other five are byte-identical.
+  // Every style re-pinned for an arch's skin between the axles fading onto the sill's clusters at the plant's edge (`ARCH_SILL_BLEND`; only the cluster tables `skinXf`, `skinW` moved): sedan f07374f7 -> ef096cd8, hatchback 5feab4d3 -> 2838e41c, wagon fc1f831a -> b828d205, coupe 7c49e707 -> 1dc928c5, pickup 0f8b4950 -> dbfc6f32, police af5e812c -> 29c4d5e9, monster 237809c1 -> ae4b15df.
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
 describe("given every body style's cage source, the tables its collision cage is decimated from", () => {
