@@ -32,12 +32,14 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
 
   beforeAll(async () => {
     rig = await OnFootRig.boot();
-    // The fleet boots with a random scene seed: logged so a red run names it.
+    // The fleet boots on the rig's fixed default seed: logged so a red run names it.
     console.log("fleet scene seed", rig.engine["sceneSeed"]);
     rig.engine["looping"] = false;
     rig.run(FRAME);
   });
   beforeEach(() => {
+    // The pacer's sim time owed from the row before must not leak into this one's first frame.
+    rig.engine.pace.reset();
     rig.normalTime();
     rig.engine["onFoot"].reset();
     rig.engine["ragdolls"].reset();
