@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { BODY_GAP } from "../../ai/civilians/civilian-crowd-constants.ts";
+import { buildVenueIndex, isSeatedVenue } from "../../ai/civilians/society-venues.ts";
 import { interiorSolids, planInterior } from "./interior-plan.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
 import { AISLE_STRIDE, CLERK_SPOTS, SEAT_STRIDE, STAND_COLUMNS, STAND_SPOTS, type Place } from "./walk-graph.ts";
 
 const map = buildOpenWorldMap(layOutLots());
+const venues = buildVenueIndex(map);
 /** A standing body's half-width (two bodies keep 0.6 m apart). */
 const BODY_HALF = 0.3;
 /** A sitter keeps a body's width from a spot: the least seat-to-spot gap on the map is 0.602 m, a bar's first lane beside its first stool. */
@@ -105,8 +107,8 @@ describe("given the aisle of every shop, coffee shop, bar and office of the neig
       }
       const seats = place.seats ?? new Float32Array(0);
       for (let seat = 0; seat < seats.length; seat += SEAT_STRIDE) {
-        // Customers sit in coffee shops and bars; an office is not a seated venue, its seats are never walked to.
-        if (seats[seat + 3]! > place.counter![3]! || (place.interior !== "bar" && place.interior !== "coffee")) continue;
+        // Customers sit where the game seats them (`isSeatedVenue`); an office is not a seated venue, its seats are never walked to.
+        if (seats[seat + 3]! > place.counter![3]! || !isSeatedVenue(venues.venueOf[map.places.indexOf(place)]!)) continue;
         if (walkCrosses(aisle, solids, seats[seat]!, seats[seat + 1]!)) found.push(`${place.name} seat ${seat / SEAT_STRIDE}: a leg of the walk from the door crosses a solid`);
       }
     }

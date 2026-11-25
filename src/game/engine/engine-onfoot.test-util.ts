@@ -25,6 +25,8 @@ const KEY_SHARE = 0.38;
 const RUN_UP_M = 5;
 const OUTWARD_M = 0.3;
 const HIT_MPS = 5;
+/** The scene seed (hex) a boot with no link takes: the fleet and the first reset of every derby and race the rig opens roll their layouts from it. */
+const DEFAULT_SEED = "1";
 /** How far out from his door he walks first (m), so the last stretch to it is clear of the car's body. */
 const APPROACH_M = 1.5;
 /** The longest walk back to his door a test allows (s): a car's blow flings him tens of metres and he walks 1.3 m/s. */
@@ -47,10 +49,10 @@ export class OnFootRig {
     this.engine = engine;
   }
 
-  /** `hash`: the page's share link (`scene=openworld&seed=beef`), none for the fleet. */
-  static async boot(hash?: string): Promise<OnFootRig> {
+  /** `hash`: the page's share link (`#scene=openworld&seed=beef`); none: the fleet at `DEFAULT_SEED`, so no file rolls a layout of its own each run (the engine rolls a random scene seed unless a link pins one). */
+  static async boot(hash = `#scene=fleet&seed=${DEFAULT_SEED}`): Promise<OnFootRig> {
     stubBrowser();
-    if (hash !== undefined) globalThis.location.hash = hash;
+    globalThis.location.hash = hash;
     const engine = await bootEngine({ pacer: true });
     engine.autoSlomo = false;
     await engine["ragdolls"].preload();
