@@ -29,6 +29,7 @@ reelViewClaims(
     await scene("city head-on", raceOn("city", 8, 2), cityTrack, [{ ...cityShift0[0]!, cars: [1, 2] }], 14);
     await scene("city T-bone", raceOn("city", 8, 2), cityTrack, [{ ...cityShift0[2]!, cars: [1, 2] }], 14);
     await scene("city wall", raceOn("city", 8, 1), cityTrack, [{ ...crashes(cityTrack.length, WALL_SHIFT)[4]!, cars: [1] }], 14);
+    await scene("city chain gap 16 m", raceOn("city", 6, 3), cityTrack, chain(CHAIN_SHIFT, 16), 14);
     await scene("city chain gap 7 m", raceOn("city", 6, 3), cityTrack, chain(CHAIN_SHIFT, 7), 14);
     await scene("stunt head-on", raceOn("stunt", 3, 2), stuntTrack, [{ ...crashes(stuntTrack.length, 0)[0]!, cars: [1, 2] }], 14);
     await scene("stunt jump +28 m", raceOn("stunt", 3, 2), stuntTrack, [{ kind: "jump", at: CREST, speed: 30, land: 28, cars: [1, 2] }], 14);

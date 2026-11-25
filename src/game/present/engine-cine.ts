@@ -132,10 +132,28 @@ const CONTACT_ABOVE_ORIGIN = 0.7;
 /** The sight's own tolerance (`CLEAR.pad` is 0.25 m): a foot this near the aim is the same point. */
 const SINK_MIN = 0.01;
 
-/** The lowest point the reel may judge a hit at (x, z), recorded at height `y`: `AIM_UP` over the car's origin, which sits no lower than the road or the car and no more than `CONTACT_ABOVE_ORIGIN` under `y`. */
-export function hitFoot(out: THREE.Vector3, x: number, y: number, z: number, sight: Sight | null): THREE.Vector3 {
+/** What a hit's recorded height means: a wall hit records the car's own origin; a car-to-car hit the contact, over an origin. `under`: how far (m) the hit car's origin sits under the road. */
+export type HitSource = { wall: boolean; under: number };
+
+/** A car-to-car hit with its car on the road: what a hit with no record of its source is taken for. */
+export const CAR_HIT: Readonly<HitSource> = { wall: false, under: 0 };
+
+/** `out` as the source of a hit by the car at (x, y, z), a wall hit or not, on `sight`'s road. */
+export function hitSource(out: HitSource, sight: Sight, x: number, y: number, z: number, wall: boolean): HitSource {
+  const g = sight.ground.heightAt(x, z, y + 1);
+  out.wall = wall;
+  out.under = g === NO_FLOOR ? 0 : Math.max(0, g - y);
+  return out;
+}
+
+/**
+ * The lowest point the reel may judge a hit at (x, z), recorded at height `y`: `AIM_UP` over the car's origin. A wall hit records the origin itself.
+ * A car-to-car hit's origin sits no lower than the road less `source.under` or the contact, and no more than `CONTACT_ABOVE_ORIGIN` under the contact.
+ */
+export function hitFoot(out: THREE.Vector3, x: number, y: number, z: number, sight: Sight | null, source: Readonly<HitSource> = CAR_HIT): THREE.Vector3 {
+  if (source.wall) return out.set(x, y + AIM_UP, z);
   const g = sight ? sight.ground.heightAt(x, z, y + 1) : 0;
-  return out.set(x, Math.max(g === NO_FLOOR ? y : Math.min(g, y), y - CONTACT_ABOVE_ORIGIN) + AIM_UP, z);
+  return out.set(x, Math.max((g === NO_FLOOR ? y : Math.min(g, y)) - source.under, y - CONTACT_ABOVE_ORIGIN) + AIM_UP, z);
 }
 
 /** How far (m) a hit's `foot` (`hitFoot`) sits under its aim `at` (`hitAim`); 0 under `SINK_MIN`. */
@@ -384,7 +402,7 @@ export class CrashCam {
    * The crash cam on a hit at `contact` along `normal`, its slow-mo held `hold` wall s. `sight` (a course): it stands on its
    * ground and turns its axis so its eyes see the hit.
    */
-  begin(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number): void {
+  begin(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number, source: Readonly<HitSource> = CAR_HIT): void {
     this.end = crashCamEnd(hold);
     hitAim(this.camAt, contact.x, contact.y, contact.z, sight);
     this.firstAt.copy(this.camAt);
@@ -394,7 +412,7 @@ export class CrashCam {
     this.camN.normalize();
     // On a course the pick runs over the lead-in frames (`direct`): no eye on any cut until it is done.
     this.camReach.fill(sight ? 0 : 1);
-    if (sight) this.pick.begin(sight, this.camAt, this.camN, this.camReach, TURNS.length, aimSink(this.camAt, hitFoot(_foot, contact.x, contact.y, contact.z, sight)));
+    if (sight) this.pick.begin(sight, this.camAt, this.camN, this.camReach, TURNS.length, aimSink(this.camAt, hitFoot(_foot, contact.x, contact.y, contact.z, sight, source)));
     else this.pick.cancel();
     this.camT = 0;
     this.held = -1;
@@ -410,14 +428,14 @@ export class CrashCam {
    * A later crash while it cuts (a sandbox pile-up): a fresh axis on that hit, its cuts starting over at once and ending as far
    * past the hit as a first crash's (`hold`: wall s from it to the hand-back). One before its crash's first cut has played is left to it.
    */
-  recut(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number): void {
+  recut(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number, source: Readonly<HitSource> = CAR_HIT): void {
     if (!this.cutting || this.camT < CUTS[1]) return;
     this.camT = CUTS[0];
     this.end = CUTS[0] + crashCamEnd(hold);
     hitAim(this.nextAt, contact.x, contact.y, contact.z, sight);
     this.nextN.set(normal.x, 0, normal.z);
     if (this.nextN.lengthSq() < 1e-6) this.nextN.copy(this.camN);
-    this.retarget(this.nextN.normalize(), sight, aimSink(this.nextAt, hitFoot(_foot, contact.x, contact.y, contact.z, sight)));
+    this.retarget(this.nextN.normalize(), sight, aimSink(this.nextAt, hitFoot(_foot, contact.x, contact.y, contact.z, sight, source)));
   }
 
   /** The pick for the axis at `nextAt` (its own point `sink` m under it, `aimSink`) along `n`, run over the next frames by `direct`, which moves the cam onto it once it is done. */
@@ -682,8 +700,8 @@ export class Cinematics {
   }
 
   /** The crash cam alone, started apart from the impact (a reel's cut lands before its hit does). */
-  beginCrashCam(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number): void {
-    if (this.tierNow !== "off") this.crash.begin(contact, normal, sight, hold);
+  beginCrashCam(contact: THREE.Vector3, normal: THREE.Vector3, sight: Sight | null, hold: number, source: Readonly<HitSource> = CAR_HIT): void {
+    if (this.tierNow !== "off") this.crash.begin(contact, normal, sight, hold, source);
   }
 
   /** A later crash of a sandbox run: its own crash cam cut, if the cam is cutting (`CrashCam.recut`). */

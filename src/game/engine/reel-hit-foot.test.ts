@@ -86,4 +86,21 @@ describe("given the clip of a car driven into the rear of two standing cars, who
     expect(asked.length, "points the spot was asked about").toBe(2);
     expect(asked[1]!.y, "the second point's height under the first's (m)").toBeLessThan(asked[0]!.y - 0.05);
   });
+
+  it("when the same clip's hits are recorded as wall hits, then no later impact has a foot under its aim, and the shot's spot is asked about one point twice over", () => {
+    const walls = { ...clip, firstB: -1, hits: clip.hits.map((h) => ({ ...h, b: -1 })) };
+    const director = playedToImpact(walls);
+    const later = director["hold"].later;
+    expect(later.n, "later impacts of the window").toBeGreaterThan(0);
+    for (let k = 0; k < later.n; k++) expect(later.sink[k], `impact ${k}'s depth under its aim (m)`).toBe(0);
+    const asked: THREE.Vector3[] = [];
+    vi.spyOn(director["shotCam"], "sees").mockImplementation((_sight, p) => {
+      asked.push(p.clone());
+      return true;
+    });
+    const prepared = director["cur"]!;
+    director["frameShot"](prepared, { ...prepared.shots[0]!, hit: true });
+    expect(asked.length, "points the spot was asked about").toBe(2);
+    expect(asked[1]!.y, "the second point's height against the first's (m)").toBeCloseTo(asked[0]!.y, 6);
+  });
 });

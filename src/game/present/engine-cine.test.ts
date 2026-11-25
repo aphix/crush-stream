@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FLAT_GROUND } from "../world/ground.ts";
 import { parseTrack } from "../world/track-schema.ts";
@@ -6,7 +6,7 @@ import { blankPoint, Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import stunt from "../world/tracks/stunt.json" with { type: "json" };
 import { camUsable, carsBlock, occluder, sightLine, withCars, type Sight } from "./spectate-cam.ts";
-import { aimSink, CrashCam, CrashPick, crashEye, CUTS, easeWarp, heldCut, hitAim, hitFoot, laterHits } from "./engine-cine.ts";
+import { aimSink, CAR_HIT, CrashCam, CrashPick, crashEye, CUTS, easeWarp, heldCut, hitAim, hitFoot, hitSource, laterHits, type HitSource } from "./engine-cine.ts";
 import { courseCensus, crashAxis, crashSeen } from "./engine-cine-courses.test-util.ts";
 import { fovFor } from "./highlight-cam.ts";
 import { clipTimeline } from "../engine/engine-highlights.ts";
@@ -350,19 +350,31 @@ describe("given a crash on flat ground whose car sits 0.11 m under the road the 
 
 describe("given a hit recorded at height y on flat ground, its camera aim over the road and the lowest point the reel judges", () => {
   const open: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0.6, rim: Infinity, occ: [] };
-  const sinkAt = (y: number): number => aimSink(hitAim(new THREE.Vector3(), 0, y, 0, open), hitFoot(new THREE.Vector3(), 0, y, 0, open));
+  const sinkAt = (y: number, source: HitSource): number => aimSink(hitAim(new THREE.Vector3(), 0, y, 0, open), hitFoot(new THREE.Vector3(), 0, y, 0, open, source));
+  const WALL: HitSource = { wall: true, under: 0 };
   const testCases = [
-    { it: "when a car meets another at a contact 0.5 m up, then the judged point is 0.5 m under the aim", y: 0.5, expectedSink: 0.5 },
-    { it: "when a car hits a wall on the road, then the judged point is the aim", y: 0, expectedSink: 0 },
-    { it: "when a car sunk 0.11 m into the road hits a wall, then the judged point is 0.11 m under the aim", y: -0.11, expectedSink: 0.11 },
-    { it: "when two cars meet 5 m above the road, then the judged point is the contact's 0.7 m above an origin, not the road's", y: 5, expectedSink: 0.7 },
-    { it: "when a car hits a wall 5 mm above the road, then the judged point is under the sight's tolerance and counts as the aim", y: 0.005, expectedSink: 0 },
+    { it: "when a car meets another at a contact 0.5 m up, then the judged point is 0.5 m under the aim", y: 0.5, source: CAR_HIT, expectedSink: 0.5 },
+    { it: "when a car hits a wall on the road, then the judged point is the aim", y: 0, source: WALL, expectedSink: 0 },
+    { it: "when a car sunk 0.11 m into the road hits a wall, then the judged point is 0.11 m under the aim", y: -0.11, source: WALL, expectedSink: 0.11 },
+    { it: "when two cars meet 5 m above the road, then the judged point is the contact's 0.7 m above an origin, not the road's", y: 5, source: CAR_HIT, expectedSink: 0.7 },
+    { it: "when a car hits a wall 5 m above the road, then the judged point is the aim: the record is the car's own origin", y: 5, source: WALL, expectedSink: 0 },
+    { it: "when a car sitting 0.11 m under the road meets another at a contact 0.5 m up, then the judged point is 0.61 m under the aim", y: 0.5, source: { wall: false, under: 0.11 }, expectedSink: 0.61 },
+    { it: "when a car hits a wall 5 mm above the road, then the judged point is under the sight's tolerance and counts as the aim", y: 0.005, source: WALL, expectedSink: 0 },
   ];
   for (const testCase of testCases) {
     it(testCase.it, () => {
-      expect(sinkAt(testCase.y), "the foot's depth under the aim (m)").toBeCloseTo(testCase.expectedSink, 6);
+      expect(sinkAt(testCase.y, testCase.source), "the foot's depth under the aim (m)").toBeCloseTo(testCase.expectedSink, 6);
     });
   }
+
+  it("when the source of a hit is read off a car 0.11 m under the road, off one above it and off a wall hit, then the depth under the road and the wall flag follow", () => {
+    const read = (y: number, wall: boolean): string => {
+      const source = hitSource({ wall: false, under: 0 }, open, 0, y, 0, wall);
+      return `${source.wall} ${source.under.toFixed(2)}`;
+    };
+    expect(read(-0.11, false), "a car 0.11 m under the road, car to car").toBe("false 0.11");
+    expect(read(0.3, true), "a car above the road, wall hit").toBe("true 0.00");
+  });
 
   it("when the pick is run a few calls at a time, then a hit with a foot under its aim spends two calls a sample and a hit without spends one", () => {
     const [at, n] = [new THREE.Vector3(0, 1.05, 0), new THREE.Vector3(1, 0, 0)];
@@ -377,11 +389,11 @@ describe("given a hit recorded at height y on flat ground, its camera aim over t
   });
 });
 
-describe("given two cars meeting at a contact 0.5 m up inside a ring of wall lips that the crane's line clears at the camera's aim and not at the car's origin height", () => {
+describe("given two cars meeting at a contact 0.5 m up beside a wall lip that the crane's line clears at the camera's aim and not at the car's origin height", () => {
   const open: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0.6, rim: Infinity, occ: [] };
   const contact = new THREE.Vector3(0, 0.5, 0);
   const aim = hitAim(new THREE.Vector3(), contact.x, contact.y, contact.z, open);
-  const foot = hitFoot(new THREE.Vector3(), contact.x, contact.y, contact.z, open);
+  const foot = hitFoot(new THREE.Vector3(), contact.x, contact.y, contact.z, open, CAR_HIT);
   const n = new THREE.Vector3(1, 0, 0);
   /** The times through a cut the pick tries an eye at (`CUT_SAMPLES`). */
   const SAMPLES = 9;
@@ -430,15 +442,26 @@ describe("given two cars meeting at a contact 0.5 m up inside a ring of wall lip
     expect(heldCut(wall, aim, n, new Float32Array([1, 1, 1]), aim, 1, later, 0, aim), "the lip hides the origin's height: another cut").not.toBe(1);
   });
 
-  it("when the crash cam begins on the hit, then its pick is told the foot's depth under the aim, and told none for a wall hit on the road", () => {
-    const told = (y: number): number => {
-      const cam = new CrashCam(false);
-      const begun = vi.spyOn(cam["pick"], "begin");
-      cam.begin(new THREE.Vector3(0, y, 0), n, open, 6.3);
-      return begun.mock.calls[0]![5]!;
-    };
-    expect(told(0.5), "a contact 0.5 m up").toBeCloseTo(0.5, 6);
-    expect(told(0), "a wall hit on the road").toBe(0);
+  /** Half the width (m) of each of four lips, one on the crane's first eye line of each axis the pick turns to: narrow enough that no axis's lens eyes are cut off by another's lip. */
+  const RING_LIP_HALF = 0.6;
+  const ringOfLips = (): Sight => {
+    const lipsOnAxes = [n, new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)].map((axis) => {
+      const eye = eyesOf(1, axis, 1)[0]!;
+      const d = Math.hypot(eye.x - aim.x, eye.z - aim.z);
+      return occluder(aim.x + ((eye.x - aim.x) / d) * 3.3, aim.z + ((eye.z - aim.z) / d) * 3.3, Math.atan2(eye.x - aim.x, eye.z - aim.z), RING_LIP_HALF, 0.15, false, 0, lips[0]!);
+    });
+    return { ...open, occ: lipsOnAxes };
+  };
+  const keptReach = (source: HitSource): number => {
+    const cam = new CrashCam(false);
+    cam.begin(contact, n, ringOfLips(), 6.3, source);
+    cam["pick"].run(Infinity);
+    return cam["camReach"].reduce((sum, reach) => sum + reach, 0);
+  };
+
+  it("when the crash cam begins on that car-to-car hit inside four lips, then its eyes keep less reach than for a wall hit at the same point, whose record is the origin itself", () => {
+    expect(keptReach({ wall: true, under: 0 }), "the wall hit's summed reach: the lips hide nothing from its eyes").toBe(1);
+    expect(keptReach(CAR_HIT), "the car-to-car hit's summed reach").toBeLessThan(1);
   });
 });
 

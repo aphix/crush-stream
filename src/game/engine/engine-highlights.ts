@@ -10,7 +10,7 @@ import type { ReelHud, SaveResult, ViewBox } from "../match/types.ts";
 import { mulberry32 } from "../world/placements.ts";
 import { AFTERS, OPENERS, pickShot, RUN_INS, ShotCam, type Shot as PickedShot, type ShotKind } from "../present/shot-cam.ts";
 import { CINE, type Sight } from "../present/spectate-cam.ts";
-import { aimSink, crashCamEnd, CUTS, hitAim, hitFoot, laterHits, type CrashCam, type CrashHold } from "../present/engine-cine.ts";
+import { aimSink, CAR_HIT, crashCamEnd, CUTS, hitAim, hitFoot, hitSource, laterHits, type CrashCam, type CrashHold, type HitSource } from "../present/engine-cine.ts";
 import { overheadPose } from "../present/highlight-cam.ts";
 import { ClipSim, NO_RIDE, type ReplayScene } from "./engine-replay.ts";
 import { SPARK_MIN_IMPULSE, TIMELINE_HZ } from "./constants.ts";
@@ -227,8 +227,8 @@ export type ReelHost = {
   still(): Sight;
   /** The engine's crash clock: the reel mirrors its slow-mo into it (letterbox, HUD). */
   clock: PhaseClock;
-  /** A clip's crash cam begins (`CUTS[0]` before the slow-mo eases in): its letterbox, then its cut at the hit's point. */
-  crash(contact: THREE.Vector3, normal: THREE.Vector3): void;
+  /** A clip's crash cam begins (`CUTS[0]` before the slow-mo eases in): its letterbox, then its cut at the hit's point. `source`: what the point's height records (`HitSource`). */
+  crash(contact: THREE.Vector3, normal: THREE.Vector3, source: Readonly<HitSource>): void;
   /** A clip's first impact, the cars meet: the kick, flash and burst. */
   impact(contact: THREE.Vector3, normal: THREE.Vector3, closing: number): void;
   /** The clip's first impact is still ahead, the slow-mo easing in: sparks and dust on its point, `strength` (0..1, `fudgeStrength`: by its cars' drawn bodies) of a full burst (at most every `FUDGE_GAP` wall s until the cars meet, none while they are not near). */
@@ -627,7 +627,7 @@ export class ReelDirector {
       this.began = true;
       this.lookahead(p);
       this.firstHit(p);
-      this.host.crash(_c, _n);
+      this.host.crash(_c, _n, this.sourceOf(p, p.clip.firstA, p.clip.firstB));
     }
     if (!this.met && w >= tl.contact) {
       this.met = true;
@@ -715,8 +715,22 @@ export class ReelDirector {
     // The shot the cars meet in: its spot must see where they will meet (the record says where) and the lowest point the reel judges there, else it is the chase.
     const still = this.host.still();
     this.firstHit(p);
-    hitFoot(_foot, _c.x, _c.y, _c.z, still);
-    if (!cam.sees(still, hitAim(_c, clip.x, sim.cars[clip.firstA]!.group.position.y, clip.z, still)) || !cam.sees(still, _foot)) cam.found = false;
+    hitFoot(_foot, _c.x, _c.y, _c.z, still, this.sourceOf(p, clip.firstA, clip.firstB));
+    if (!cam.sees(still, hitAim(_c, _c.x, _c.y, _c.z, still)) || !cam.sees(still, _foot)) cam.found = false;
+  }
+
+  private readonly source: HitSource = { wall: false, under: 0 };
+
+  /** The source of clip `p`'s hit by its car `a` (an index of its cars, -1 for one it does not carry) with `b` (-1: a wall hit), the car as it stands now over the course's road. */
+  private sourceOf(p: Prepared, a: number, b: number): HitSource {
+    const car = p.sim.cars[a];
+    if (!car) {
+      this.source.wall = b < 0;
+      this.source.under = 0;
+      return this.source;
+    }
+    const { x, y, z } = car.group.position;
+    return hitSource(this.source, this.host.still(), x, y, z, b < 0);
   }
 
   /** Clip `p`'s first impact: `_c` its recorded point (its height from the record, `ClipHit.y`, not the first car's: the crash cam begins well before the hit, with the car still on its way up a kicker), `_n` the flat line the cars meet along (the car's heading if it hit alone). */
@@ -743,7 +757,7 @@ export class ReelDirector {
     l.n = 0;
     const end = crashCamEnd(tl.hold);
     const s = this.host.still();
-    const add = (w: number, x: number, y: number, z: number, thrown: boolean): void => {
+    const add = (w: number, x: number, y: number, z: number, thrown: boolean, source: Readonly<HitSource>): void => {
       if (w >= end || l.n === l.at.length) return;
       let k = l.n++;
       for (; k > 0 && l.until[k - 1]! > w + HIT_KEEP; k--) {
@@ -758,17 +772,17 @@ export class ReelDirector {
       l.thrown[k] = thrown ? 1 : 0;
       if (thrown) l.at[k]!.set(x, y, z);
       else hitAim(l.at[k]!, x, y, z, s);
-      l.sink[k] = thrown ? 0 : aimSink(l.at[k]!, hitFoot(_foot, x, y, z, s));
+      l.sink[k] = thrown ? 0 : aimSink(l.at[k]!, hitFoot(_foot, x, y, z, s, source));
     };
     for (let k = 1; k < clip.hits.length; k++) {
       const h = clip.hits[k]!;
-      add(wallAt(tl, shownFrom(clip, h.t)) - tl.impact, h.x, h.y, h.z, false);
+      add(wallAt(tl, shownFrom(clip, h.t)) - tl.impact, h.x, h.y, h.z, false, this.sourceOf(p, h.a, h.b));
     }
     for (const x of clip.ejections) {
       if (!x.own) continue;
       let at = 0;
       for (let i = 0; i <= x.step; i++) at += clip.h[i]!;
-      add(wallAt(tl, at) - tl.impact, x.e.pos.x, x.e.pos.y, x.e.pos.z, true);
+      add(wallAt(tl, at) - tl.impact, x.e.pos.x, x.e.pos.y, x.e.pos.z, true, CAR_HIT);
     }
   }
 }
