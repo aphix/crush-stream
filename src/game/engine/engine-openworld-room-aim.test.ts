@@ -713,7 +713,8 @@ const EXIT_ANGLES = [0, Math.PI / 6, Math.PI / 4] as const;
 const SHOTS_AFTER_S = [0.1, 0.2, 0.3] as const;
 
 describe("given a guest in a room over the slowed link, an office's street face with its door beside him", () => {
-  it("when he sprints out through the door at 7 m/s straight out, at 30 or at 45 degrees, turns along the sidewalk either way 0.05 or 1 m out and fires 0.1, 0.2 or 0.3 s later, then the host carries every shot out", () => {
+  // The 30 and 45 degree exits were added to a row that already passed: they pin behaviour that was already right.
+  it("when he sprints out through the door at 7 m/s straight out, at 30 or at 45 degrees, turns along the sidewalk either way 0.05 or 1 m out and fires 0.1, 0.2 or 0.3 s later, then the host carries every shot out (guard)", () => {
     for (const angle of EXIT_ANGLES) for (const turn of [1, -1] as const) for (const outM of TURNS_OUT_M) for (const after of SHOTS_AFTER_S) {
       expect(doorwayShot(after, outM, angle, turn), `shots carried out, exit ${Math.round((angle * 180) / Math.PI)} degrees, turned ${turn > 0 ? "away from" : "back toward"} the door ${outM} m out, fired ${after} s later`).toBe(1);
     }
