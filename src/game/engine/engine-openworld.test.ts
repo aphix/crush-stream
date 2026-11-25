@@ -284,9 +284,9 @@ function turnedOnHim(harness: Harness): number {
   const resident = shownOnTheHost(harness);
   const crowd = harness.crowd();
   const seconds = harness.director["seconds"];
-  crowd["logHostEvent"](EVENT_KIND.fight, resident, seconds);
-  crowd["logHostEvent"](EVENT_KIND.walker, WALKER_BEARING_STEPS / 4, seconds);
-  crowd["postBatch"]();
+  crowd["log"].logHostEvent(EVENT_KIND.fight, resident, seconds);
+  crowd["log"].logHostEvent(EVENT_KIND.walker, WALKER_BEARING_STEPS / 4, seconds);
+  crowd["log"].postBatch();
   const ints = crowd.state.ints;
   const base = resident * RESIDENT_INT_STRIDE;
   for (let frame = 0; frame < 20 / FRAME && ints[base + RESIDENT_INT.fightPartner] !== FIGHT_PLAYER; frame++) harness.frame();

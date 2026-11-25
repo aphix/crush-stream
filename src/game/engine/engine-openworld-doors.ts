@@ -2,7 +2,7 @@ import { hypot2 } from "../kernel/physics-core.js";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { carDoorSpot } from "../ai/civilians/civilian-car-door.ts";
 import { RESIDENT_INT, RESIDENT_INT_STRIDE } from "../ai/civilians/civilian-constants.ts";
-import type { DriverDoors } from "../ai/civilians/civilian-crowd.ts";
+import type { DriverDoors } from "../ai/civilians/crowd-placing.ts";
 import type { CityState } from "../ai/civilians/civilian-state.ts";
 import { residentBody, residentCarPose, type ResidentCarPose } from "../ai/openworld-traffic/traffic-look.ts";
 import { CAR_STYLES, type CarStyleId } from "../vehicle/car-variants.ts";

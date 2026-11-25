@@ -11,7 +11,8 @@ import type { GlassName } from "../vehicle/car-core.ts";
 import type { SignSight } from "../present/openworld-signs.ts";
 import { dayGradeAt, makeDayGrade } from "../present/day-cycle.ts";
 import { PLACE_KIND, type OpenWorldMap, type Place } from "../world/openworld/walk-graph.ts";
-import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
+import { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
+import { ClientCrowdClock } from "../ai/civilians/crowd-clock.ts";
 import { gameHourAtMinute, gameMinuteAt, secondsOfGameMinutes, tickAt } from "../ai/civilians/civilian-clock.ts";
 import { MINUTES_PER_GAME_DAY, MINUTES_PER_GAME_HOUR, PLAYER_KO_BLOWS, PLAYER_KO_WINDOW, PLAYER_PUNCH_SPEED } from "../ai/civilians/civilian-constants.ts";
 import { fillAwakeAtHomes } from "../ai/civilians/society-awake.ts";
@@ -1116,7 +1117,7 @@ export class OpenWorldDirector {
     const tier = Math.floor(key / CROWD_TIER_SCALE);
     const remote = CivilianRemote.open((err) => console.error("Crush Stream civilian worker failed", err));
     this.crowd = new CivilianCrowd(map, key & CROWD_SEED_MASK, POPULATION[tier] ?? POPULATION[0], remote, true);
-    this.crowd.onAmbulanceCall = (x, z, seconds, victim) => {
+    this.crowd.aftermath.onAmbulanceCall = (x, z, seconds, victim) => {
       this.traffic?.callAmbulance(x, z, seconds, victim);
     };
     this.crowdKey = key;

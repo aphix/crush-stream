@@ -135,7 +135,7 @@ type RunDown = { crowd: CivilianCrowd; resident: number; hitSeconds: number; spo
 function runDown(): RunDown {
   const crowd = newCrowd(map);
   const calls: { x: number; z: number; seconds: number }[] = [];
-  crowd.onAmbulanceCall = (x, z, seconds) => calls.push({ x, z, seconds });
+  crowd.aftermath.onAmbulanceCall = (x, z, seconds) => calls.push({ x, z, seconds });
   let seconds = stepUntilShown(crowd);
   const resident = shownResident(crowd);
   const { car, place } = carAtWalker(crowd, resident, CAR_RUN_UP, FAST);
