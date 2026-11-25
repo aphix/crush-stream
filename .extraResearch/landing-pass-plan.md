@@ -251,7 +251,13 @@ in `~/crash-wt/triage/` (`verdict-*.json|txt`, `show/<sha>.txt`). Before a port,
   against truck head-on speed-change ratio); 912f2ab09 and 8046ada20 (class-mass-scaled lid pop and tail pair); 4e3f80389 (the
   piston's far half).
 - **The skin stack** (ten commits of 10-30/31: fd5d0ae8c, 8939ab1f7, 73dd1661a, 1681f8cb5, fdcd9af75, c945e7924, 1fc490df0,
-  6497a092d, 3560a129f, eb0fca73d): after CageWasm; `npm run build:kernel`, `test:parity` green, digests re-derived.
+  6497a092d, 3560a129f, eb0fca73d): after CageWasm; `npm run build:kernel`, `test:parity` green, digests re-derived. A dry
+  run on `main` (2026-11-25): not one of the ten picks cleanly; the conflicts are in source, not only in pins
+  (`deform/deform-rig.ts` in five, `vehicle/car-tyre-skin.ts` in three, `vehicle/car-cage-rig.ts`, `deform/skin-kernel.ts`
+  and the built `skin-kernel.wasm` in two). So it is a re-port by a lane that reads each commit and today's code, not a
+  series of picks. The tenth, eb0fca73d (a skin the tyre hold re-lifts on a frame the writer skipped is drawn round again),
+  is on `main` in substance since this pass's TiltDraw fix: check it against that before porting it. Nine remain.
+  The simulation-law proposals are written up for the owner in `sim-law-proposals.md` (not decided).
 - **Unfinished on its branch:** 37ed37403 (a thrown driver eased from his seated pose into the ragdoll; its skin row is red:
   the drawn dummy crosses the car's skin in 12 of 20 frames); 087a6eb89 (a class-balance bench, a measuring tool).
 - **Waiting for the owner's ruling (simulation laws):** fb1e68a99 and cee15a306 (one crush impulse law); 415b7fd49 and
