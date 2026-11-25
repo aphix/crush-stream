@@ -85,6 +85,9 @@ import { detSin, detCos } from "../kernel/physics-core.js";
 
 const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
+const _fxAt = new THREE.Vector3();
+/** How far over the car's origin (m) a wall hit's sparks, debris and smoke start: the bumper's height, where they started while the contact was recorded 0.4 m over the ground. */
+const WALL_FX_UP = 0.4;
 /** The masses a wreck's engine smoke rises from (`puffEngine`). */
 const ENGINE_MASSES = ["engineL", "engineR"] as const;
 /**
@@ -792,11 +795,14 @@ export abstract class EngineCore {
     this.impactLight.position.copy(contact);
     this.impactLight.position.y = 0.8;
     this.impactLightLife = 0.35;
-    this.debris.burst(contact, normal, Math.min(90, 28 + impulse * 0.9) * this.fxDensity);
-    this.sparks.poof(contact, normal, Math.min(90, 36 + impulse * 1.1) * this.fxDensity);
+    // A wall hit's contact is the car's own origin (the crash cam's point); its effects start at the bumper.
+    _fxAt.copy(contact);
+    if (source.wall) _fxAt.y += WALL_FX_UP;
+    this.debris.burst(_fxAt, normal, Math.min(90, 28 + impulse * 0.9) * this.fxDensity);
+    this.sparks.poof(_fxAt, normal, Math.min(90, 36 + impulse * 1.1) * this.fxDensity);
     const src =
       this.nearestCar(contact);
-    this.smoke.plume(contact, src.velocity, Math.max(8, (14 * this.fxDensity) | 0));
+    this.smoke.plume(_fxAt, src.velocity, Math.max(8, (14 * this.fxDensity) | 0));
     this.armEngineSmoke(src, 4.5);
     for (const car of this.live()) {
       if (car.crashed && car !== src) this.armEngineSmoke(car, 4.5);
