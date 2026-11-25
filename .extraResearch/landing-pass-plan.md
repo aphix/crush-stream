@@ -112,11 +112,15 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
       the aim and not for the car. Fixed in the camera (a8f7ad5f1, reviewed: merge, merged): an eye sees a hit only if its
       line is also clear to the hit's own point under the aim (`aimSink`, `seesHit`, in the pick and in a held cut's later
       impacts). The three reel-view files and `engine-cine-courses.ai-long-run.ts` green on the landing head.
-      What the fix leaves, introduced or exposed by this landing, for the next lane: a car-to-car hit's aim is the contact's
-      height (0.3 to 0.7 m over the car's origin, which the row judges) and nothing tests the lower point: the same red can
-      wait in another seed; the shot camera's hit check (`engine-highlights.ts` `frameShot`) has no such second point, and
-      the stricter pick falls back to it more often; no row pins `aimSink` and its wiring; the pick's budget does not count
-      the extra `sightLine` and its time was not measured.
+      What that fix left, introduced or exposed by this landing, is lane ReelView2's (branch `play/ReelView2`, on `main`,
+      reviewed three times: merge; lands after its last two items and one run of the `present` and `engine` folders and
+      the four long camera files): the second point for every kind of hit (`hitFoot`: a wall hit records the car's own
+      origin, a car-to-car hit the contact 0.3 to 0.7 m over it; a car sunk under the road), in the pick, a held cut's later
+      impacts and the shot camera; the extra sight line counted in the pick's budget (measured on a loaded box: a
+      car-to-car pick takes 1.4 to 1.9 times as long, city 1.10 to 2.06 ms; per-frame work bounded as before); the
+      per-commit chain staged at 7 m beside the 16 m one. Its last two items: a LIVE sandbox wall hit on raised ground has
+      had no crash-cam cut since the first fix (its contact is recorded at y 0.4 whatever the ground: a regression that is
+      on `main` at 88f489ab4), and a later hit's car depth is read before the first crash.
     - The GL file (`scripts/detail-spec-aa.test.mjs`, `DISPLAY=:0`): green at 9641f9303. `build:node`: built on the landing
       head. Secret scan: clean.
     - After the gate's tree was cut the only source change is the camera fix (four files under `present/` and `engine/`);
