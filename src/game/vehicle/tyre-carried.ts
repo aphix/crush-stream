@@ -20,6 +20,15 @@ export function onGrid(v: number, step: number): number {
   return Math.round(v / step) * step;
 }
 
+/** Whether poses `a` and `b` (wheels' axles and hubs, NaN for a wheel gone) are each within `step` of one another, and the same wheels are gone in both. */
+export function poseWithin(a: Float64Array, b: Float64Array, step: number): boolean {
+  for (let k = 0; k < a.length; k++) {
+    if (Number.isNaN(a[k]!) !== Number.isNaN(b[k]!)) return false;
+    if (Math.abs(a[k]! - b[k]!) > step) return false;
+  }
+  return true;
+}
+
 /** How far (m) point `i` of `pos` stands over the upper surface of tyre `tyre` of hub h, unit axle a and scale `scale`, less `gap`; the surface carried on past its edges at `FALL`. */
 export function clearOver(tyre: CarFrame["rig"]["tyre"], pos: ArrayLike<number>, i: number, h: ArrayLike<number>, a: ArrayLike<number>, scale: number, gap: number): number {
   const dx = pos[i]! - h[0]!;

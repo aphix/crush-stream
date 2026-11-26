@@ -6,7 +6,7 @@ import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import type { CarFrame } from "./car-rig.ts";
 import type { PartSeat } from "./part-geometry.ts";
 import { INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
-import { admitCarried, capAtRest, carryLift, clearOver, DIRTY_WORD, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, REACH, type Carried } from "./tyre-carried.ts";
+import { admitCarried, capAtRest, carryLift, clearOver, DIRTY_WORD, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, poseWithin, REACH, type Carried } from "./tyre-carried.ts";
 
 /** How far (m) a held skin point stands over the tyre: the triangles between held points sag under their chords (edges up to 25 cm over a tyre). */
 const TYRE_GAP = 0.05;
@@ -601,6 +601,7 @@ export class TyreSkin {
     const overFound = this.findOver(group, wheels, lift, seats);
     matrixIn(group, this.mesh, _mesh).invert();
     let wheelMoved = false;
+    let fadeMoved = false;
     // Bit w: wheel w's hold has ended (gone and left its seat).
     let out = 0;
     for (let w = 0; w < wheels.length; w++) {
@@ -615,7 +616,7 @@ export class TyreSkin {
         seat.set(_wheel.elements);
         if (this.noteWheel(w, _wheel.elements)) wheelMoved = true;
       }
-      if (fade !== this.fade[w]) wheelMoved = true;
+      if (fade !== this.fade[w]) fadeMoved = true;
       this.fade[w] = fade;
     }
 
@@ -624,6 +625,12 @@ export class TyreSkin {
     const rewritten = this.skinRewritten && !skinWritten;
     const fresh = skinWritten || rewritten || !this.hasWritten;
     this.skinRewritten = false;
+    // A skin rewritten under wheels a grid step from where the last lift read them (a held reset re-seats them by a hair) is held where that lift read them: it draws the same body.
+    if (rewritten && wheelMoved && !fadeMoved && poseWithin(this.wheelNow, this.heldAt, WHEEL_STEP * 1.5)) {
+      this.wheelNow.set(this.heldAt);
+      wheelMoved = false;
+    }
+    wheelMoved ||= fadeMoved;
     if (fresh) {
       this.written.set(pos);
       this.hasWritten = true;
