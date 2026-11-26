@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
+import { ROW_KEEP } from "./tyre-carried.ts";
 
 /** Edges shorter than this (m) are not measured: a ratio over a sliver is noise. */
 const MIN_EDGE_M = 0.02;
@@ -64,8 +65,8 @@ function tyresTop(car: DeformableCar): number {
 
 /**
  * How far (m) the tyre hold lifts the car's worst body point past what it may, over the skin as the crush wrote it: back up to where it rested or to the
- * top of the tyres plus the hold's gap, and its neighbours after it at 1 m/m of written skin (car-tyre-skin.ts `LEVEL_SLOPE`). Past that the hold
- * carried a lift no tyre and no rest shape asked for, and the skin stands off the car.
+ * top of the tyres plus the hold's gap, and the points resting above it after it at the hold's own rule (`tyre-carried.ts`): each stands over the point below it
+ * by at most `ROW_KEEP` of their rest rise, in drawn height. Past that the hold carried a lift no tyre and no rest shape asked for, and the skin stands off the car.
  */
 export function worstHoldOverRest(car: DeformableCar): { over: number; at: string } {
   car.group.updateMatrixWorld(true);
@@ -74,22 +75,17 @@ export function worstHoldOverRest(car: DeformableCar): { over: number; at: strin
   const { start, to, rep } = hold["neighbours"];
   const top = tyresTop(car);
   const may = new Float64Array(rep.length);
-  const queue: number[] = [];
   for (let p = 0; p < may.length; p++) {
     const y = rep[p]! * 3 + 1;
     may[p] = Math.max(0, Math.max(rest[y]!, top) - written[y]!);
-    if (may[p]! > 0) queue.push(p);
   }
-  while (queue.length > 0) {
-    const p = queue.pop()!;
-    const a = rep[p]! * 3;
+  // The points are numbered by rest height and an edge runs up it, so one pass in order carries every allowance to its end.
+  for (let p = 0; p < may.length; p++) {
+    const yp = rep[p]! * 3 + 1;
     for (let e = start[p]!; e < start[p + 1]!; e++) {
       const q = to[e]!;
-      const b = rep[q]! * 3;
-      const carried = may[p]! - Math.hypot(written[a]! - written[b]!, written[a + 1]! - written[b + 1]!, written[a + 2]! - written[b + 2]!);
-      if (carried <= may[q]!) continue;
-      may[q] = carried;
-      queue.push(q);
+      const yq = rep[q]! * 3 + 1;
+      may[q] = Math.max(may[q]!, written[yp]! + may[p]! + ROW_KEEP * (rest[yq]! - rest[yp]!) - written[yq]!);
     }
   }
   const drawn = car.body.geometry.getAttribute("position").array as Float32Array;
