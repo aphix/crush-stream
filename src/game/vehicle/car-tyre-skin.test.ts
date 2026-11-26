@@ -15,8 +15,9 @@ import { assertSameNumbers } from "./test-support.ts";
 import { tyreClearance } from "./tyre-clearance.test-util.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
 import { must } from "../kernel/must.test-util.ts";
-import { worstHoldOverRest } from "./skin-stretch.test-util.ts";
+import { tyresTop, worstHoldOverRest } from "./skin-stretch.test-util.ts";
 import { hiddenTwins, NOSE_HIT } from "./hidden-twins.test-util.ts";
+import { ROW_KEEP } from "./tyre-carried.ts";
 import { makeShell } from "./car-panels.ts";
 import { allocatedBytes } from "../kernel/alloc-sample.test-util.ts";
 
@@ -355,6 +356,49 @@ describe("given a column of crushed fender points written one over another at on
       const apart = drawn[k]! - drawn[k - 1]!;
       expect(apart, `point ${k} stands ${(apart * 1000).toFixed(1)} mm over point ${k - 1}, of ${(spacing * 1000).toFixed(0)} mm written`).toBeGreaterThanOrEqual(COLUMN_KEEPS * spacing);
     }
+  });
+});
+
+/** A bay-wall point's written place is this far (m) under its rest, and the hold lifts it this far (m) over the tyres' top (`tyresTop`, which holds the gap). */
+const BAY_WALL_UNDER_M = 0.2;
+const BAY_WALL_OVER_TOP_M = 0.11;
+/** The edge of the hood beside it rests at least this far (m) over the bay wall's rest, so that a lift of the wall to its neighbour's height less a tenth of the gap would pass. */
+const HOOD_ABOVE_WALL_M = 0.25;
+
+/** A sedan's body skin written at rest but for one point, an edge's lower end resting under the tyres' top, written `BAY_WALL_UNDER_M` under its rest, and drawn `BAY_WALL_OVER_TOP_M` over the top; what `worstHoldOverRest` reads of it. */
+function liftedBayWall(): number {
+  const car = buildCar("sedan", "sedan");
+  const skin = new TyreSkin(car.frame, car.body, car.deform.restSkin, true);
+  car["bodyTyres"] = skin;
+  car.group.updateMatrixWorld(true);
+  skin.hold(car.group, car.wheels, 0, CLASSES[carClass(car)].lift, true);
+  const top = tyresTop(car);
+  const rest = car.deform.restSkin;
+  const { start, to, weld } = skin["edges"];
+  const { rep } = skin["neighbours"];
+  let wall = -1;
+  for (let p = 0; p < start.length - 1 && wall < 0; p++) {
+    for (let e = start[p]!; e < start[p + 1]! && wall < 0; e++) {
+      const gap = rest[rep[to[e]!]! * 3 + 1]! - rest[rep[p]! * 3 + 1]!;
+      if (gap >= HOOD_ABOVE_WALL_M && rest[rep[to[e]!]! * 3 + 1]! - ROW_KEEP * gap >= top + BAY_WALL_OVER_TOP_M + 0.01 && rest[rep[p]! * 3 + 1]! <= top - 0.05) wall = p;
+    }
+  }
+  must(wall >= 0, "fixture: a point resting under the tyres' top with a neighbour resting over it by a quarter metre and more");
+  const written = skin["written"];
+  written.set(rest);
+  const drawn = car.body.geometry.getAttribute("position");
+  for (let v = 0; v < weld.length; v++) {
+    drawn.setXYZ(v, rest[v * 3]!, rest[v * 3 + 1]!, rest[v * 3 + 2]!);
+    if (weld[v] !== wall) continue;
+    written[v * 3 + 1] = rest[v * 3 + 1]! - BAY_WALL_UNDER_M;
+    drawn.setY(v, top + BAY_WALL_OVER_TOP_M);
+  }
+  return worstHoldOverRest(car).over;
+}
+
+describe("given a bay-wall point a crush wrote 20 cm under its rest beside a hood edge resting a quarter metre over it, which the hold lifts 11 cm over the tyres' top", () => {
+  it("when the envelope of what the hold may lift is read, then it catches that lift: a neighbour above does not allow it", () => {
+    expect(liftedBayWall(), "how far the lifted point stands past what the hold may").toBeGreaterThanOrEqual(BAY_WALL_OVER_TOP_M - 0.01);
   });
 });
 
