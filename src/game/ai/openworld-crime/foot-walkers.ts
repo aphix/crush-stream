@@ -119,7 +119,6 @@ export class FootWalkers {
     const { nodeX, nodeZ } = this.graph;
     let tried = -1;
     let triedGap = -1;
-    let any = -1;
     for (let round = 0; round < SEEN_TRIES; round++) {
       let next = -1;
       let nextGap = Infinity;
@@ -129,8 +128,7 @@ export class FootWalkers {
         nextGap = gap;
         next = node;
       }
-      if (next < 0) return any;
-      if (any < 0) any = next;
+      if (next < 0) break;
       if (this.clear(x, z, nodeX[next]!, nodeZ[next]!)) return next;
       tried = next;
       triedGap = nextGap;
