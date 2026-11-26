@@ -192,6 +192,8 @@ describe("given a pickup's fender point resting well ahead of its front tyre, wh
 const PAST_FRONT = 0.01;
 /** A wheel or part move (m) under the half millimetre the hold reads it to (`WHEEL_SLACK`), and a wreck's hub seat travel (m) either side of a centimetre gridline. */
 const WHEEL_NUDGE = 0.0004;
+/** The step (m) the hold reads a wheel's pose to (`WHEEL_STEP`): a wheel moved by it reads one grid value over. */
+const GRID_STEP_M = 0.001;
 const SEATS_BEFORE = 0.004;
 const SEATS_AFTER = 0.006;
 
@@ -268,6 +270,16 @@ describe("given a pickup whose fender point a crush carries into its front tyre,
     const seatsAt = (s: number) => Float64Array.from({ length: 8 }, (_, k) => (k === FRONT_RIGHT_WHEEL * 2 + 1 ? s : 0));
     seated.skin.hold(seated.car.group, seated.car.wheels, 0, seated.lift, false, [], false, seatsAt(SEATS_BEFORE));
     assertHeldAlike(heldBothWays(seated, Float32Array.from(seated.skin["written"]), false, seatsAt(SEATS_AFTER)), "the front-right hub seat moved back across a centimetre gridline");
+  });
+
+  it("when its skin is rewritten (a held reset) under a wheel that moved a grid step, then it is drawn as it was: held where the last lift read the wheel", () => {
+    const { car, mesh, lift, skin } = carriedIn();
+    const positions = mesh.geometry.getAttribute("position");
+    const before = Float32Array.from(positions.array);
+    skin.rewritten();
+    car.wheels[FRONT_RIGHT_WHEEL]!.position.y += GRID_STEP_M;
+    skin.hold(car.group, car.wheels, 0, lift, false);
+    assertSameNumbers(Float32Array.from(positions.array), before, "the rewritten skin held under the nudged wheel");
   });
 
   it("when it is held again after only a hub seat moved, then the vertices the crush moved are not listed again, and when the skin is written they are", () => {
