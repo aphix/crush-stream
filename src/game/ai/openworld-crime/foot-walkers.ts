@@ -6,6 +6,9 @@ import { RUN_STRIDES_PER_SECOND, STRIDE_RADIANS_PER_METRE } from "../civilians/c
 import type { PathFinder } from "../civilians/walk-path.ts";
 import { MAX_ROUTE_NODES } from "./crime-constants.ts";
 
+/** How many blocked nodes `nearestSeenNode` steps past, nearest first, before it takes the full pass. */
+const SEEN_TRIES = 6;
+
 /**
  * Cops and suspects as struct-of-arrays walkers on the sidewalk graph: one node route each, walked at a pace. Each grid step keeps where it began (`snapshot`), so the
  * drawing blends between the last two steps at any frame rate. Nothing here allocates after construction.
@@ -107,9 +110,36 @@ export class FootWalkers {
     return this.clear === null || this.clear(ax, az, bx, bz);
   }
 
-  /** The nearest node (the lowest on a tie) a straight step from (x, z) reaches without crossing a building; the plain nearest node when none is in the clear. */
+  /**
+   * The nearest node (the lowest on a tie) a straight step from (x, z) reaches without crossing a building; the plain nearest node when none is in the clear.
+   * Nodes are tried nearest first (`clear` costs a sight line each, and in index order most of the graph is tried before a near node is), and the plain scan takes over after `SEEN_TRIES` blocked ones.
+   */
   nearestSeenNode(x: number, z: number): number {
     if (this.clear === null) return this.nearestNode(x, z);
+    const { nodeX, nodeZ } = this.graph;
+    let tried = -1;
+    let triedGap = -1;
+    let any = -1;
+    for (let round = 0; round < SEEN_TRIES; round++) {
+      let next = -1;
+      let nextGap = Infinity;
+      for (let node = 0; node < nodeX.length; node++) {
+        const gap = hypot2(nodeX[node]! - x, nodeZ[node]! - z);
+        if (gap < triedGap || (gap === triedGap && node <= tried) || gap >= nextGap) continue;
+        nextGap = gap;
+        next = node;
+      }
+      if (next < 0) return any;
+      if (any < 0) any = next;
+      if (this.clear(x, z, nodeX[next]!, nodeZ[next]!)) return next;
+      tried = next;
+      triedGap = nextGap;
+    }
+    return this.scanSeenNode(x, z);
+  }
+
+  /** `nearestSeenNode` by one pass over every node: the nearest in the clear, in node order. */
+  private scanSeenNode(x: number, z: number): number {
     const { nodeX, nodeZ } = this.graph;
     let seen = -1;
     let seenGap = Infinity;
@@ -121,7 +151,7 @@ export class FootWalkers {
         anyGap = gap;
         any = node;
       }
-      if (gap >= seenGap || !this.clear(x, z, nodeX[node]!, nodeZ[node]!)) continue;
+      if (gap >= seenGap || !this.clear!(x, z, nodeX[node]!, nodeZ[node]!)) continue;
       seenGap = gap;
       seen = node;
     }

@@ -29,6 +29,8 @@ const LEAST_MEAN_CELLS = 11;
 /** Sample points round the walk graph's nodes, each a few metres off one: a corner lot has some whose nearest node is across its wall. */
 const SAMPLES = 2000;
 const NODE_STRIDE = 7;
+/** The reference pass asks a sight line of nearly every node a sample, so the row reads fewer samples. */
+const REFERENCE_SAMPLES = 150;
 const SAMPLE_OFFSET = 5;
 
 /** The society's rows as the law reads them, for the doors of the real map: a crime at a door is wanted until the host's bust. */
@@ -171,6 +173,52 @@ describe("given a cop standing beside a corner lot of the real map", () => {
       expect(real.sight(x, z, nodeX[seen]!, nodeZ[seen]!), `a clear line from sample ${sample} to its node`).toBe(true);
     }
     expect(across, "samples whose nearest node was across a building").toBeGreaterThan(0);
+  });
+});
+
+describe("given points on and beside the real map's sidewalks, some inside buildings", () => {
+  // mutation: sed -i 's/      if (this.clear(x, z, nodeX\[next\]!, nodeZ\[next\]!)) return next;/      if (this.clear(x, z, nodeX[next]!, nodeZ[next]!)) return next + 1;/' src/game/ai/openworld-crime/foot-walkers.ts
+  it("when the nearest node in the clear is asked for, then it is the one a pass over every node in index order finds, with a fraction of the sight lines", () => {
+    let lines = 0;
+    let referenceLines = 0;
+    let seeingLines = 0;
+    let seeingReferenceLines = 0;
+    const counted = (ax: number, az: number, bx: number, bz: number): boolean => {
+      lines++;
+      return real.sight(ax, az, bx, bz);
+    };
+    const walkers = new FootWalkers(real.map.graph, 1, counted);
+    const { nodeX, nodeZ } = real.map.graph;
+    for (let sample = 0; sample < REFERENCE_SAMPLES; sample++) {
+      const node = (sample * NODE_STRIDE) % nodeX.length;
+      const x = nodeX[node]! + SAMPLE_OFFSET * detCos(sample);
+      const z = nodeZ[node]! + SAMPLE_OFFSET * detSin(sample);
+      let seen = -1;
+      let seenGap = Infinity;
+      let any = 0;
+      let anyGap = Infinity;
+      const referenceBefore = referenceLines;
+      const before = lines;
+      for (let n = 0; n < nodeX.length; n++) {
+        const gap = hypot2(nodeX[n]! - x, nodeZ[n]! - z);
+        if (gap < anyGap) {
+          anyGap = gap;
+          any = n;
+        }
+        if (gap >= seenGap) continue;
+        referenceLines++;
+        if (!real.sight(x, z, nodeX[n]!, nodeZ[n]!)) continue;
+        seenGap = gap;
+        seen = n;
+      }
+      expect(walkers.nearestSeenNode(x, z), `sample ${sample}`).toBe(seen >= 0 ? seen : any);
+      // A point that sees no node (inside a building) has every pass ask about every node: only the others tell the passes apart.
+      if (seen >= 0) {
+        seeingReferenceLines += referenceLines - referenceBefore;
+        seeingLines += lines - before;
+      }
+    }
+    expect(seeingLines, "sight lines asked from points that see a node, against the plain pass's").toBeLessThan(seeingReferenceLines / 3);
   });
 });
 

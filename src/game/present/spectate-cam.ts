@@ -177,6 +177,19 @@ export function solid(s: Sight, x: number, y: number, z: number, pad: number, oc
   return solidAt(s, occ, terrain);
 }
 
+/** Per path: whether any of its nodes has a wall or a tunnel, the only things `solidAt` reads from the road projection. */
+const pathBounds = new WeakMap<TrackPath, boolean>();
+
+function boundsOf(p: TrackPath): boolean {
+  let bounded = pathBounds.get(p);
+  if (bounded === undefined) {
+    bounded = false;
+    for (let k = 0; k < p.count && !bounded; k++) bounded = p.tunnel[k] !== 0 || p.wallL[k] !== 0 || p.wallR[k] !== 0;
+    pathBounds.set(p, bounded);
+  }
+  return bounded;
+}
+
 /** `solid` at the point and clearance in `PROBE`. */
 export function solidAt(s: Sight, occ: readonly Occluder[], terrain: boolean): boolean {
   const x = PROBE[PROBE_X]!;
@@ -193,7 +206,7 @@ export function solidAt(s: Sight, occ: readonly Occluder[], terrain: boolean): b
   }
   if (x * x + z * z > (s.rim - pad) ** 2) return true;
   const p = s.path;
-  if (p) {
+  if (p && boundsOf(p)) {
     PATH_POINT[0] = x;
     PATH_POINT[1] = z;
     projectGrid(s.grid, p, _proj);
