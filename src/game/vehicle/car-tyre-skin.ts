@@ -6,13 +6,12 @@ import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import type { CarFrame } from "./car-rig.ts";
 import type { PartSeat } from "./part-geometry.ts";
 import { INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
+import { admitCarried, capAtRest, carryLift, clearOver, DIRTY_WORD, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, REACH, type Carried } from "./tyre-carried.ts";
 
 /** How far (m) a held skin point stands over the tyre: the triangles between held points sag under their chords (edges up to 25 cm over a tyre). */
 const TYRE_GAP = 0.05;
 /** How far (m) the body paint stands over the tyre: 95 % of its edges between points resting within 6 cm of a tyre are under 0.21 m (the coupe's longest, 0.31 m), and a chord of 0.21 m dips 1.6 cm over the arc (L²/8r, r 0.342); the bonnet's 25 cm and longer chords keep `TYRE_GAP`. */
 const BODY_TYRE_GAP = 0.03;
-/** How steeply (m/m) the tyre's surface is carried on past the tread's edges and the arc's ends: a point near an edge is held a little, never with a step. */
-const FALL = 1;
 /** From this share of the tyre's radius out along the road its surface is steeper than a lip can stand on: a body vertex there leaves along the road when that is shorter than going over. */
 const ENDS_ZONE = 0.9;
 /** The band (share of the tyre's radius, inside `ENDS_ZONE`) across which a body vertex's leaving along the road takes over from its lift: a switch at one line moved a crushed fascia point from a 44 mm push to a 193 mm lift in one step, and back. */
@@ -27,8 +26,6 @@ const LEVEL_SLOPE = 1;
 const UPPER_FADE = 0.1;
 /** How many tyre radii off its seat a torn-off wheel's hub has gone when the hold over it has let go: it fades out as the wheel leaves, no one-frame drop. */
 const LEAVE_FADE = 2;
-/** How far (m) over the tyre's surface a skin point may rest and still be held: the hood and fenders, not the roof. */
-const REACH = 0.5;
 /** How far (m) a triangle spanning a tyre's top must stand over it: twice the 5 mm the drawn skin keeps over a tyre, so a stretched triangle's chord is lifted before it dips through. */
 const SAG_CLEAR = 0.01;
 /** The most (m) a triangle's points read for sag lie apart along its longest edge: a chord of the arc stands 0.9 mm under it across 5 cm (L²/8r, r 0.342); at 10 cm the drawn skin stood 2.2 mm off a hold found every frame (bar 2 mm). */
@@ -46,11 +43,9 @@ const SAG_LIFT_FROM = 0.25;
 const SAG_PASSES = 4;
 /** Rounding of the rest frame (m), rebuilt from matrices. */
 const REST_SLACK = 1e-3;
-/** The elements of a wheel's matrix that place its tyre: the axle (first column) and the hub (last). */
-const HELD_ELEMENTS = [0, 1, 2, 12, 13, 14] as const;
-/** How far (m, and in unit rotation components) a wheel or a part under the skin may move from where the last lift read it before the lift is found again: the sag pass lifts up to twice a shortfall, so a millimetre drew the skin 3.3 mm off a hold found every frame (bar 2 mm). */
-const WHEEL_SLACK = 5e-4;
-/** How far (m) a wreck's drawn hub seat may travel from where its over-set was found before it is found again: a third of the 3 cm gap the body paint keeps, while a crush carrying a hub 2 mm a frame finds it again every few frames, not each. */
+/** The step (m, and in unit rotation components) a wheel's or a part's pose under the skin is read to (`onGrid`), so the hold is a function of the pose now however often it is drawn. Rounding leaves a pose at most half a step (5e-4) off, the bound the hold's hysteresis kept: the sag pass lifts up to twice a shortfall, so a millimetre of hysteresis drew the skin 3.3 mm off a hold found every frame (bar 2 mm); a finer grid only re-found the hold more often. */
+const WHEEL_STEP = 1e-3;
+/** The step (m) a wreck's drawn hub seat travel is read to before its over-set is found (`onGrid`): a third of the 3 cm gap the body paint keeps, while a crush carrying a hub 2 mm a frame finds it again every few frames, not each. */
 const SEAT_STEP = 0.01;
 /** The entries a wheel's `overTris` buffer starts with (ints): it doubles when a search needs more, and is then kept. */
 const TRIS_START = 4096;
@@ -157,22 +152,6 @@ function matrixIn(root: THREE.Object3D | null, obj: THREE.Object3D, out: THREE.M
   return out;
 }
 
-/** How far (m) point `i` of `pos` stands over the upper surface of tyre `tyre` of hub h, unit axle a and scale `scale`, less `gap`; the surface carried on past its edges at `FALL`. */
-function clearOver(tyre: CarFrame["rig"]["tyre"], pos: ArrayLike<number>, i: number, h: ArrayLike<number>, a: ArrayLike<number>, scale: number, gap: number): number {
-  const dx = pos[i]! - h[0]!;
-  const dy = pos[i + 1]! - h[1]!;
-  const dz = pos[i + 2]! - h[2]!;
-  const flat = hypot2(a[0]!, a[2]!);
-  const fx = -a[2]! / flat;
-  const fz = a[0]! / flat;
-  const up = -fz * a[1]! * dx + (fz * a[0]! - fx * a[2]!) * dy + fx * a[1]! * dz;
-  const ahead = dx * fx + dz * fz;
-  const along = dx * a[0]! + dy * a[1]! + dz * a[2]!;
-  const r = tyre.r * scale;
-  const top = Math.sqrt(Math.max(0, r * r - ahead * ahead)) - FALL * (Math.max(0, Math.abs(ahead) - r) + Math.max(0, Math.abs(along) - tyre.halfW * scale));
-  return up - top - gap;
-}
-
 const _h = new Float64Array(3);
 const _a = new Float64Array(3);
 /** The sag pass's wheel (`readSagWheel`, with `_h` and `_a`), a lattice point as held and as it rested, and the rest frame's hub and axle. */
@@ -244,8 +223,6 @@ function sagFloor(pos: Float32Array, a: number, b: number, c: number, ya: number
   const toC = gx * (pos[c]! - cx) + gy * (yc - cy) + gz * (pos[c + 2]! - cz);
   return clear + Math.min(toA, toB, toC);
 }
-/** Bytes of `TyreSkin.dirty` read at once to pass the clean ones: few of a hold's points are dirty. */
-const DIRTY_WORD = Uint32Array.BYTES_PER_ELEMENT;
 
 /**
  * The share of two skin points' rest height apart that a lift under the lower one leaves between them: a held point lifts the skin resting above it, less
@@ -381,6 +358,8 @@ export class TyreSkin {
   private readonly over: Float32Array[] = [];
   /** Per wheel, the vertices with a point in `over` (not NaN), ascending. */
   private readonly overAt: Int32Array[] = [];
+  /** The carried set and caps (`tyre-carried.ts`) over this hold's tables. */
+  private readonly carried: Carried;
   /** Per wheel, how many of its `overAt`, `overTris` and `sagFirst` entries are in use: the arrays are buffers kept and written in place (`findOver`), longer than what they hold. */
   private readonly overAtN = new Int32Array(4);
   private readonly overTrisN = new Int32Array(4);
@@ -479,6 +458,7 @@ export class TyreSkin {
     this.liftedBefore = new Int32Array(rest.length / 3);
     this.near = new Int32Array((2 * rest.length) / 3);
     this.sagSkin = { serial: 0, weld: this.edges.weld, liftable: this.liftable, sagFree: this.sagFree, rest, lift: this.lift, dirty: this.dirty, overTris: this.overTris, overTrisN: this.overTrisN, sagRead: this.sagRead, heldAt: this.heldAt, restHub: this.restHub, restScale: this.overFor, sagTop: this.sagTop, fade: this.fade };
+    this.carried = newCarried(rest.length / 3, points, { written: this.written, rest, liftable: this.liftable, over: this.over, wheelNow: this.wheelNow, heldAt: this.heldAt, ownLift: this.ownLift, lift: this.lift, rep: this.neighbours.rep, push: this.push, pushDir: this.pushDir, dirty: this.dirty, dirtyWords: this.dirtyWords, start: this.edges.start, to: this.edges.to, drop: this.edges.drop });
   }
 
   /** The skin as last written, before this hold lifted any of it; null until a hold has read one. */
@@ -499,7 +479,7 @@ export class TyreSkin {
 
   /**
    * The vertices resting over each tyre where its wheel is seated: the class's lift, hub shift and wheel scale change what that is, and so does a wreck's hub travel off its rest seat
-   * (`seats`, x and z per wheel, null: none), past `SEAT_STEP`. True when any was found again.
+   * (`seats`, x and z per wheel, null: none), read to `SEAT_STEP`. True when any was found again.
    */
   private findOver(group: THREE.Object3D, wheels: readonly THREE.Object3D[], lift: number, seats: ArrayLike<number> | null): boolean {
     const hubs = wheels[0]!.parent!;
@@ -509,12 +489,13 @@ export class TyreSkin {
     const all = f[0] !== lift || f[1] !== hubShift || f[2] !== scale;
     let found = false;
     for (let w = 0; w < wheels.length; w++) {
-      const sx = seats ? seats[w * 2]! : 0;
-      const sz = seats ? seats[w * 2 + 1]! : 0;
+      const sx = seats ? onGrid(seats[w * 2]!, SEAT_STEP) : 0;
+      const sz = seats ? onGrid(seats[w * 2 + 1]!, SEAT_STEP) : 0;
       const at = 3 + w * 2;
-      if (!all && hypot2(sx - f[at]!, sz - f[at + 1]!) <= SEAT_STEP) continue;
+      if (!all && sx === f[at] && sz === f[at + 1]) continue;
       f[at] = sx;
       f[at + 1] = sz;
+      this.carried.n[w] = 0;
       if (!found) {
         this.mesh.updateMatrix();
         _mesh.makeTranslation(0, this.mesh.parent === group ? 0 : lift, 0).multiply(this.mesh.matrix).invert();
@@ -530,16 +511,18 @@ export class TyreSkin {
       _h[2] = _hub.z;
       const over = (this.over[w] ??= new Float32Array(this.rest.length / 3));
       const resting = (this.overAt[w] ??= new Int32Array(over.length));
+      this.carried.at[w] ??= new Int32Array(over.length);
       let restingN = 0;
       for (let i = 0; i < this.rest.length; i += 3) {
         const c = clearOver(this.frame.rig.tyre, this.rest, i, _h, _a, scale, 0);
         const restsOver = c >= -REST_SLACK && c < REACH;
         over[i / 3] = restsOver ? c : NaN;
         this.liftable[i / 3]! &= ~(1 << w);
+        this.carried.restInside[i / 3]! &= ~(1 << w);
         if (restsOver) {
           this.liftable[i / 3]! |= 1 << w;
           resting[restingN++] = i / 3;
-        }
+        } else if (c < -REST_SLACK) this.carried.restInside[i / 3]! |= 1 << w;
       }
       this.overAtN[w] = restingN;
       this.trianglesOver(w, over);
@@ -551,6 +534,18 @@ export class TyreSkin {
     f[1] = hubShift;
     f[2] = scale;
     return found;
+  }
+
+  /** Wheel `w`'s tables over its `over`, written in place: the vertices in it, the triangles they touch, and their sag reads. */
+  private indexOver(w: number): void {
+    const over = this.over[w]!;
+    const resting = this.overAt[w]!;
+    let restingN = 0;
+    for (let v = 0; v < over.length; v++) if (!Number.isNaN(over[v]!)) resting[restingN++] = v;
+    this.overAtN[w] = restingN;
+    this.trianglesOver(w, over);
+    this.sagRead[w]!.fill(0, 0, this.overTrisN[w]!);
+    this.firstCorners(w);
   }
 
   /** Wheel `w`'s `overTris`: the corners of the mesh's triangles that have a point in `over` (not NaN), written in place (the buffer grows only past what it held, so a search allocates nothing once warm), and their `sagRead` grown with it. */
@@ -634,6 +629,10 @@ export class TyreSkin {
       this.hasWritten = true;
       this.crushed = movedOffRest(this.written, this.rest);
     }
+    if (fresh || wheelMoved || overFound) {
+      const changed = admitCarried(this.carried, this.frame.rig.tyre, wheels.length, gone, this.crushed, fresh);
+      for (let w = 0; w < wheels.length; w++) if ((changed >> w) & 1) this.indexOver(w);
+    }
     // An uncrushed skin has nothing crushed under it to stand over.
     const partsMoved = this.notePartPoses(group, this.crushed ? under : NO_PARTS);
     // The lift is a function of the skin, the points resting over the tyres, the wheels and the parts: none changed, the drawn skin already carries it.
@@ -653,7 +652,7 @@ export class TyreSkin {
     if (!rewritten || wheelMoved) this.heldAt.set(this.wheelNow);
     const reset = !fresh && this.held;
     if (reset) pos.set(this.written);
-    if (fresh || partsMoved) this.findPartFloor(pos, this.partsShown > 0 ? this.partSamples(group, under) : 0);
+    if (fresh || partsMoved) this.findPartFloor(pos, this.partsShown > 0 ? this.partSamples(under) : 0);
     this.layLift(attr, pos, fresh, reset, wheels.length, out);
   }
 
@@ -683,7 +682,23 @@ export class TyreSkin {
       this.needOver(pos, w, scale);
     }
     this.ownLift.set(this.lift);
-    this.carryLift();
+    carryLift(this.carried);
+    findCaps(this.carried, this.frame.rig.tyre, this.pushSide ? BODY_TYRE_GAP : TYRE_GAP, wheelCount, out);
+    this.liftSaggingSkin(pos, wheelCount, out);
+    this.levelLift(pos);
+    const held = this.applyLift(pos);
+    const changed = this.changedSince(reset);
+    const wasHeld = this.held;
+    this.held = held;
+    // Unheld, the positions are the writer's (fresh) or as they stood: its normals still match.
+    if (!held && (fresh || !wasHeld)) return;
+    attr.needsUpdate = true;
+    computeNormalsNear(this.mesh.geometry, this.near, changed);
+    this.normalsRewritten = true;
+  }
+
+  /** Lifts the triangles over each standing tyre that sag into it (`liftSaggingTriangles`), carrying and capping the lifts after each read, until none does or `SAG_PASSES`. */
+  private liftSaggingSkin(pos: Float32Array, wheelCount: number, out: number): void {
     // Bit w: wheel w's last read lifted nothing; until a corner of its triangles rises, reading it again finds the same.
     let quiet = 0;
     this.sagSkin.serial++;
@@ -696,20 +711,11 @@ export class TyreSkin {
           quiet &= ~(1 << w);
         } else quiet |= 1 << w;
       }
-      if (!sagged) break;
-      this.carryLift();
+      if (!sagged) return;
+      carryLift(this.carried);
+      // The sag passes read the lifts as capped: capped after them, a triangle lifted by a corner the cap then lowered sagged back into the tyre.
+      capAtRest(this.carried);
     }
-    this.capAtRest(wheelCount, out);
-    this.levelLift(pos);
-    const held = this.applyLift(pos);
-    const changed = this.changedSince(reset);
-    const wasHeld = this.held;
-    this.held = held;
-    // Unheld, the positions are the writer's (fresh) or as they stood: its normals still match.
-    if (!held && (fresh || !wasHeld)) return;
-    attr.needsUpdate = true;
-    computeNormalsNear(this.mesh.geometry, this.near, changed);
-    this.normalsRewritten = true;
   }
 
   /** Whether a lift laid since the last ask rewrote normals on the mesh (flat ones, where the drawn skin had its contour-smoothed or rest ones): the owner draws them round again. Clears itself. */
@@ -749,8 +755,11 @@ export class TyreSkin {
       const a = rep[p]! * 3;
       for (let e = start[p]!; e < start[p + 1]!; e++) {
         const q = to[e]!;
+        const from = lift[p]!;
+        // A neighbour already as high is not raised whatever the edge's length: the carried lift only falls from `from`.
+        if (from <= lift[q]!) continue;
         const b = rep[q]! * 3;
-        const carried = lift[p]! - LEVEL_SLOPE * hypot3(pos[a]! - pos[b]!, pos[a + 1]! - pos[b + 1]!, pos[a + 2]! - pos[b + 2]!);
+        const carried = from - LEVEL_SLOPE * hypot3(pos[a]! - pos[b]!, pos[a + 1]! - pos[b + 1]!, pos[a + 2]! - pos[b + 2]!);
         if (carried <= lift[q]!) continue;
         lift[q] = carried;
         if (queued[q] === 1) continue;
@@ -758,29 +767,6 @@ export class TyreSkin {
         queue[(head + size) % points] = q;
         size++;
       }
-    }
-  }
-
-  /**
-   * No carried, sag or levelled lift raises a point over the higher of where it rested and the standing tyres' top plus the gap `needOver` holds over them; its own tyre lift stays whole.
-   * One top for every point keeps the cap rising with rest height, so it keeps the rest order `carryLift` holds: a per-point tyre folded rows the crush moved over a tyre.
-   */
-  private capAtRest(wheels: number, gone: number): void {
-    const { lift, ownLift, rest, written, heldAt } = this;
-    const { rep } = this.neighbours;
-    const { r, halfW } = this.frame.rig.tyre;
-    const gap = this.pushSide ? BODY_TYRE_GAP : TYRE_GAP;
-    let tyreTop = -Infinity;
-    for (let w = 0; w < wheels; w++) {
-      if ((gone >> w) & 1) continue;
-      const e = heldAt.subarray(w * HELD_ELEMENTS.length, (w + 1) * HELD_ELEMENTS.length);
-      // The axle's columns carry the wheel's scale.
-      tyreTop = Math.max(tyreTop, e[4]! + Math.abs(e[1]!) * halfW + hypot2(e[0]!, e[2]!) * r + gap);
-    }
-    for (let p = 0; p < lift.length; p++) {
-      const y = rep[p]! * 3 + 1;
-      const cap = Math.max(ownLift[p]!, Math.max(rest[y]!, tyreTop) - written[y]!);
-      if (lift[p]! > cap) lift[p] = cap;
     }
   }
 
@@ -822,7 +808,7 @@ export class TyreSkin {
     return n;
   }
 
-  /** Reads the poses of the shown parts of `under` in the mesh's frame (`partsShown` of them); true when any moved past `WHEEL_SLACK` from `partPoseAt`, or one came or went, and then keeps them there. */
+  /** Reads the poses of the shown parts of `under` in the mesh's frame to `WHEEL_STEP` (`partsShown` of them); true when any differs from `partPoseAt`, or one came or went, and then keeps them there. */
   private notePartPoses(group: THREE.Object3D, under: readonly PartSeat[]): boolean {
     let n = 0;
     for (const seat of under) {
@@ -832,11 +818,13 @@ export class TyreSkin {
         grown.set(_part.poses);
         _part.poses = grown;
       }
-      _part.poses.set(_seat.multiplyMatrices(_mesh, matrixIn(group, seat, _seat)).elements, n * 16);
+      const at = n * 16;
+      _part.poses.set(_seat.multiplyMatrices(_mesh, matrixIn(group, seat, _seat)).elements, at);
+      for (let k = at; k < at + 16; k++) _part.poses[k] = onGrid(_part.poses[k]!, WHEEL_STEP);
       n++;
     }
     let moved = n !== this.partsShown;
-    for (let k = 0; k < n * 16 && !moved; k++) if (Math.abs(_part.poses[k]! - this.partPoseAt[k]!) > WHEEL_SLACK) moved = true;
+    for (let k = 0; k < n * 16 && !moved; k++) if (_part.poses[k] !== this.partPoseAt[k]) moved = true;
     this.partsShown = n;
     if (moved) this.partPoseAt = _part.poses.slice(0, n * 16);
     return moved;
@@ -848,14 +836,15 @@ export class TyreSkin {
     this.dirty.fill(0);
     for (let pass = 0; pass < SAG_PASSES && count > 0; pass++) {
       if (!this.liftOverParts(pos, count)) break;
-      this.carryLift();
+      carryLift(this.carried);
     }
     this.partFloor.set(this.lift);
   }
 
-  /** Fills `_part.samples` with the top samples (`topSamples`) of the shown parts of `under` in the mesh's frame, each raised by `PART_CLEAR`; returns their count. */
-  private partSamples(group: THREE.Object3D, under: readonly PartSeat[]): number {
+  /** Fills `_part.samples` with the top samples (`topSamples`) of the shown parts of `under` at their poses as read (`partPoseAt`), each raised by `PART_CLEAR`; returns their count. */
+  private partSamples(under: readonly PartSeat[]): number {
     let n = 0;
+    let shown = 0;
     for (const seat of under) {
       if (seat.showIf && !seat.showIf()) continue;
       const top = topSamples(seat.drawn);
@@ -864,7 +853,7 @@ export class TyreSkin {
         grown.set(_part.samples);
         _part.samples = grown;
       }
-      _seat.multiplyMatrices(_mesh, matrixIn(group, seat, _seat));
+      _seat.fromArray(this.partPoseAt, 16 * shown++);
       for (let i = 0; i < top.length; i += 3, n++) {
         _top.set(top[i]!, top[i + 1]!, top[i + 2]!).applyMatrix4(_seat);
         _part.samples[n * 3] = _top.x;
@@ -1169,14 +1158,14 @@ export class TyreSkin {
     return false;
   }
 
-  /** Records wheel `w`'s axle and hub (`e`, null for a wheel gone, NaN) in `wheelNow`; true when they moved past `WHEEL_SLACK` (or came or went) since the hold that last read them (`heldAt`). */
+  /** Records wheel `w`'s axle and hub (`e`, null for a wheel gone, NaN) to `WHEEL_STEP` in `wheelNow`; true when they differ (or came or went) from the hold that last read them (`heldAt`). */
   private noteWheel(w: number, e: ArrayLike<number> | null): boolean {
     let moved = false;
     for (let k = 0; k < HELD_ELEMENTS.length; k++) {
-      const v = e ? e[HELD_ELEMENTS[k]!]! : NaN;
+      const v = e ? onGrid(e[HELD_ELEMENTS[k]!]!, WHEEL_STEP) : NaN;
       const at = w * HELD_ELEMENTS.length + k;
       const was = this.heldAt[at]!;
-      if (Number.isNaN(v) !== Number.isNaN(was) || Math.abs(v - was) > WHEEL_SLACK) moved = true;
+      if (v !== was && !(Number.isNaN(v) && Number.isNaN(was))) moved = true;
       this.wheelNow[at] = v;
     }
     return moved;
@@ -1232,37 +1221,6 @@ export class TyreSkin {
       // Under the hub a point cannot reach the top: a bumper the crush drove into the tyre's front was lifted 0.45 m over it for a frame.
       lift[p] = Math.max(lift[p]!, Math.min(1, Math.max(0, height / (UPPER_FADE * r))) * (1 - leave) * rise * this.fade[w]!);
       dirty[p] = 1;
-    }
-  }
-
-  /** Every lift and push carried up the mesh's edges, lowest point first: the higher end of an edge stands at most its `drop` short of the lower end's. Only from points `dirty` (raised since they last carried): lifts only rise within a hold, so a point that has not risen has nothing new to carry. */
-  private carryLift(): void {
-    const { start, to, drop } = this.edges;
-    const { lift, push, pushDir, dirty, dirtyWords } = this;
-    for (let word = 0; word < dirtyWords.length; word++) {
-      if (dirtyWords[word] === 0) continue;
-      // A byte set below by an earlier point of this word is read here, after it.
-      for (let p = word * DIRTY_WORD; p < (word + 1) * DIRTY_WORD; p++) {
-        if (dirty[p] === 0) continue;
-        dirty[p] = 0;
-        const up = lift[p]!;
-        const out = push[p]!;
-        if (up <= 0 && out <= 0) continue;
-        for (let e = start[p]!; e < start[p + 1]!; e++) {
-          const q = to[e]!;
-          const carried = up - drop[e]!;
-          if (carried > lift[q]!) {
-            lift[q] = carried;
-            dirty[q] = 1;
-          }
-          const carriedOut = out - drop[e]!;
-          if (carriedOut > push[q]!) {
-            push[q] = carriedOut;
-            dirty[q] = 1;
-            for (let a = 0; a < 3; a++) pushDir[q * 3 + a] = pushDir[p * 3 + a]!;
-          }
-        }
-      }
     }
   }
 }

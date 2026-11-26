@@ -1,3 +1,4 @@
+import { hypot2 } from "../kernel/physics-core.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { type CrashWorld, FREEWHEEL, launch, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -150,6 +151,135 @@ describe("given a pickup's skin of which one point is crushed into its front tyr
     );
     expect(under, "fixture: the corner starts deep under its target").toBeGreaterThan(10 * SAG_CLEAR_M);
     expect(over, `${(over * 1000).toFixed(1)} mm over its target`).toBeLessThanOrEqual(0.001);
+  });
+});
+
+/** How far (m) ahead of the front hub, at rest, the carried point stands at least, and how far across from it at most: the fender ahead of the tyre. */
+const CARRIED_AHEAD = 0.55;
+const CARRIED_ACROSS = 0.15;
+/** Where the crush leaves it (m, off the hub in the car's frame): inside the tyre, under its top. */
+const CARRIED_INTO = [0, 0.3, 0.05] as const;
+
+describe("given a pickup's fender point resting well ahead of its front tyre, which a crush carries back into the tyre", () => {
+  it("when the skin is held off the tyres, then the point stands 5 mm out of the tyre, as one that rested over it does", () => {
+    const car = buildCar("pickup", "truck");
+    const mesh = car["body"] as THREE.Mesh;
+    const skin = new TyreSkin(car.frame, mesh, car.deform.restSkin, true);
+    const lift = CLASSES[carClass(car)].lift;
+    car.group.updateMatrixWorld(true);
+    skin.hold(car.group, car.wheels, 0, lift, true);
+    const toCar = new THREE.Matrix4().multiplyMatrices(car.group.matrixWorld.clone().invert(), mesh.matrixWorld);
+    const hub = car.wheels[FRONT_RIGHT_WHEEL]!.getWorldPosition(new THREE.Vector3()).applyMatrix4(car.group.matrixWorld.clone().invert());
+    const positions = mesh.geometry.getAttribute("position");
+    const at = new THREE.Vector3();
+    const carried = Array.from({ length: positions.count }, (_, v) => v).find((v) => {
+      at.fromBufferAttribute(positions, v).applyMatrix4(toCar);
+      return Math.abs(at.x - hub.x) < CARRIED_ACROSS && at.z > hub.z + CARRIED_AHEAD && at.y > hub.y && Number.isNaN(skin["over"][FRONT_RIGHT_WHEEL]![v]!);
+    });
+    must(carried !== undefined, "fixture: a fender point ahead of the front-right hub that does not rest over its tyre");
+    at.fromBufferAttribute(positions, carried);
+    const into = new THREE.Vector3(hub.x + CARRIED_INTO[0], hub.y + CARRIED_INTO[1], hub.z + CARRIED_INTO[2]).applyMatrix4(toCar.clone().invert());
+    const rest = at.clone();
+    for (let v = 0; v < positions.count; v++) if (at.fromBufferAttribute(positions, v).distanceTo(rest) < 1e-6) positions.setXYZ(v, into.x, into.y, into.z);
+    skin.hold(car.group, car.wheels, 0, lift, true);
+    at.fromBufferAttribute(positions, carried).applyMatrix4(toCar);
+    const out = hypot2(at.y - hub.y, at.z - hub.z) - car.frame.rig.tyre.r;
+    expect(out, `the carried point stands ${(out * 1000).toFixed(1)} mm out of the tyre`).toBeGreaterThanOrEqual(CLEARANCE_M);
+  });
+});
+
+/** Where the carried point goes next: a centimetre over the hub and this far (m) past the tyre's front, where the hold admits no carried point. */
+const PAST_FRONT = 0.01;
+/** A wheel or part move (m) under the half millimetre the hold reads it to (`WHEEL_SLACK`), and a wreck's hub seat travel (m) either side of a centimetre gridline. */
+const WHEEL_NUDGE = 0.0004;
+const SEATS_BEFORE = 0.004;
+const SEATS_AFTER = 0.006;
+
+/** The pickup, its body skin held once with the fender point carried into the tyre, and `write`, which puts the point at an offset (m) off the hub in the car's frame. */
+type CarriedIn = { car: DeformableCar; mesh: THREE.Mesh; lift: number; skin: TyreSkin; write: (off: readonly number[]) => void };
+
+/** The fender point of `skin` a crush carries into the front-right tyre, found over `car` and written as the crush would. */
+function carriedIn(): CarriedIn {
+  const car = buildCar("pickup", "truck");
+  const mesh = car["body"] as THREE.Mesh;
+  const lift = CLASSES[carClass(car)].lift;
+  car.group.updateMatrixWorld(true);
+  const toCar = new THREE.Matrix4().multiplyMatrices(car.group.matrixWorld.clone().invert(), mesh.matrixWorld);
+  const hub = car.wheels[FRONT_RIGHT_WHEEL]!.getWorldPosition(new THREE.Vector3()).applyMatrix4(car.group.matrixWorld.clone().invert());
+  const positions = mesh.geometry.getAttribute("position");
+  const at = new THREE.Vector3();
+  const skin = new TyreSkin(car.frame, mesh, car.deform.restSkin, true);
+  skin.hold(car.group, car.wheels, 0, lift, true);
+  const carried = Array.from({ length: positions.count }, (_, v) => v).find((v) => {
+    at.fromBufferAttribute(positions, v).applyMatrix4(toCar);
+    return Math.abs(at.x - hub.x) < CARRIED_ACROSS && at.z > hub.z + CARRIED_AHEAD && at.y > hub.y && Number.isNaN(skin["over"][FRONT_RIGHT_WHEEL]![v]!);
+  });
+  must(carried !== undefined, "fixture: a fender point ahead of the front-right hub that does not rest over its tyre");
+  const rest = at.fromBufferAttribute(positions, carried).clone();
+  const twins = Array.from({ length: positions.count }, (_, v) => v).filter((v) => at.fromBufferAttribute(positions, v).distanceTo(rest) < 1e-6);
+  const write = (off: readonly number[]) => {
+    at.set(hub.x + off[0]!, hub.y + off[1]!, hub.z + off[2]!).applyMatrix4(toCar.clone().invert());
+    for (const v of twins) positions.setXYZ(v, at.x, at.y, at.z);
+  };
+  write(CARRIED_INTO);
+  skin.hold(car.group, car.wheels, 0, lift, true);
+  return { car, mesh, lift, skin, write };
+}
+
+type Held = { after: Float32Array[]; once: Float32Array[] };
+
+/** The body skin and the front-right tyre's held set (`over`) as `hold` leaves them from `written`, and as a skin held once, afresh, from the same written skin, wheels and seats leaves them. */
+function heldBothWays(fixture: CarriedIn, written: Float32Array, skinWritten: boolean, seats: ArrayLike<number> | null): Held {
+  const { car, mesh, lift, skin } = fixture;
+  const positions = mesh.geometry.getAttribute("position");
+  if (skinWritten) positions.array.set(written);
+  skin.hold(car.group, car.wheels, 0, lift, skinWritten, [], false, seats);
+  const after = [Float32Array.from(positions.array), skin["over"][FRONT_RIGHT_WHEEL]!.slice()];
+  positions.array.set(written);
+  const once = new TyreSkin(car.frame, mesh, car.deform.restSkin, true);
+  once.hold(car.group, car.wheels, 0, lift, true, [], false, seats);
+  return { after, once: [Float32Array.from(positions.array), once["over"][FRONT_RIGHT_WHEEL]!] };
+}
+
+/** Both ways drawn alike, and holding alike (NaN: not held). */
+function assertHeldAlike(both: Held, label: string): void {
+  assertSameNumbers(both.after[0]!, both.once[0]!, `${label}: drawn`);
+  assertSameNumbers(both.after[1]!.map((c) => (Number.isNaN(c) ? -1 : c)), both.once[1]!.map((c) => (Number.isNaN(c) ? -1 : c)), `${label}: held set`);
+}
+
+describe("given a pickup whose fender point a crush carries into its front tyre, its skin held over its tyres", () => {
+  it("when it is held again after the carried point moved on past the tyre, then it is drawn, and holds the same set, as a skin held once from the same skin", () => {
+    const moved = carriedIn();
+    const positions = moved.mesh.geometry.getAttribute("position");
+    positions.array.set(moved.skin["written"]);
+    moved.write([0, PAST_FRONT, moved.car.frame.rig.tyre.r * moved.car.wheels[0]!.scale.x + PAST_FRONT]);
+    assertHeldAlike(heldBothWays(moved, Float32Array.from(positions.array), true, null), "the point carried in, then past the tyre");
+  });
+
+  it("when it is held again after the front-right wheel moved under what the hold reads it to, then it is drawn as a skin held once with the wheel where it stands", () => {
+    const nudged = carriedIn();
+    const written = Float32Array.from(nudged.skin["written"]);
+    nudged.car.wheels[FRONT_RIGHT_WHEEL]!.position.y += WHEEL_NUDGE;
+    assertHeldAlike(heldBothWays(nudged, written, false, null), "the front-right wheel nudged up");
+  });
+
+  it("when it is held again after the hub seat moved back across a centimetre gridline, then it is drawn as a skin held once with the hub at that seat", () => {
+    const seated = carriedIn();
+    const seatsAt = (s: number) => Float64Array.from({ length: 8 }, (_, k) => (k === FRONT_RIGHT_WHEEL * 2 + 1 ? s : 0));
+    seated.skin.hold(seated.car.group, seated.car.wheels, 0, seated.lift, false, [], false, seatsAt(SEATS_BEFORE));
+    assertHeldAlike(heldBothWays(seated, Float32Array.from(seated.skin["written"]), false, seatsAt(SEATS_AFTER)), "the front-right hub seat moved back across a centimetre gridline");
+  });
+
+  it("when it is held again after only a hub seat moved, then the vertices the crush moved are not listed again, and when the skin is written they are", () => {
+    const { car, lift, skin } = carriedIn();
+    const carried = skin["carried"];
+    expect(carried.movedN, "fixture: the crush moved some vertices").toBeGreaterThan(0);
+    carried.moved[0] = -1;
+    const seats = Float64Array.from({ length: 8 }, (_, k) => (k === FRONT_RIGHT_WHEEL * 2 + 1 ? SEATS_AFTER + SEATS_AFTER : 0));
+    skin.hold(car.group, car.wheels, 0, lift, false, [], false, seats);
+    expect(carried.moved[0], "a hold that only the seat changed: the list stands").toBe(-1);
+    skin.hold(car.group, car.wheels, 0, lift, true, [], false, seats);
+    expect(carried.moved[0], "a hold of a written skin lists them again").not.toBe(-1);
   });
 });
 
@@ -455,6 +585,27 @@ describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, it
     const seen = afterRise(false);
     expect(seen.owes, "the car in view lays its hold").toBe(false);
     expect(seen.apart, `and the control moved the skin ${(seen.apart * 1000).toFixed(1)} mm: the row can fail`).toBeGreaterThan(0);
+  });
+
+  it("when its bonnet is held again after the parts under it moved under half a millimetre, then it is drawn as a bonnet held once over the parts where they stand", () => {
+    const { car } = fixture;
+    const crushed = fixture.meshes[1]!;
+    const lift = CLASSES[carClass(car)].lift;
+    const positions = crushed.mesh.geometry.getAttribute("position");
+    const skin = new TyreSkin(car.frame, crushed.mesh, crushed.rest, crushed.pushSide);
+    positions.array.set(crushed.written);
+    skin.hold(car.group, car.wheels, 0, lift, true, crushed.under);
+    expect(skin["partFloor"].some((floor) => floor > 0), "fixture: the parts under the bonnet lift it").toBe(true);
+    for (const seat of crushed.under) seat.position.y += WHEEL_NUDGE;
+    try {
+      skin.hold(car.group, car.wheels, 0, lift, false, crushed.under);
+      const after = Float32Array.from(positions.array);
+      positions.array.set(crushed.written);
+      new TyreSkin(car.frame, crushed.mesh, crushed.rest, crushed.pushSide).hold(car.group, car.wheels, 0, lift, true, crushed.under);
+      assertSameNumbers(after, positions.array, "the bonnet held again against held once");
+    } finally {
+      for (const seat of crushed.under) seat.position.y -= WHEEL_NUDGE;
+    }
   });
 });
 
