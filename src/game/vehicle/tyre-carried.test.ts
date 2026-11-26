@@ -95,3 +95,14 @@ describe("given a column whose lower point the crush wrote 0.3 m under the rest 
     expect(drawnAt(c, 1) - drawnAt(c, 0), "and still over it").toBeGreaterThan(0);
   });
 });
+
+describe("given a column whose base holds its own lift right on the tyre's top and the next point rests 0.1 m over it", () => {
+  it("when the hold caps it, then the next point is drawn the kept share of that rise over the base, not on the cap beside it", () => {
+    // Rests 0.50 and 0.60, written 0.40 and 0.60: the base's lift is its own (0.315 puts it on the top), the next point's carried lift 0.225 is over its cap 0.115.
+    const c = column([[0.5, 0.4, 0.315], [0.6, 0.6, 0.225]]);
+    c.ownLift[0] = 0.315;
+    findCaps(c, TYRE, GAP, 1, 0);
+    expect(drawnAt(c, 0), "the base, on the tyre's top").toBeCloseTo(TYRE_TOP, 5);
+    expect(drawnAt(c, 1) - drawnAt(c, 0), "the next point over it, by the kept share of 0.1 m").toBeGreaterThanOrEqual(0.9 * ROW_KEEP * 0.1);
+  });
+});
