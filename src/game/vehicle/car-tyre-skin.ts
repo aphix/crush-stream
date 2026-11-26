@@ -6,7 +6,7 @@ import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import type { CarFrame } from "./car-rig.ts";
 import type { PartSeat } from "./part-geometry.ts";
 import { INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
-import { admitCarried, capAtRest, carryLift, clearOver, DIRTY_WORD, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, poseWithin, REACH, type Carried } from "./tyre-carried.ts";
+import { admitCarried, capAtRest, carryLift, clearOver, DIRTY_WORD, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, poseWithin, REACH, ROW_KEEP, type Carried } from "./tyre-carried.ts";
 
 /** How far (m) a held skin point stands over the tyre: the triangles between held points sag under their chords (edges up to 25 cm over a tyre). */
 const TYRE_GAP = 0.05;
@@ -224,11 +224,6 @@ function sagFloor(pos: Float32Array, a: number, b: number, c: number, ya: number
   return clear + Math.min(toA, toB, toC);
 }
 
-/**
- * The share of two skin points' rest height apart that a lift under the lower one leaves between them: a held point lifts the skin resting above it, less
- * the rest of the way between. Each held point lifted to its own height alone, a crushed nose's side stacked into one band and crossed itself.
- */
-const ROW_KEEP = 0.1;
 /** How fast (m per m of rest distance) a carried lift falls off along the skin at least: past the rows above a held point it spreads a hand's width, where a near-flat deck would carry it whole. */
 const SPREAD = 0.5;
 
