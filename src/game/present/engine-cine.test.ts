@@ -301,6 +301,33 @@ describe("given the crash cam on a hit in an open field", () => {
   }
 });
 
+describe("given a reel's crash camera holding the crane over a hit, and the subject car leaving it at speed once the hit has landed (a take-off)", () => {
+  const open: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0.6, rim: Infinity, occ: [] };
+  const camera = new THREE.PerspectiveCamera();
+  /** The car's speed on screen (m per wall s) as it leaves, and the frame step (wall s). */
+  const SPEED = 20;
+  const STEP = 0.05;
+  /** The furthest (m) the camera's aim may trail the car it follows. */
+  const TRAIL_MAX = 1;
+
+  it("when the car has been leaving for 1.5 s, then the camera's aim is within a metre of it and its point is inside the frame of the narrowest screen at the crane's lens", () => {
+    const cam = new CrashCam(false);
+    cam.begin(new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(1, 0, 0), open, SLOMO_HOLD);
+    const later = laterHits(1);
+    const target = new THREE.Vector3(0, 0.55, 0);
+    const hold = { target, sight: () => open, hit: 0.3, later };
+    while (cam.camT < 2.5) cam.direct(camera, STEP, true, hold);
+    let worst = 0;
+    for (let frame = 0; frame < 30; frame++) {
+      target.z += SPEED * STEP;
+      cam.direct(camera, STEP, true, hold);
+      worst = Math.max(worst, cam["aim"].distanceTo(target));
+    }
+    expect(worst, "the furthest the aim trailed the car (m)").toBeLessThan(TRAIL_MAX);
+    expect(fovFor(camera.position, cam["aim"], target, 0), "the lens the car's point needs in the narrowest screen (deg)").toBeLessThanOrEqual(camera.fov);
+  });
+});
+
 /** A car this far above the road (m) at its hit: in flight over the stunt course. */
 const FLIGHT_HEIGHT = 5;
 /** A car this deep in the road (m) at its hit: a wheel through the surface. */

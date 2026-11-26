@@ -21,6 +21,7 @@ import { GpuTimer } from "./gpu-timer.ts";
 import { SKIN_SSS } from "./dummy-shader.ts";
 import { fovFor, inFrame } from "./highlight-cam.ts";
 import { camUsable, sightLine, type Sight } from "./spectate-cam.ts";
+import { leadTarget } from "./crash-cam-lead.ts";
 import { AIM_UP, aimSink, CAR_HIT, hitFoot, type HitSource } from "./hit-foot.ts";
 import type { Ultra } from "./ultra/ultra.ts";
 import { FX_REACH, type Witness } from "./witness.ts";
@@ -303,10 +304,10 @@ const WIDEN_MAX = 70;
 
 /**
  * What a held crash cam looks at `t` wall s in: the middle of what is happening now (the first hit until it has landed, each later
- * impact or thrown driver from its `from` to its `until`: two drivers thrown a tenth of a second apart are one shot), else the car.
+ * impact or thrown driver from its `from` to its `until`: two drivers thrown a tenth of a second apart are one shot), else `car` (the subject, led).
  * The points it took are left in `_taken`.
  */
-function holdAim(hold: CrashHold, at: THREE.Vector3, t: number): THREE.Vector3 {
+function holdAim(hold: CrashHold, at: THREE.Vector3, t: number, car: THREE.Vector3): THREE.Vector3 {
   const l = hold.later;
   _taken.n = 0;
   _aim.set(0, 0, 0);
@@ -319,7 +320,7 @@ function holdAim(hold: CrashHold, at: THREE.Vector3, t: number): THREE.Vector3 {
     _aim.add(l.at[k]!);
     _taken.pts[_taken.n++] = l.at[k]!;
   }
-  return _taken.n ? _aim.divideScalar(_taken.n) : hold.target;
+  return _taken.n ? _aim.divideScalar(_taken.n) : car;
 }
 
 /**
@@ -351,6 +352,8 @@ export class CrashCam {
   /** Entries of the hold's `later` whose look has begun. */
   private reached = 0;
   private aimSet = false;
+  /** The subject car's place the last frame: what its lead is measured from (`leadTarget`). */
+  private readonly prevTarget = new THREE.Vector3();
   private readonly aim = new THREE.Vector3();
   /** The lens a held cut opens beyond its own (deg) to keep the moment's points in frame, eased; unset until the cut's first frame, and again when the held cut changes (a new eye has a new own lens: the opening is its first frame's, not eased from the last cut's). */
   private widen = 0;
@@ -496,8 +499,8 @@ export class CrashCam {
         this.widenSet = false;
       }
       eyeT = cut < 0 ? u : CUTS[cut]!;
-      // The hit itself until it has landed (the reel's moment, framed at the lens's centre), each later impact of the window as it comes, else the car.
-      const want = holdAim(hold, this.firstAt, t);
+      // The hit itself until it has landed (the reel's moment, framed at the lens's centre), each later impact of the window as it comes, else the car, aimed a little ahead of where it is going.
+      const want = holdAim(hold, this.firstAt, t, leadTarget(hold.target, this.prevTarget, !this.aimSet, wallDt, HOLD_AIM));
       if (this.aimSet) this.aim.lerp(want, 1 - Math.exp(-wallDt * HOLD_AIM));
       else this.aim.copy(want);
       this.aimSet = true;

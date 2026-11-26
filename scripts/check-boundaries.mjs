@@ -55,6 +55,7 @@ const HOT = {
   "src/game/engine/people-index.ts": ["personOf", "kindOf", "idOf"],
   "src/game/engine/openworld-shared.ts": ["hear", "fresh", "bodyRecords", "drawnAt", "writePoseRows", "poseRows", "hide", "writeDummies", "threw", "dummy", "took", "personOfDummy", "knows", "giveBackRows", "unfollowRecorded", "placeable", "sortByDistance", "place", "drewBody", "drewDummy", "throwDummy", "reapDummies", "stale", "forgetDummy", "drawFigure"],
   "src/game/present/shop-spill.ts": ["update"],
+  "src/game/present/crash-cam-lead.ts": ["leadTarget"],
   "src/game/present/shot-fx.ts": ["update", "age", "fireFrom", "begin"],
   "src/game/present/spectate-cam.ts": ["solidAt", "gatherIn"],
   "src/game/present/eye-clear.ts": ["gatherAround", "liftOver", "aim", "chooseSwing"],
