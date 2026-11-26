@@ -1,6 +1,9 @@
 import * as THREE from "three";
 
-/** The furthest (m) the held crash cam aims ahead of a car it follows: a car that jumps (a clip's start, a cut) is no lead. */
+/**
+ * The furthest (m) the held crash cam aims ahead of a car it follows. The cap guards a target that jumps in one frame, a subject switch (the replay's next car) or a step catch-up,
+ * which is no speed. At the aim's 4/s ease it fully leads a car up to 4 × 4 = 16 m/s on screen; above that the aim trails it by speed / 4 - 4 m.
+ */
 const LEAD_MAX = 4;
 
 const _lead = new THREE.Vector3();

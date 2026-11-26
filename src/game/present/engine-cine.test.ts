@@ -326,6 +326,26 @@ describe("given a reel's crash camera holding the crane over a hit, and the subj
     expect(worst, "the furthest the aim trailed the car (m)").toBeLessThan(TRAIL_MAX);
     expect(fovFor(camera.position, cam["aim"], target, 0), "the lens the car's point needs in the narrowest screen (deg)").toBeLessThanOrEqual(camera.fov);
   });
+
+  /** The lead's cap (m) in `crash-cam-lead.ts`, and the aim's ease per wall s (`HOLD_AIM`), which the bound below follows. */
+  const CAP_OF_LEAD = 4;
+  const AIM_EASE = 4;
+  const JUMP = 10;
+
+  it("when the subject switches to a car 10 m away in one frame, then the aim that frame moves by no more than that jump plus the lead's cap, eased by one frame", () => {
+    const cam = new CrashCam(false);
+    cam.begin(new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(1, 0, 0), open, SLOMO_HOLD);
+    const target = new THREE.Vector3(0, 0.55, 0);
+    const hold = { target, sight: () => open, hit: 0.3, later: laterHits(1) };
+    while (cam.camT < 2.5) cam.direct(camera, STEP, true, hold);
+    const before = cam["aim"].clone();
+    target.z += JUMP;
+    cam.direct(camera, STEP, true, hold);
+    const moved = cam["aim"].distanceTo(before);
+    const bound = (JUMP + CAP_OF_LEAD) * (1 - Math.exp(-STEP * AIM_EASE));
+    expect(moved, "the aim moved toward the new car (m)").toBeGreaterThan(0.5 * JUMP * (1 - Math.exp(-STEP * AIM_EASE)));
+    expect(moved, "the furthest the aim may move in the frame (m)").toBeLessThanOrEqual(bound + 1e-6);
+  });
 });
 
 /** A car this far above the road (m) at its hit: in flight over the stunt course. */
