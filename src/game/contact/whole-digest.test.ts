@@ -55,6 +55,7 @@ const NX = new THREE.Vector3(-1, 0, 0);
 // Head-on, door and pile-up re-pinned for the sedan's cage hood lid resting on the deck edge and its hull holding the shoulder-top points at the rear half of the hood's span (REPLAY): head-on ce244cbebf8b6587 -> 5e0963d787bbdd9d, door 07f1e5d5bc3b20d4 -> 42ee2b9dfbe05e93, pile-up 279af62d4675f221 -> 57adf97d371d8b86; the barrier's is unchanged.
 // All four re-pinned for the wreck's frame taking its masses' tilt after a contact and a deep crush's hubs riding the yielding cage and keeping the place it leaves (REPLAY): head-on 5e0963d787bbdd9d -> b666c9b63f88325d, door 42ee2b9dfbe05e93 -> b225b4f1c71bb26d, barrier ff5c9c6857b0d4c6 -> 331cddc94d9a960f, pile-up 57adf97d371d8b86 -> 0107e6848f67d5e0.
 // All four re-derived once for the landing pass's union (REPLAY 251 to 254: the pinned hubs, the rigid exchange carrying a wreck as its whole body, the frame's tilt and the hub riding the cage, and those rest rules only on a wreck that is not turning and stands on its hubs): head-on b666c9b63f88325d -> 578179c51e7d0c3c, door b225b4f1c71bb26d -> 77748622b28723a2, barrier 331cddc94d9a960f -> f973cc6d030bd48c, pile-up 0107e6848f67d5e0 -> e6eeda918021e1eb.
+// Door and pile-up re-derived once for the skin cluster tables' arch sill rule (REPLAY 255: a struck arch's rear lip rides the sill beside it): door 77748622b28723a2 -> 14bf79a95d52e720, pile-up e6eeda918021e1eb -> 98f629f8b0fa310d; the head-on and barrier are unchanged.
 describe("given four staged crashes with the epicenter activation off", () => {
   it("when the owner's head-on, 20 m/s each, runs 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
@@ -69,7 +70,7 @@ describe("given four staged crashes with the epicenter activation off", () => {
     const b = makeCar("shape");
     launch(a, 0, 0, 0, 0, 0);
     launch(b, 6, 0, -Math.PI / 2, -50 * KPH, 0);
-    expect(staged([a, b], false, [new Probe(a, NX), new Probe(b, NX)], [PARKED, FREEWHEEL], 5)).toBe("77748622b28723a2");
+    expect(staged([a, b], false, [new Probe(a, NX), new Probe(b, NX)], [PARKED, FREEWHEEL], 5)).toBe("14bf79a95d52e720");
   });
 
   it("when a car hits the held barrier at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
@@ -85,6 +86,6 @@ describe("given four staged crashes with the epicenter activation off", () => {
     launch(a, -4, 0, Math.PI / 2, 50 * KPH, 0);
     launch(b, 4, 0, -Math.PI / 2, -50 * KPH, 0);
     launch(c, 28, 0, -Math.PI / 2, -90 * KPH, 0);
-    expect(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6)).toBe("e6eeda918021e1eb");
+    expect(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6)).toBe("98f629f8b0fa310d");
   });
 });

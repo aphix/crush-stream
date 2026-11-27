@@ -304,7 +304,7 @@ const WIDEN_MAX = 70;
 
 /**
  * What a held crash cam looks at `t` wall s in: the middle of what is happening now (the first hit until it has landed, each later
- * impact or thrown driver from its `from` to its `until`: two drivers thrown a tenth of a second apart are one shot), else `car` (the subject, led).
+ * impact, half way down to the point its car is judged at (`LaterHits.sink`), or thrown driver from its `from` to its `until`: two drivers thrown a tenth of a second apart are one shot), else `car` (the subject, led).
  * The points it took are left in `_taken`.
  */
 function holdAim(hold: CrashHold, at: THREE.Vector3, t: number, car: THREE.Vector3): THREE.Vector3 {
@@ -318,6 +318,7 @@ function holdAim(hold: CrashHold, at: THREE.Vector3, t: number, car: THREE.Vecto
   for (let k = 0; k < l.n; k++) {
     if (t < l.from[k]! || t >= l.until[k]!) continue;
     _aim.add(l.at[k]!);
+    _aim.y -= l.sink[k]! / 2;
     _taken.pts[_taken.n++] = l.at[k]!;
   }
   return _taken.n ? _aim.divideScalar(_taken.n) : car;
@@ -469,6 +470,7 @@ export class CrashCam {
         this.camReach.set(this.nextReach);
         this.held = -1;
         this.heldAt = -1;
+        this.aimSet = false;
       }
     }
     if (t < CUTS[0] || t >= end) return false;
@@ -494,9 +496,11 @@ export class CrashCam {
         this.held = heldCut(s, this.camAt, this.camN, this.camReach, hold.target, this.held, l, ahead, this.firstAt);
       }
       cut = this.held;
+      // A cut is a new shot: it begins on its subject, not gliding there from where the last shot aimed.
       if (cut !== this.widenCut) {
         this.widenCut = cut;
         this.widenSet = false;
+        this.aimSet = false;
       }
       eyeT = cut < 0 ? u : CUTS[cut]!;
       // The hit itself until it has landed (the reel's moment, framed at the lens's centre), each later impact of the window as it comes, else the car, aimed a little ahead of where it is going.

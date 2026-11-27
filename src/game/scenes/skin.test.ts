@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
+import { FREEWHEEL, launch, makeCar, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
+import { buildCar } from "../vehicle/drawn-body.test-util.ts";
 import { PISTON, PISTON_IDS } from "./piston-rig.ts";
 import { doorShell, firePiston, pistonLocality, PISTON_DENT_RADIUS, PISTON_FAR, type PistonLocality, type PistonShot, type PistonShotResult } from "./piston-rig.test-util.ts";
 import { transformSkinPointInto } from "../deform/shape-match.test-util.ts";
@@ -332,6 +334,72 @@ describe("given a car tapped at 3 km/h by a piston", () => {
         worst = Math.max(worst, Math.hypot(now[i * 3]! - rx, now[i * 3 + 2]! - rz));
       }
       expect(worst, `arch skin moved ${worst.toFixed(3)} m in plan`).toBeLessThanOrEqual(0.03);
+    });
+  }
+});
+
+/** The struck corner (m, the muscle's frame: its right side, -x) and the striker's heading off its nose or tail (rad). */
+const ARCH_HIT = { kph: 40, heading: Math.PI / 4, x: -0.7, runIn: 4.5 };
+/** How near (m) an arch plant's edge, in plan, an edge's both ends stand to be the lip's: the arch's skin and the sill's beside it. */
+const LIP_BAND = 0.15;
+/** Shortest lip edge (m) read: a shear over a sliver is noise. */
+const LIP_EDGE_MIN = 0.02;
+/** Height an arch lip's edge may gain or lose over its rest length: the cabin-face blend's own edges shear 0.12-0.16 in these hits (0.99 in the owner's Fleet capture); a lip hard-switched onto the nose's clusters sheared 1.08. */
+const LIP_SHEAR = 0.4;
+
+/** The body mesh's edges (vertex pairs) at the arch lips between the axles: both ends below the arch top and within `LIP_BAND` of a plant's edge. */
+function archLipEdges(car: DeformableCar): number[] {
+  const d = car.deform;
+  const rest = d["restPos"];
+  const { archTop, archPlant } = d["rig"];
+  const hubs = d.masses.filter((m) => m.hub);
+  const front = Math.max(...hubs.map((m) => m.rest.z));
+  const back = Math.min(...hubs.map((m) => m.rest.z));
+  const lip = (v: number) =>
+    rest[v * 3 + 1]! < archTop &&
+    rest[v * 3 + 2]! < front &&
+    rest[v * 3 + 2]! > back &&
+    hubs.some((m) => Math.abs(Math.hypot(rest[v * 3]! - m.rest.x, rest[v * 3 + 2]! - m.rest.z) - archPlant) < LIP_BAND);
+  const index = car.body.geometry.getIndex()!.array;
+  const edges: number[] = [];
+  for (let t = 0; t < index.length; t++) {
+    const [a, b] = [index[t]!, index[t - (t % 3) + ((t + 1) % 3)]!];
+    const length = Math.hypot(rest[a * 3]! - rest[b * 3]!, rest[a * 3 + 1]! - rest[b * 3 + 1]!, rest[a * 3 + 2]! - rest[b * 3 + 2]!);
+    if (lip(a) && lip(b) && length >= LIP_EDGE_MIN) edges.push(a, b);
+  }
+  return edges;
+}
+
+describe(`given a hatchback driven at ${ARCH_HIT.kph} km/h into a standing muscle car's right corner, 45 degrees off its end`, () => {
+  for (const [end, z] of [
+    ["front", 2],
+    ["rear", -2],
+  ] as const) {
+    it(`when it strikes the ${end} corner, then no edge at an arch's lip, where the arch's skin meets the sill's, gains or loses more than ${LIP_SHEAR} of its rest length in height`, () => {
+      const car = buildCar("coupe", "muscle");
+      const striker = buildCar("hatchback", "hatch");
+      launch(car, 0, 0, 0, 0, 0);
+      const v = ARCH_HIT.kph / 3.6;
+      const [vx, vz] = [Math.sin(ARCH_HIT.heading) * v, -Math.sign(z) * Math.cos(ARCH_HIT.heading) * v];
+      launch(striker, ARCH_HIT.x - (vx / v) * ARCH_HIT.runIn, z - (vz / v) * ARCH_HIT.runIn, Math.atan2(vx, vz), vx, vz);
+      const world = makeWorld([car, striker], false, false, FREEWHEEL);
+      const edges = archLipEdges(car);
+      const rest = car.deform["restPos"];
+      // The skin as the crush wrote it, before the tyre hold lifts it off the tyres (until the first hold, the drawn mesh is that skin).
+      const drawn = car.body.geometry.getAttribute("position").array;
+      let worst = 0;
+      let at = "";
+      for (let f = 0; f < 1.5 * FRAME_HZ; f++) {
+        tickWorld(world, 1 / FRAME_HZ);
+        const skin = car["bodyTyres"]?.["written"] ?? drawn;
+        for (let e = 0; e < edges.length; e += 2) {
+          const [a, b] = [edges[e]! * 3, edges[e + 1]! * 3];
+          const shear = Math.abs(skin[a + 1]! - skin[b + 1]! - rest[a + 1]! + rest[b + 1]!) / Math.hypot(rest[a]! - rest[b]!, rest[a + 1]! - rest[b + 1]!, rest[a + 2]! - rest[b + 2]!);
+          if (shear > worst) [worst, at] = [shear, `rest (${rest[a]!.toFixed(2)}, ${rest[a + 1]!.toFixed(2)}, ${rest[a + 2]!.toFixed(2)}) at frame ${f}`];
+        }
+      }
+      expect(car.crashed, "the muscle's corner crushed").toBe(true);
+      expect(worst, `a lip edge from ${at} sheared ${worst.toFixed(2)} of its length`).toBeLessThanOrEqual(LIP_SHEAR);
     });
   }
 });

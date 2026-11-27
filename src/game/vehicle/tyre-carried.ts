@@ -12,6 +12,12 @@ const CARRIED_MIN = 0.01;
 /** How far (m) over a tyre's surface a carried vertex must come to be held: the skin a lift there moves with a frame's crush to spare; all of `REACH` held every crushed nose point and doubled the hold. */
 const CARRIED_REACH = 0.1;
 
+/**
+ * The share of two skin points' rest height apart that a lift under the lower one leaves between them: a held point lifts the skin resting above it, less
+ * the rest of the way between. Each held point lifted to its own height alone, a crushed nose's side stacked into one band and crossed itself.
+ */
+export const ROW_KEEP = 0.1;
+
 /** Bytes of a hold's `dirty` read at once to pass the clean ones: few of a hold's points are dirty. */
 export const DIRTY_WORD = Uint32Array.BYTES_PER_ELEMENT;
 
@@ -75,6 +81,9 @@ export type Carried = {
   start: Int32Array;
   to: Int32Array;
   drop: Float32Array;
+  /** The edges the other way (`downTo[downStart[q]..downStart[q + 1]]` are the points with an upward edge to `q`): who a lowered point's carry is owed from. */
+  downStart: Int32Array;
+  downTo: Int32Array;
   /** The points `carryLift` processed or raised since the last cap (the first `touchedN`, each once by `mark`): the only ones a cap can lower. */
   touched: Int32Array;
   touchedN: number;
@@ -82,8 +91,14 @@ export type Carried = {
 };
 
 /** The carried set's buffers for a skin of `vertices` vertices and `points` welded points, over the hold's tables `tables`. */
-export function newCarried(vertices: number, points: number, tables: Omit<Carried, "restInside" | "at" | "n" | "scratch" | "cap" | "moved" | "movedN" | "touched" | "touchedN" | "mark">): Carried {
-  return { restInside: new Uint8Array(vertices), at: [], n: new Int32Array(4), scratch: new Int32Array(vertices), cap: new Float64Array(points), moved: new Int32Array(vertices), movedN: 0, touched: new Int32Array(points), touchedN: 0, mark: new Uint8Array(points), ...tables };
+export function newCarried(vertices: number, points: number, tables: Omit<Carried, "restInside" | "at" | "n" | "scratch" | "cap" | "moved" | "movedN" | "touched" | "touchedN" | "mark" | "downStart" | "downTo">): Carried {
+  const { start, to } = tables;
+  const downStart = new Int32Array(points + 2);
+  for (let e = 0; e < to.length; e++) downStart[to[e]! + 2]!++;
+  for (let q = 0; q < points; q++) downStart[q + 2]! += downStart[q + 1]!;
+  const downTo = new Int32Array(to.length);
+  for (let p = 0; p < points; p++) for (let e = start[p]!; e < start[p + 1]!; e++) downTo[downStart[to[e]! + 1]!++] = p;
+  return { downStart: downStart.subarray(0, points + 1), downTo, restInside: new Uint8Array(vertices), at: [], n: new Int32Array(4), scratch: new Int32Array(vertices), cap: new Float64Array(points), moved: new Int32Array(vertices), movedN: 0, touched: new Int32Array(points), touchedN: 0, mark: new Uint8Array(points), ...tables };
 }
 
 /** Lists into `c.moved` the vertices written `CARRIED_MIN` off their rest, ascending; how many. */
@@ -178,9 +193,20 @@ export function findCaps(c: Carried, tyre: { r: number; halfW: number }, gap: nu
   for (let p = 0; p < cap.length; p++) {
     const y = rep[p]! * 3 + 1;
     cap[p] = Math.max(ownLift[p]!, Math.max(rest[y]!, tyreTop) - written[y]!);
-    if (lift[p]! > cap[p]!) lift[p] = cap[p]!;
+    if (lift[p]! > cap[p]!) lowerToCap(c, p);
   }
   forgetTouched(c);
+  recarry(c);
+}
+
+/**
+ * Point `p`'s lift is cut to its cap, and the column it is in is owed a carry again (`recarry`): `p` for the points above it, and the points below it that
+ * lead to it for `p` itself, so a point that held its own lift keeps its rows over the tyre's top as one that was lowered does.
+ */
+function lowerToCap(c: Carried, p: number): void {
+  c.lift[p] = c.cap[p]!;
+  c.dirty[p] = 1;
+  for (let e = c.downStart[p]!; e < c.downStart[p + 1]!; e++) c.dirty[c.downTo[e]!] = 1;
 }
 
 /** Every point is capped: none is owed one. */
@@ -189,17 +215,21 @@ function forgetTouched(c: Carried): void {
   c.touchedN = 0;
 }
 
-/** Lowers to its `cap` the lift of each point `carryLift` touched since the last cap (every other lift is as `findCaps` left it, under its cap). */
+/**
+ * Lowers to its `cap` the lift of each point `carryLift` touched since the last cap (every other lift is as `findCaps` left it, under its cap), then carries again over the columns it lowered a point of (`recarry`).
+ * The cap cuts what a carry raised a point by, never the order the carry keeps: rows the crush wrote stacked at one spot under a tyre's top stay over one another by their kept share, not all on the cap.
+ */
 export function capAtRest(c: Carried): void {
   const { lift, cap, touched } = c;
   for (let k = 0; k < c.touchedN; k++) {
     const p = touched[k]!;
-    if (lift[p]! > cap[p]!) lift[p] = cap[p]!;
+    if (lift[p]! > cap[p]!) lowerToCap(c, p);
   }
   forgetTouched(c);
+  recarry(c);
 }
 
-/** Every lift and push carried up the mesh's edges, lowest point first: the higher end of an edge stands at most its `drop` short of the lower end's. Only from points `dirty` (raised since they last carried): lifts only rise within a hold, so a point that has not risen has nothing new to carry. */
+/** Every lift and push carried up the mesh's edges, lowest point first: the higher end of an edge stands at most its `drop` short of the lower end's. It lists the points it processes or raises (`touched`) for the next cap. Only from points `dirty` (raised since they last carried): lifts only rise within a hold, so a point that has not risen has nothing new to carry. */
 export function carryLift(c: Carried): void {
   const { start, to, drop, lift, push, pushDir, dirty, dirtyWords, mark, touched } = c;
   for (let word = 0; word < dirtyWords.length; word++) {
@@ -232,6 +262,36 @@ export function carryLift(c: Carried): void {
           dirty[q] = 1;
           for (let a = 0; a < 3; a++) pushDir[q * 3 + a] = pushDir[p * 3 + a]!;
         }
+      }
+    }
+  }
+}
+
+/**
+ * The carry again after the cap, from the capped points and the points below them: a point above one stands over it by at most the kept share (`ROW_KEEP`) of their rest rise (or on its cap, if
+ * that is higher), counted in drawn height. In lift space the carry would stretch with the crush: a point written far over the one below it stood that far over the tyre's top. It raises
+ * lifts only up to what the carry before the cap gave, and lists nothing: what it raises is not capped again.
+ */
+function recarry(c: Carried): void {
+  const { start, to, drop, lift, cap, rest, written, rep, dirty, dirtyWords } = c;
+  for (let word = 0; word < dirtyWords.length; word++) {
+    if (dirtyWords[word] === 0) continue;
+    for (let p = word * DIRTY_WORD; p < (word + 1) * DIRTY_WORD; p++) {
+      if (dirty[p] === 0) continue;
+      dirty[p] = 0;
+      const up = lift[p]!;
+      if (up <= 0) continue;
+      const yp = rep[p]! * 3 + 1;
+      const drawn = written[yp]! + up;
+      for (let e = start[p]!; e < start[p + 1]!; e++) {
+        const q = to[e]!;
+        let carried = up - drop[e]!;
+        if (carried <= lift[q]!) continue;
+        const yq = rep[q]! * 3 + 1;
+        carried = Math.min(carried, Math.max(cap[q]!, drawn + ROW_KEEP * (rest[yq]! - rest[yp]!) - written[yq]!));
+        if (carried <= lift[q]!) continue;
+        lift[q] = carried;
+        dirty[q] = 1;
       }
     }
   }

@@ -19,6 +19,7 @@ import { DeformParticleHelper, DeformRigHelper } from "./deform-helper.ts";
 import { bindLattice, buildRunStructures, INF_K, restoreInto, runTemplate, wrinkleSeeds } from "./deform-build.ts";
 import { FACES, faceFollow, IMPRINT_NONE, type FaceBands } from "./load-crush.ts";
 import { PushBudget } from "./push-budget.ts";
+import { strongest } from "./skin-weights.ts";
 import { hypot3, hypot2, PART_FAMILY } from "../kernel/physics-core.js";
 
 /** Numbers a `simState` block spends on the rig’s scalar fields (`simScalarsOut`: 63 fields, one double each: nine are the epicenter freeze: `frozen`, `frozenReady`, `sinceThaw`, the cached centre and inertia; then the solids' hold of the slice, `solidHold`; the last five the hit's take-over, `armedAt` to `armedWear`). */
@@ -100,6 +101,8 @@ export const PLATFORM_RIG: RigTables = {
 const CELL_FACE_BLEND = 0.3;
 /** Largest non-cell skin weight at the span face (D1): the A-pillar foot still creases. */
 const CELL_FACE_SHARE = 0.25;
+/** Depth (m) inside an arch plant's edge, between the axles, over which its skin's cluster weights fade from the sill's to its own: hard-switched, the arch's rear lip rode the crushed nose down while the sill beside it held. */
+const ARCH_SILL_BLEND = 0.3;
 /** Share of the nearest nose mass in a windscreen base corner (`parentRule`'s `foot`): the cowl is where the nose meets the cabin, so the pane's frame rides the cabin and half the nose's give. */
 const WINDSCREEN_FOOT_SHARE = 0.5;
 /** The windscreen's cage: the pane whose crack reads the glass frame (`glassFrame`) and whose contact corners take the foot share. */
@@ -224,11 +227,11 @@ export interface PointSkin extends SkinPointTables {
   readonly count: number;
 }
 
-/** The cabin section and the sill's rule for which skin follows only the cell (D1, `DeformRig.skinZones`). */
+/** The cabin section and the sill's rule for how much of a skin point's cluster weight follows only the cell (D1, `DeformRig.skinZones`). */
 interface SkinZones {
   readonly span: Cage;
   inCell(x: number, y: number, z: number): boolean;
-  cellOnly(x: number, y: number, z: number, hub: number): boolean;
+  cellShare(x: number, y: number, z: number, hub: number): number;
 }
 
 type SkinParentRule = (rx: number, ry: number, rz: number, i: number, t: SkinPointTables, hung?: boolean, foot?: boolean, roofless?: boolean) => void;
@@ -798,7 +801,8 @@ export abstract class DeformRig {
    * clusters hung 15 cm off the rocker vertex 2.5 cm beside it) is the cell's rocker and follows the cell's clusters too: on the nose's
    * clusters, which a frontal crush turns, it swung into the standing front tyre. So is the windshield's frame, the skin over the bonnet's top
    * up to the glass's front (the A-posts and the cowl): on the nose's clusters, past the cell's face, the post's bow stayed 2.6 cm down while the
-   * roof it meets went 31 cm, and stood 6.6 cm in the ground over a truck dropped on its roof.
+   * roof it meets went 31 cm, and stood 6.6 cm in the ground over a truck dropped on its roof. An arch's skin between the axles takes the sill's
+   * share in full at its plant's edge, fading to none ARCH_SILL_BLEND inside it, so the arch and the sill beside it meet on the same clusters.
    */
   private skinZones(): SkinZones {
     const span = this.cageByPart.get("chassisCell")!;
@@ -807,11 +811,17 @@ export abstract class DeformRig {
     const inCell = (x: number, y: number, z: number): boolean => z >= span.min.z && y >= span.min.y && (z <= span.max.z || (z <= frame.max.z && y > frameFloor));
     const axleF = Math.max(...this.masses.filter((m) => m.hub).map((m) => m.rest.z));
     const axleR = Math.min(...this.masses.filter((m) => m.hub).map((m) => m.rest.z));
-    const { archTop, rockerTop } = this.rig;
+    const { archTop, archPlant, rockerTop } = this.rig;
     return {
       span,
       inCell,
-      cellOnly: (x, y, z, hub) => inCell(x, y, z) || (y < archTop && z < axleF && z > axleR && (hub < 0 || y < rockerTop + ROCKER_LINE_EPS)),
+      cellShare: (x, y, z, hub) => {
+        if (inCell(x, y, z)) return 1;
+        if (y >= archTop || z >= axleF || z <= axleR) return 0;
+        if (hub < 0 || y < rockerTop + ROCKER_LINE_EPS) return 1;
+        const m = this.masses[hub]!.rest;
+        return Math.max(0, 1 - (archPlant - hypot2(x - m.x, z - m.z)) / ARCH_SILL_BLEND);
+      },
     };
   }
 
@@ -871,14 +881,15 @@ export abstract class DeformRig {
     };
   }
 
-  /** A skin point's cluster weights: the 4 nearest clusters within 1.45 m by exp(−2.35 d), a `cellOnly` point the cell's (D1); the roof skin takes none from below the bonnet's top. */
-  private clusterRule(zones: SkinZones, cms: readonly { x: number; y: number; z: number }[]): (rx: number, ry: number, rz: number, cellOnly: boolean, i: number, t: SkinPointTables) => void {
+  /** A skin point's cluster weights: the 4 nearest clusters within 1.45 m by exp(−2.35 d), its `cellShare` of them the cell's (D1); the roof skin takes none from below the bonnet's top. */
+  private clusterRule(zones: SkinZones, cms: readonly { x: number; y: number; z: number }[]): (rx: number, ry: number, rz: number, cellShare: number, i: number, t: SkinPointTables) => void {
     const { span, inCell } = zones;
     const holdsCell = this.clustersHoldingCell();
     const roofFloor = this.cages.find((c) => c.spec.name === "roof")!.spec.min[1];
     const bonnetTop = this.cages.find((c) => c.spec.name === "bonnet")!.spec.max[1];
-    return (rx, ry, rz, cellOnly, i, t) => {
-      const scored: { ci: number; w: number }[] = [];
+    return (rx, ry, rz, cellShare, i, t) => {
+      const all: { ci: number; w: number }[] = [];
+      const cell: { ci: number; w: number }[] = [];
       let other = -1,
         otherW = 0;
       for (let ci = 0; ci < this.clusters.length; ci++) {
@@ -887,20 +898,19 @@ export abstract class DeformRig {
         if (d > 1.45) continue;
         if (ry > roofFloor && cm.y < bonnetTop) continue;
         const w = Math.exp(-d * 2.35);
-        if (cellOnly && !holdsCell[ci]) {
-          if (w > otherW) {
-            other = ci;
-            otherW = w;
-          }
-          continue;
+        all.push({ ci, w });
+        if (holdsCell[ci]) cell.push({ ci, w });
+        else if (w > otherW) {
+          other = ci;
+          otherW = w;
         }
-        scored.push({ ci, w });
       }
-      scored.sort((a, b) => b.w - a.w);
-      if (scored.length > 4) scored.length = 4;
-      let sum = 0;
-      for (const s of scored) sum += s.w;
-      if (sum > 1e-8) for (const s of scored) s.w /= sum;
+      let scored = strongest(cellShare >= 1 ? cell : all, 4);
+      if (cellShare > 0 && cellShare < 1) {
+        const mix = new Map(scored.map((s) => [s.ci, s.w * (1 - cellShare)]));
+        for (const s of strongest(cell, 4)) mix.set(s.ci, (mix.get(s.ci) ?? 0) + s.w * cellShare);
+        scored = strongest([...mix].map(([ci, w]) => ({ ci, w })), 4);
+      }
       const face = Math.max(0, Math.min(rz - span.min.z, span.max.z - rz));
       if (inCell(rx, ry, rz) && other >= 0 && face < CELL_FACE_BLEND && scored.length > 0) {
         const share = CELL_FACE_SHARE * (1 - face / CELL_FACE_BLEND);
@@ -933,7 +943,7 @@ export abstract class DeformRig {
       const ry = rest[i * 3 + 1]! + origin.y;
       const rz = rest[i * 3 + 2]! + origin.z;
       parents(rx, ry, rz, i, t);
-      clusters(rx, ry, rz, zones.cellOnly(rx, ry, rz, this.archHub(rx, ry, rz)), i, t);
+      clusters(rx, ry, rz, zones.cellShare(rx, ry, rz, this.archHub(rx, ry, rz)), i, t);
     }
     return t;
   }
@@ -962,7 +972,7 @@ export abstract class DeformRig {
       const rz = this.restPos[i * 3 + 2]!;
       parents(rx, ry, rz, i, t);
       this.skinHub[i] = this.archHub(rx, ry, rz);
-      clusters(rx, ry, rz, zones.cellOnly(rx, ry, rz, this.skinHub[i]!), i, t);
+      clusters(rx, ry, rz, zones.cellShare(rx, ry, rz, this.skinHub[i]!), i, t);
     }
     this.bindCorners(n, cms, parents, t);
   }
