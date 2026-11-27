@@ -55,10 +55,12 @@ export default defineConfig({
           name: "app",
           include: ["src/game/**/*.test.ts", "src/lib/multiplayer/**/*.test.ts", "src/lib/submissions/**/*.test.ts", "src/lib/deploy/**/*.test.ts"],
           setupFiles: appSetup,
+          /** Each file boots one engine, and the boot's crash warm-up (`crashWarmWanted`) would add its ~0.8 s to every one of them. */
+          env: { CRASH_WARM: "off" },
         },
       },
       { test: { ...defaults, name: "scripts", include: ["scripts/**/*.test.mjs"] } },
-      { test: { ...defaults, name: "ai-long-run", include: ["src/game/**/*.ai-long-run.ts"], setupFiles: appSetup } },
+      { test: { ...defaults, name: "ai-long-run", include: ["src/game/**/*.ai-long-run.ts"], setupFiles: appSetup, env: { CRASH_WARM: "off" } } },
     ],
   },
 });

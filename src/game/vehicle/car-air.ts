@@ -643,6 +643,8 @@ export function armPairWithRows(a: DeformableCar, b: DeformableCar, point: THREE
     PENDING.copyWithin(i * PENDING_STRIDE, queue.size * PENDING_STRIDE, (queue.size + 1) * PENDING_STRIDE);
     PENDING_A[i] = PENDING_A[queue.size]!;
     PENDING_B[i] = PENDING_B[queue.size]!;
+    PENDING_A[queue.size] = null;
+    PENDING_B[queue.size] = null;
   }
   if (!met) return false;
   if (!pushingA) a.applyImpact(a.deform.massPoint(point, _massPoint, a.group.position.y), normal, closing, Math.sqrt(ebsA2), false, true);
@@ -687,6 +689,8 @@ export function armCrushRows(dt: number): void {
     b.deform.takeMotion(b.velocity, b.angular);
     b.deform.notifyContact();
   }
+  PENDING_A.fill(null, 0, queue.size);
+  PENDING_B.fill(null, 0, queue.size);
   queue.size = 0;
 }
 

@@ -8,7 +8,7 @@ import { EjectionWatch } from "../vehicle/ejection.ts";
 import { assignClass } from "../vehicle/vehicle-classes.ts";
 import { newWorld, settleStep, stepWorld } from "./world-step.ts";
 
-/** Fleet slots whose styles the pile wears: every style a race field has, the monster truck included. */
+/** Fleet slots whose styles the pile wears: sedan, hatchback, wagon, pickup and monster truck. Not coupe or police: each costs 0.2-0.5 s more at boot for no measured gain. */
 const PILE_SLOTS = [6, 7, 8, 10, 11] as const;
 /** Each car's x, z (m), yaw (rad, facing the origin, skewed so no two meet square) and speed (m/s). */
 const PILE_CARS = [
@@ -21,6 +21,11 @@ const PILE_CARS = [
 const PILE_SECONDS = 0.6;
 /** The rendered frame's share of fixed steps: the skin is written once per frame, not per step. */
 const STEPS_PER_FRAME = FINE_HZ / 60;
+
+/** Whether a boot runs the warm-up: always, but in the Vitest app project (`CRASH_WARM=off`), where each file boots one engine and would pay ~0.8 s for nothing. */
+export function crashWarmWanted(): boolean {
+  return typeof process === "undefined" || process.env.CRASH_WARM !== "off";
+}
 
 /**
  * Crashes a pile of fleet cars on a scratch scene during boot, so V8 compiles and types the crash path (stepping, breakage, skin) before the first real crash.

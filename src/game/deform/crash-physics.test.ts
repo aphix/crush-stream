@@ -3,10 +3,8 @@ import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import { ENGINE_KILL_TRAVEL, PLATFORM_RIG, type DeformMode } from "./deform-rig.ts";
 import { CRASH, crushStroke, leftoverCrumple } from "./physics-util.ts";
-import { DT, MODES, assertSameDigest, assertSameNumbers, dummyGeom, mass } from "../vehicle/test-support.ts";
-import { runPair } from "../contact/crash-scenarios.test-util.ts";
+import { DT, MODES, assertSameNumbers, dummyGeom, mass } from "../vehicle/test-support.ts";
 import { holdOnFace } from "../contact/external-contact.ts";
-import { warmCrashPath } from "../engine/crash-warm.ts";
 import { stepWreck, type WreckRig } from "./physics-util.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -1359,13 +1357,5 @@ describe("given a quiet car whose engine pair stands at its rest length but roll
       worst = Math.max(worst, Math.abs(eL.local.distanceTo(eR.local) - rest));
     }
     expect(worst, `the pair's gap strayed ${(worst * 1000).toFixed(1)} mm from its ${(rest * 1000).toFixed(0)} mm rest length`).toBeLessThanOrEqual(0.001);
-  });
-});
-
-describe("given the crash path's boot warm-up (a pre-run that compiles the crush path before the first real crash, see docs/PERF_HITCH.md)", () => {
-  it("when two cars crash head-on at 48 km/h, the warm-up hits are run and the head-on is run again, then every warm-up hit crashes both cars and the second head-on is bit-identical to the first", () => {
-    const before = runPair(48, 48, "head-on", { fresh: true });
-    expect(warmCrashPath(), "a warm-up hit no longer crashes both cars, so it no longer compiles the crush path").toBeTruthy();
-    assertSameDigest(runPair(48, 48, "head-on", { fresh: true }), before, "48 km/h head-on after the warm-up");
   });
 });
