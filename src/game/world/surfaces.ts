@@ -2569,12 +2569,14 @@ const _pq = new Float64Array(PQ_SIZE);
  * The footprint's pose `tread` reads: its turn in the rolling plane (cos, sin), the wheel's scale along its radius and across its tread,
  * and the highest the surfaces stand over the footprint (`Infinity`: unbounded) (no boxed doubles cross the call).
  */
-const _foot = new Float64Array(5);
+const _foot = new Float64Array(6);
 const FOOT_COS = 0;
 const FOOT_SIN = 1;
 const FOOT_SCALE = 2;
 const FOOT_TOP = 3;
 const FOOT_ACROSS = 4;
+/** How far under the highest rise so far a point's bound may fall to be left unasked: 0 for the rings' bottoms alone, else the arcs' pass's margin (`ARC_RISE`). */
+const FOOT_MARGIN = 5;
 /**
  * The wheel's motion its tread's points ask with (`wheelContact`'s `motion`): the hub's plan velocity (x, z) and the body's spin (x, y, z);
  * vertical motion is none, as a tyre's side points' (a pitching tyre's falling tread read a face's top as come in through). A point moving
@@ -2826,7 +2828,12 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
   const px = hub[0]! + axes[0]! * lx + axes[3]! * ly + axes[6]! * lz;
   const py = hub[1]! + axes[1]! * lx + axes[4]! * ly + axes[7]! * lz;
   const pz = hub[2]! + axes[2]! * lx + axes[5]! * ly + axes[8]! * lz;
-  if (_foot[FOOT_TOP]! - py <= out[C_H]!) return;
+  if (_foot[FOOT_TOP]! - py <= out[C_H]! - _foot[FOOT_MARGIN]!) {
+    // Left unasked: the arcs' pass reads it as no rise, and asks it only if it neighbours a ring's highest point (`askSkipped`).
+    _rise[k] = NONE;
+    _pid[k] = NaN;
+    return;
+  }
   _pq[PQ_X] = px;
   _pq[PQ_Z] = pz;
   _pq[PQ_Y] = hub[1]!;
@@ -2845,6 +2852,16 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
   _w[C_PY] = py;
   _w[C_PZ] = pz;
   take(out, _w, r, k);
+}
+
+/** Footprint point `k` left unasked by its bound, asked now (its store only: it cannot set the rise, which is at or over the bound). */
+function askSkipped(hub: Float64Array, axes: Float64Array, skip: number, k: number, out: Float64Array): void {
+  const top = _foot[FOOT_TOP]!;
+  _foot[FOOT_TOP] = Infinity;
+  tread(hub, axes, skip, k, out);
+  _foot[FOOT_TOP] = top;
+  _pq[PQ_VX] = _motion[MOTION_VX]!;
+  _pq[PQ_VZ] = _motion[MOTION_VZ]!;
 }
 
 /**
@@ -2948,11 +2965,13 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
   out[C_H] = NONE;
   _foot[FOOT_COS] = c;
   _foot[FOOT_SIN] = s;
-  // With no car top asked (`treadReach.tops` null: none within the tyre's reach) and the rings' bottoms alone (no patch ends within reach),
-  // the static surface's and the solids' highest over the footprint bounds every point's surface; otherwise every point is asked (a top's
-  // own height is not in the bound, and the arcs' pass reads every rise).
+  // With no car top asked (`treadReach.tops` null: none within the tyre's reach), the static surface's and the solids' highest over the
+  // footprint bounds every point's surface (a top's own height is not in the bound). A point it puts under the highest rise so far, less
+  // the margin the arcs' pass reads a rise by (`ARC_RISE`; none with the rings' bottoms alone), is left unasked. Off the bake (`--verify`'s
+  // live reference) every point is asked.
+  _foot[FOOT_MARGIN] = n === FOOT ? ARC_RISE * scale : 0;
   _foot[FOOT_TOP] =
-    treadReach.tops !== null || n === FOOT
+    treadReach.tops !== null || (n === FOOT && !BAKE.on)
       ? Infinity
       : Math.max(live.statics === null ? NONE : staticTop(live.statics, x - r, x + r, z - r, z + r), solidTop(x - r, x + r, z - r, z + r));
   for (let k = 0; k < n; k++) tread(hub, axes, skip, k, out);
@@ -2982,6 +3001,7 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
         const jn = jb + side;
         if (jn < -STEPS || jn > STEPS) continue;
         const kn = KOF[ring * ARCS + jn + STEPS]!;
+        if (_pid[kn] !== _pid[kn]) askSkipped(hub, axes, skip, kn, out);
         if (_pid[kn] === _pid[kb]) continue;
         const r = edgeCross(_fx[kb]!, _fy[kb]!, _fz[kb]!, _fx[kn]!, _fy[kn]!, _fz[kn]!, x + axes[0]! * lx, y + axes[1]! * lx, z + axes[2]! * lx, rad, y, skip, _pid[kb]!);
         if (r > out[C_H]!) take(out, EDGE_HIT, r, kb);
