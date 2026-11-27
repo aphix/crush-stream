@@ -40,7 +40,7 @@ describe("given an object with a number field that a loop later writes fractions
     for (let i = 0; i < STORES; i++) o.speed = i * 0.37 + 0.1;
   };
 
-  // mutation: /usr/bin/sed -i 's/? 0.5 : undefined;/? undefined : undefined;/' src/game/kernel/scalar.ts
+  // mutation: sed -i 's/? 0.5 : undefined;/? undefined : undefined;/' src/game/kernel/scalar.ts
   it("when its fields are generalized, then storing fractions in the number field allocates nothing: it is still a raw double, not a tagged field that boxes every store", () => {
     const o = { speed: 0 };
     generalizeFields(o);
