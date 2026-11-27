@@ -39,6 +39,9 @@ export class SeatDraw {
   private builtCount = 0;
   private readonly attributes: readonly string[];
   private room = { vertices: 0, indices: 0 };
+  /** Where the writes of rebuilds the GPU has not seen yet begin (vertex, index): a rebuild marks only the seats it moved, and a draw that three skipped (nothing packed) has seen none. */
+  private fromVertex = Infinity;
+  private fromIndex = Infinity;
   /** `seated` materials by their base. */
   private readonly flat = new Map<THREE.Material, THREE.Material>();
 
@@ -59,6 +62,11 @@ export class SeatDraw {
     this.mesh.matrixAutoUpdate = false;
     this.mesh.matrixWorldAutoUpdate = false;
     this.mesh.visible = false;
+    // Three uploads the marked ranges as it draws the mesh, right after this hook, in whichever pass draws it first.
+    this.mesh.onBeforeRender = () => {
+      this.fromVertex = Infinity;
+      this.fromIndex = Infinity;
+    };
     // The real attribute set from the start, so the boot warm links the program the race draws with.
     this.grow(1, 3);
   }
@@ -145,6 +153,7 @@ export class SeatDraw {
     return m;
   }
 
+  /** Rewrites the geometry for the packed seats from the first seat that differs from the built ones: the seats before it keep their bytes, offsets and seat rows. */
   private rebuild(n: number): void {
     let vertices = 0;
     let indices = 0;
@@ -153,13 +162,22 @@ export class SeatDraw {
       vertices += g.getAttribute("position")?.count ?? 0;
       indices += g.index?.count ?? 0;
     }
+    let first = 0;
     if (vertices > this.room.vertices || indices > this.room.indices) this.grow(vertices, indices);
+    else for (const shared = Math.min(n, this.builtCount); first < shared && this.packed[first] === this.built[first]; ) first++;
     const geo = this.mesh.geometry;
     const seat = geo.getAttribute(SEAT_ATTRIBUTE).array as Float32Array;
     const index = geo.index!.array as Uint32Array;
     let v = 0;
     let k = 0;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < first; i++) {
+      const g = this.variants[this.packed[i]!]!;
+      v += g.getAttribute("position")?.count ?? 0;
+      k += g.index?.count ?? 0;
+    }
+    const v0 = v;
+    const k0 = k;
+    for (let i = first; i < n; i++) {
       this.built[i] = this.packed[i]!;
       const g = this.variants[this.packed[i]!]!;
       const count = g.getAttribute("position")?.count ?? 0;
@@ -175,8 +193,10 @@ export class SeatDraw {
       k += src.length;
     }
     this.builtCount = n;
-    for (const name of [...this.attributes, SEAT_ATTRIBUTE]) upload(geo.getAttribute(name) as THREE.BufferAttribute, v);
-    upload(geo.index!, k);
+    this.fromVertex = Math.min(this.fromVertex, v0);
+    this.fromIndex = Math.min(this.fromIndex, k0);
+    if (v > this.fromVertex) for (const name of [...this.attributes, SEAT_ATTRIBUTE]) upload(geo.getAttribute(name) as THREE.BufferAttribute, this.fromVertex, v);
+    if (k > this.fromIndex) upload(geo.index!, this.fromIndex, k);
     geo.setDrawRange(0, k);
   }
 
@@ -203,10 +223,10 @@ export class SeatDraw {
   }
 }
 
-/** Mark the first `items` items of `attr` for upload. */
-function upload(attr: THREE.BufferAttribute, items: number): void {
+/** Mark items `from` to `to` of `attr` for upload. */
+function upload(attr: THREE.BufferAttribute, from: number, to: number): void {
   attr.clearUpdateRanges();
-  attr.addUpdateRange(0, items * attr.itemSize);
+  attr.addUpdateRange(from * attr.itemSize, (to - from) * attr.itemSize);
   attr.needsUpdate = true;
 }
 
