@@ -100,3 +100,22 @@ describe("given a world nobody asked to gate its props", () => {
     expect(out).toBe(0);
   });
 });
+
+describe("given a gated world whose far props are out", () => {
+  // mutation: sed -i '/^    if (!on) this.gated.restore(this.bodies);/d' src/game/present/ragdoll-props.ts
+  it("when the gate is turned off, then every standing prop is back in the world", async () => {
+    const track = new Track(parseTrack(square({ props: [...NEAR, ...FAR].map((p) => ({ ...p, yaw: 0, scale: 1 })) })));
+    const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await sys.preload();
+    setGround(track.ground());
+    sys.setCourse(track, placeProps(track), null);
+    sys.gateProps(true);
+    sys["spawn"]({ car: 0, p: new THREE.Vector3(50, 1.2, 59), q: new THREE.Quaternion(), v: new THREE.Vector3(14, 3, 1.5), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
+    for (let f = 0; f < 30; f++) sys.update(FRAME, [], true, false, null);
+    const bodies = sys["props"]["bodies"] as ({ isEnabled(): boolean } | null)[];
+    expect(bodies.filter((b) => b && !b.isEnabled()).length, "control: the far props are out while gated").toBeGreaterThanOrEqual(FAR.length);
+    sys.gateProps(false);
+    expect(bodies.filter((b) => b && !b.isEnabled()).length, "props out after the gate is off").toBe(0);
+    sys.dispose();
+  });
+});
