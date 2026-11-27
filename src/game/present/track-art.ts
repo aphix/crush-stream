@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { detAtan2 } from "../kernel/physics-core.js";
+import { PROXY_MIN_INSTANCES, ShadowProxy } from "./shadow-proxy.ts";
 import { applyMarkMap } from "./engine-marks.ts";
 import type { WorldStage } from "./engine-world.ts";
 import { GROUND_PAINT_PREFABS, PARKED_PREFABS, PREFABS, SURFACE_IDS, SURFACES, type PrefabId, type SurfaceId } from "../world/catalog.ts";
@@ -339,6 +340,7 @@ export class TrackArt {
     mesh.matrixAutoUpdate = false;
     mesh.matrixWorldAutoUpdate = false;
     this.group.add(mesh);
+    if (cast && mesh instanceof THREE.InstancedMesh && mesh.frustumCulled && mesh.count >= PROXY_MIN_INSTANCES) this.group.add(new ShadowProxy(mesh).mesh);
   }
 
   /**

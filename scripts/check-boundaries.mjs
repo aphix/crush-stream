@@ -58,6 +58,7 @@ const HOT = {
   "src/game/present/crash-cam-lead.ts": ["leadTarget"],
   "src/game/present/shot-fx.ts": ["update", "age", "fireFrom", "begin"],
   "src/game/present/spectate-cam.ts": ["solidAt", "boundsOf", "gatherIn"],
+  "src/game/present/shadow-proxy.ts": ["isOrthographic", "intersects", "stale", "rebuild"],
   "src/game/present/interiors/interior-doors.ts": ["update", "markOpeners", "touch"],
   "src/game/present/eye-clear.ts": ["gatherAround", "liftOver", "aim", "chooseSwing"],
   "src/game/present/drive-cam.ts": ["eyeFloor", "weighFollow", "rideStep"],
