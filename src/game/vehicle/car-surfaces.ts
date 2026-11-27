@@ -281,11 +281,6 @@ export class CarSurfaces extends Surface {
     this.react[own]! += j;
   }
 
-  /** Whether weight is waiting on car `i` (borne on its top and not yet taken by a rigid step): a car under a load does not sleep. */
-  isBorne(i: number): boolean {
-    return i >= 0 && BORNE_STATE * i < this.borne.length && this.borne[BORNE_STATE * i + 6]! > 0;
-  }
-
   /** Car `own`, under the stepping car, takes velocity change `dv` and spin change `dw` times `k`, borne over the stepping car's slice `h` (s). */
   bear(own: number, dv: THREE.Vector3, dw: THREE.Vector3, k: number, h: number): void {
     const o = BORNE_STATE * own;
