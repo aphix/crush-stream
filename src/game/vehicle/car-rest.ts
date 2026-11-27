@@ -44,7 +44,7 @@ export function settleIntact(car: DeformableCar, dt: number): void {
   car.drove = false;
   const v = car.velocity;
   const w = car.angular;
-  if (!car.restSleep || driven || car.crashed || car.falling || car.airborne || car.wheelsDown !== ALL_WHEELS || car.restsOn !== null || car.yielding || !car.suspension.still || !driveAtRest(car) || v.lengthSq() >= STILL * STILL || w.lengthSq() >= STILL * STILL || !car.hingesLatched || car.hasLoosePart()) {
+  if (!car.restSleep || driven || car.crashed || car.falling || car.airborne || car.wheelsDown !== ALL_WHEELS || car.restsOn !== null || car.yielding || car.surfaces?.isBorne(car.slot) === true || !car.suspension.still || !driveAtRest(car) || v.lengthSq() >= STILL * STILL || w.lengthSq() >= STILL * STILL || !car.hingesLatched || car.hasLoosePart()) {
     car.restS = 0;
     return;
   }

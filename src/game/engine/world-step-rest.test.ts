@@ -204,3 +204,31 @@ describe("given a parked car asleep with a cable tied to another car", () => {
     for (const car of f.cars) car.dispose();
   });
 });
+
+describe("given a car with weight borne on its roof by a car above it", () => {
+  const NO_CHANGE = new THREE.Vector3();
+
+  // mutation: sed -i '/^    if (under !== undefined && under.asleep && !under.deform.massActive) under.wake();/d' src/game/vehicle/car-surfaces.ts
+  it("when the car is asleep and the car above bears weight on it, then it wakes at once: its skipped step would never take that weight", () => {
+    const f = field(true, [[0, 0, 0, 0, 0]]);
+    const car = f.cars[0]!;
+    run(f, SETTLE_S);
+    expect(car.asleep, "control: asleep").toBe(true);
+    f.w.surfaces.bear(0, NO_CHANGE, NO_CHANGE, 1, H);
+    expect(car.asleep, "awake").toBe(false);
+    car.dispose();
+  });
+
+  // mutation: sed -i 's/ || car.surfaces?.isBorne(car.slot) === true//' src/game/vehicle/car-rest.ts
+  it("when the weight borne on a still car is waiting over 10 s of slices, then it does not fall asleep for 3 s, and does once the weight is taken", () => {
+    const f = field(true, [[0, 0, 0, 0, 0]]);
+    const car = f.cars[0]!;
+    step(f);
+    f.w.surfaces.bear(0, NO_CHANGE, NO_CHANGE, 1, 10);
+    run(f, SETTLE_S);
+    expect(car.asleep, "awake under a waiting load").toBe(false);
+    run(f, 10);
+    expect(car.asleep, "asleep once the load is taken").toBe(true);
+    car.dispose();
+  });
+});
