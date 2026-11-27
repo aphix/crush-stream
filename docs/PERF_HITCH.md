@@ -78,10 +78,11 @@ marks, smoke, hit-stop and crash cam.
 **Distance detail** (`present/car-detail.ts`, `DetailGovernor`): past a car's rung its small non-shadow parts leave the
 camera's layer and only the body draws ([`CINEMATIC.md`](CINEMATIC.md)).
 
-**Crash path warm-up.** `warmCrashPath` (`engine/world-step.ts`) runs two throwaway crashes through `stepWorld` during the
-boot warm-up, so V8 has compiled the crush path before the first real crash; cold, a race's first pile-up ran it
-unoptimised. `deform/crash-physics.test.ts` checks that every warm-up hit crashes both cars and leaves the next crash
-bit-identical.
+**Crash path warm-up.** `warmCrashPath` (`engine/crash-warm.ts`) crashes a pile of five fleet cars (every style, built as a race builds
+them: class, generalised fields, glass callback) on a scratch scene during the boot warm-up, through `stepWorld`, `settleStep` and
+`updateSkin`, so V8 has compiled and typed the crash path before the first real crash. Cold, a race's first pile-up was one 37-49 ms step
+(176 deopts on branches no warm-up had run, ~200 functions compiled mid-step); the skin write is what carries most of the benefit.
+`deform/crash-physics.test.ts` checks that the pile crashes every car and leaves the next crash bit-identical.
 
 ### GC during races
 

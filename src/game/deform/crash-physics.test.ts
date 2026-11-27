@@ -6,7 +6,7 @@ import { CRASH, crushStroke, leftoverCrumple } from "./physics-util.ts";
 import { DT, MODES, assertSameDigest, assertSameNumbers, dummyGeom, mass } from "../vehicle/test-support.ts";
 import { runPair } from "../contact/crash-scenarios.test-util.ts";
 import { holdOnFace } from "../contact/external-contact.ts";
-import { warmCrashPath } from "../engine/world-step.ts";
+import { warmCrashPath } from "../engine/crash-warm.ts";
 import { stepWreck, type WreckRig } from "./physics-util.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";

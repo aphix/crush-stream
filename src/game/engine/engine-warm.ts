@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { getCrackMap, makeGlassMaterial } from "../vehicle/car-materials.ts";
 import { applyCarFinish, finishedMaterials, finishForTier } from "../vehicle/car-finish.ts";
-import { warmCrashPath } from "./world-step.ts";
+import { warmCrashPath } from "./crash-warm.ts";
 import { loadSkinKernel, skinKernel } from "../deform/skin-kernel.ts";
 import { EngineCore } from "./engine-core.ts";
 import type { Ultra } from "../present/ultra/ultra.ts";

@@ -1,4 +1,3 @@
-import * as THREE from "three";
 import { bleedAfterSlide, DeformableCar } from "../vehicle/car.ts";
 import { StrongestContact, type ContactHit, type JerseyBarrier } from "../scenes/engine-props.ts";
 import { partContactPair } from "../contact/external-contact.ts";
@@ -14,7 +13,6 @@ import { CarSurfaces, REACH } from "../vehicle/car-surfaces.ts";
 import { armTops, calmSolids } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { CONTACT_WINDOW } from "../deform/constants.ts";
-import { STOCK_PAINT } from "../vehicle/constants.ts";
 import { UPRIGHT_UP_Y } from "../vehicle/car-suspension.ts";
 import { FINE_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
 import { FINE_SLICE } from "./sim-pace.ts";
@@ -517,38 +515,6 @@ export function settleStep(cars: readonly DeformableCar[], h: number, bleed: boo
     if (bleed && car.crashed) bleedAfterSlide(car, h);
     car.stepBreakage(h);
   }
-}
-
-/** Warm-up crashes: car A at (x, z) facing `yaw` at 14 m/s into car B parked at the origin facing `yawB`, or driving at `vB`. */
-const WARM_HITS = [
-  // Head-on, 14 m/s each (100 km/h closing), noses 1.7 m apart.
-  [0, -6, 0, Math.PI, 14],
-  // T-bone into a parked car's door.
-  [-4.5, 0, Math.PI / 2, 0, 0],
-] as const;
-
-/**
- * Run two throwaway crashes through `stepWorld` (1 s each) so V8 has compiled the crush path before play.
- * Cold, a race's first crashes ran it unoptimised: single frames took 21–27 ms of physics headless (oval, 8 cars),
- * 26–48 ms in the browser (docs/PERF_HITCH.md); after this warm-up, ≤ 7.4 ms. Returns whether every hit crashed
- * both cars (else it no longer warms the code it is for).
- */
-export function warmCrashPath(): boolean {
-  const scene = new THREE.Scene();
-  const paint = { ...STOCK_PAINT, name: "warm-up" };
-  let crashed = true;
-  for (const [x, z, yaw, yawB, vB] of WARM_HITS) {
-    const a = new DeformableCar(paint, scene);
-    const b = new DeformableCar(paint, scene);
-    a.spawnFacing(x, z, yaw, 14);
-    b.spawnFacing(0, 0, yawB, vB);
-    const w = newWorld([a, b]);
-    for (let i = 0; i < FINE_HZ; i++) stepWorld(w, 1 / FINE_HZ);
-    crashed &&= a.crashed && b.crashed && a.deform.massActive && b.deform.massActive;
-    a.dispose();
-    b.dispose();
-  }
-  return crashed;
 }
 
 /**
