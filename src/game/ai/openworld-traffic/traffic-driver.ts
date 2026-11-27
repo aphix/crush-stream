@@ -80,6 +80,10 @@ export class TrafficDriver {
   private readonly arc = new Float64Array(MAX_CARS);
   /** Per car, 1 when what holds it back on its route (`leadLimit`) is a person, or a car that is itself held by one (a queue behind a person inherits it), else 0. */
   private readonly person = new Uint8Array(MAX_CARS);
+  /** `leadLimit`'s scratch: the cars and people near one car's look, as indexes. */
+  private readonly nearCars = new Int32Array(MAX_CARS);
+  private nearPeople = new Int32Array(0);
+  private nearPeopleCount = 0;
 
   constructor(network: RoadNetwork) {
     this.network = network;
@@ -236,11 +240,13 @@ export class TrafficDriver {
     const sample = this.sample;
     this.sampleSegment[id] = this.segment[id]!;
     this.person[id] = 0;
+    let candidates = 0;
     for (let ahead = PATH_SAMPLE_STEP; ahead <= look && arc + ahead <= route.length; ahead += PATH_SAMPLE_STEP) {
       this.sampleSegment[id] = pointAtArc(route, arc + ahead, this.sampleSegment[id]!, sample);
-      for (let index = 0; index < others.length; index++) {
-        const other = others[index]!;
-        if (other.id === id || !other.alive) continue;
+      // Every later sample lies within `look` along the route of the first, so within `look` of it: only what stands that near is asked about again.
+      if (ahead === PATH_SAMPLE_STEP) candidates = this.gatherAhead(id, sample.x, sample.z, look + Math.max(PATH_REACH, PERSON_REACH), others);
+      for (let at = 0; at < candidates; at++) {
+        const other = others[this.nearCars[at]!]!;
         const dx = other.x - sample.x;
         const dz = other.z - sample.z;
         if (Math.abs(dx) > PATH_REACH || Math.abs(dz) > PATH_REACH || hypot2(dx, dz) > PATH_REACH) continue;
@@ -248,7 +254,7 @@ export class TrafficDriver {
         this.person[id] = this.person[other.id]!;
         return leadSpeed + Math.sqrt(2 * FOLLOW_BRAKE * Math.max(0, ahead - FOLLOW_GAP));
       }
-      if (this.personNear(sample.x, sample.z)) {
+      if (this.personNearAhead(sample.x, sample.z)) {
         this.person[id] = 1;
         return Math.sqrt(2 * FOLLOW_BRAKE * Math.max(0, ahead - PERSON_GAP));
       }
@@ -256,17 +262,48 @@ export class TrafficDriver {
     return Infinity;
   }
 
-  /** Whether a shown person, or a body on foot (a player, standing or lying; a foot cop), is within `PERSON_REACH` of (x, z). */
-  private personNear(x: number, z: number): boolean {
+  /** The other live cars (`nearCars`) and shown people (`nearPeople`) within `radius` of (x, z), in index order; how many cars. */
+  private gatherAhead(id: number, x: number, z: number, radius: number, others: readonly AiCar[]): number {
+    let cars = 0;
+    for (let index = 0; index < others.length; index++) {
+      const other = others[index]!;
+      if (other.id === id || !other.alive) continue;
+      if (Math.abs(other.x - x) <= radius && Math.abs(other.z - z) <= radius) this.nearCars[cars++] = index;
+    }
     const people = this.people;
+    let near = 0;
     if (people !== null) {
+      if (this.nearPeople.length < people.count) this.fitNearPeople(people.count);
       for (let index = 0; index < people.count; index++) {
         if (people.shown[index] === 0) continue;
+        if (Math.abs(people.x[index]! - x) <= radius && Math.abs(people.z[index]! - z) <= radius) this.nearPeople[near++] = index;
+      }
+    }
+    this.nearPeopleCount = near;
+    return cars;
+  }
+
+  /** Room for `count` people in `nearPeople`: the cold path, when a crowd is bigger than any before. */
+  private fitNearPeople(count: number): void {
+    this.nearPeople = new Int32Array(count);
+  }
+
+  /** Whether a shown person, or a body on foot, is within `PERSON_REACH` of (x, z), asking only the people `gatherAhead` found near the look. */
+  private personNearAhead(x: number, z: number): boolean {
+    const people = this.people;
+    if (people !== null) {
+      for (let at = 0; at < this.nearPeopleCount; at++) {
+        const index = this.nearPeople[at]!;
         const dx = people.x[index]! - x;
         const dz = people.z[index]! - z;
         if (Math.abs(dx) <= PERSON_REACH && Math.abs(dz) <= PERSON_REACH && hypot2(dx, dz) <= PERSON_REACH) return true;
       }
     }
+    return this.walkerNear(x, z);
+  }
+
+  /** Whether a body on foot (a player, standing or lying; a foot cop) is within `PERSON_REACH` of (x, z). */
+  private walkerNear(x: number, z: number): boolean {
     const walkers = this.walkers;
     if (walkers === null) return false;
     for (let index = 0; index < walkers.count; index++) {

@@ -6,7 +6,7 @@ import { buildParkingSpots } from "../../world/openworld/openworld-parking.ts";
 import { buildRoadNetwork, HEADING, HEADING_COUNT, junctionIndex } from "../../world/openworld/openworld-roads.ts";
 import { blankAiCar } from "../derby-ai.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
-import { CRUISE_SPEED, NOSE_OVERHANG, PERSON_GAP, PERSON_REACH } from "./traffic-constants.ts";
+import { CRUISE_SPEED, LOOK_MINIMUM, NOSE_OVERHANG, PERSON_GAP, PERSON_REACH } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { CYCLE_SECONDS, KinematicCar, STEP_SECONDS } from "./traffic-world.test-util.ts";
@@ -180,7 +180,7 @@ describe("given a person standing on the car's way (a crossing, a lane)", () => 
     }
   }
 
-  // mutation: sed -i 's/      if (this.personNear(sample.x, sample.z)) return Math.sqrt(2 \* FOLLOW_BRAKE \* Math.max(0, ahead - PERSON_GAP));/      \/\/ no person/' src/game/ai/openworld-traffic/traffic-driver.ts
+  // mutation: sed -i 's/      if (this.personNearAhead(sample.x, sample.z)) {/      if (false) {/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when the light is green and she stands in its lane, then the car stops short of her and waits; when she has gone it drives on past where she stood", () => {
     const { route, car } = newTrip();
     const person = personAhead(route);
@@ -196,7 +196,33 @@ describe("given a person standing on the car's way (a crossing, a lane)", () => 
     driver.people = null;
   });
 
-  // mutation: sed -i 's/  private personNear(x: number, z: number): boolean {/  private personNear(x: number, z: number): boolean {\n    return false;/' src/game/ai/openworld-traffic/traffic-driver.ts
+  // mutation: sed -i 's/look + Math.max(PATH_REACH, PERSON_REACH), others)/PERSON_REACH, others)/' src/game/ai/openworld-traffic/traffic-driver.ts
+  it("when she stands at the far end of the look and another stands a look and more off, then only the near one holds the car, and it is held by a car there too", () => {
+    const { route } = newTrip();
+    const snap = blankAiCar(CAR_ID);
+    snap.x = 0;
+    snap.z = 0;
+    const lead = (): number => {
+      driver.forget(CAR_ID);
+      return driver["leadLimit"](snap, route, 0, 0, [snap]);
+    };
+    const spot = { x: 0, z: 0, tx: 0, tz: 0 };
+    pointAtArc(route, LOOK_MINIMUM - 1, 0, spot);
+    driver.people = { count: 1, x: Float32Array.of(spot.x), z: Float32Array.of(spot.z), shown: Uint8Array.of(1) };
+    expect(lead(), "she stands within the look: it holds").toBeLessThan(Infinity);
+    pointAtArc(route, 3 * LOOK_MINIMUM, 0, spot);
+    driver.people = { count: 1, x: Float32Array.of(spot.x), z: Float32Array.of(spot.z), shown: Uint8Array.of(1) };
+    expect(lead(), "she stands past it: it does not").toBe(Infinity);
+    const other = blankAiCar(CAR_ID + 1);
+    pointAtArc(route, LOOK_MINIMUM - 1, 0, spot);
+    other.x = spot.x;
+    other.z = spot.z;
+    driver.people = null;
+    driver.forget(CAR_ID);
+    expect(driver["leadLimit"](snap, route, 0, 0, [snap, other]), "a car there holds it").toBeLessThan(Infinity);
+  });
+
+  // mutation: sed -i 's/  private personNearAhead(x: number, z: number): boolean {/  private personNearAhead(x: number, z: number): boolean {\n    return false;/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when she stands on the pavement beside the lane, then the car does not stop for her", () => {
     const { route, car } = newTrip();
     const person = personAhead(route);
