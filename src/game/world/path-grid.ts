@@ -34,7 +34,7 @@ export function longestSegment(path: GridPath): number {
 }
 
 /** A path's segments by cell (CSR: `items[start[c]..start[c + 1]]` are the segments whose bounding box touches cell c). */
-type SegGrid = { x0: number; z0: number; nx: number; nz: number; start: Int32Array; items: Int32Array; seen: Int32Array; stamp: number };
+type SegGrid = { x0: number; z0: number; nx: number; nz: number; start: Int32Array; items: Int32Array; seen: Int32Array; stamp: number; memo: Float64Array; memoNext: number };
 const segGrids = new WeakMap<GridPath, SegGrid>();
 
 function segGrid(path: GridPath): SegGrid {
@@ -78,7 +78,7 @@ function segGrid(path: GridPath): SegGrid {
       fill = start.slice(0, nx * nz);
     }
   }
-  g = { x0: minX, z0: minZ, nx, nz, start, items, seen: new Int32Array(n), stamp: 0 };
+  g = { x0: minX, z0: minZ, nx, nz, start, items, seen: new Int32Array(n), stamp: 0, memo: new Float64Array(MEMO * MEMO_FIELDS).fill(NaN), memoNext: 0 };
   segGrids.set(path, g);
   return g;
 }
@@ -128,12 +128,54 @@ function scanCell(path: GridPath, g: SegGrid, c: number, out: GridHit): void {
   }
 }
 
+/** How many points' whole-path answers a path keeps (every car in a race step is asked about by every other car, and a parked car at the same place each step), and the floats of one: x, z, then the six fields of the hit. */
+const MEMO = 32;
+const MEMO_FIELDS = 8;
+
+/**
+ * The nearest segment of the whole path to the point in `PATH_POINT` into `out` (whose `dist2` the caller set to Infinity). The answer depends on the point alone, so one asked
+ * at the same x and z as a recent query (the path's last `MEMO`, in its grid, freed with it) is copied, not found again; the hint a caller searched with first never enters it.
+ */
+export function nearestOnPath(path: GridPath, out: GridHit): void {
+  if (out.dist2 !== Infinity) {
+    scanNearest(path, out);
+    return;
+  }
+  const x = PATH_POINT[0]!;
+  const z = PATH_POINT[1]!;
+  const g = segGrid(path);
+  const memo = g.memo;
+  for (let m = 0; m < MEMO; m++) {
+    const o = m * MEMO_FIELDS;
+    if (memo[o] !== x || memo[o + 1] !== z) continue;
+    out.dist2 = memo[o + 2]!;
+    out.k = memo[o + 3]!;
+    out.s = memo[o + 4]!;
+    out.cx = memo[o + 5]!;
+    out.cz = memo[o + 6]!;
+    out.lateral = memo[o + 7]!;
+    return;
+  }
+  scanNearest(path, out);
+  const at = g.memoNext;
+  const o = at * MEMO_FIELDS;
+  memo[o] = x;
+  memo[o + 1] = z;
+  memo[o + 2] = out.dist2;
+  memo[o + 3] = out.k;
+  memo[o + 4] = out.s;
+  memo[o + 5] = out.cx;
+  memo[o + 6] = out.cz;
+  memo[o + 7] = out.lateral;
+  g.memoNext = at + 1 === MEMO ? 0 : at + 1;
+}
+
 /**
  * The nearest segment of the whole path to the point in `PATH_POINT` into `out` (whose `dist2` the caller set to Infinity), found from the cell under
  * it outward: it stops once the cells searched reach farther in every direction than the best distance. A point far
  * outside the path's box takes the plain scan.
  */
-export function nearestOnPath(path: GridPath, out: GridHit): void {
+function scanNearest(path: GridPath, out: GridHit): void {
   const x = PATH_POINT[0]!;
   const z = PATH_POINT[1]!;
   const g = segGrid(path);
