@@ -2,7 +2,7 @@ import { describeDepthProbe, type DepthProbe } from "../present/depth-probe.ts";
 import { FX_TIER_ULTRA } from "../present/constants.ts";
 import type { SkyDetail, SkyMode } from "../present/sky-dome.ts";
 import { labLine, stripLines, type StripResult } from "./engine-bench-plan.ts";
-import { QUIET_HZ } from "../kernel/constants.ts";
+import { FINE_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import type { HitchTable } from "./bench-hitch.ts";
 import { PHASE_NAMES, WORK, WORK_NAMES } from "./sim-phases.ts";
 import { NAME, type FrameStats, type PartCard } from "./bench-frames.ts";
@@ -11,7 +11,9 @@ import { SCENERY_ARM, type SceneryArm } from "../world/constants.ts";
 import type { SwitchHitch } from "./bench-settle.ts";
 import { TIME_OF_DAY } from "../match/types.ts";
 
-const COARSE_LABEL = `1/${QUIET_HZ} s`;
+/** The pacer's two step sizes as a card and a sweep stop name them, from the sim's own rates. */
+export const FINE_LABEL = `1/${FINE_HZ} s`;
+export const COARSE_LABEL = `1/${QUIET_HZ} s`;
 
 /** The detail A/B's arms: no cuts at all, then the ladder's rungs for 50 and 30 m (`DETAIL_LEVELS`). */
 export const DETAIL_ARMS: readonly { key: string; level: number | null }[] = [{ key: "off", level: null }, { key: "50 m", level: 2 }, { key: "30 m", level: 4 }];
@@ -598,7 +600,7 @@ export function describeBench(r: BenchResult): string[] {
     `depth: ${s.depth.bits} bits (drawing buffer${s.depth.contextDepth ? "" : ", none requested"}), subpixel ${s.depth.subpixelBits} bits, fragment highp ${s.depth.fragmentHighFloat ? `${s.depth.fragmentHighFloat.precision} bits, range 2^${s.depth.fragmentHighFloat.rangeMin}..2^${s.depth.fragmentHighFloat.rangeMax}` : "not supported"}, camera near ${s.depth.near} far ${s.depth.far}, log depth ${s.depth.logarithmicDepthBuffer ? "on" : "off"}, ${describeDepthProbe(s.depth.probe)}`,
     ...(abPace && abFx && abDetail
       ? [
-      `A/B pacer pinned: ${arm("1/240 s", abPace.fine)}, ${f1(abPace.fine.fineCutsPerSimS)} fine-slice cuts/sim-s`,
+      `A/B pacer pinned: ${arm(FINE_LABEL, abPace.fine)}, ${f1(abPace.fine.fineCutsPerSimS)} fine-slice cuts/sim-s`,
       `                  ${arm(COARSE_LABEL, abPace.coarse)}, ${f1(abPace.coarse.fineCutsPerSimS)} fine-slice cuts/sim-s`,
       `A/B fx pinned: ${arm("minimal", abFx.minimal)}`,
       `               ${arm("low", abFx.low)}`,

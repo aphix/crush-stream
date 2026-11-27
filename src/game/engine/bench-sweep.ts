@@ -5,7 +5,7 @@ import type { KnobId } from "../hud/knobs.ts";
 import { BENCH, QUICK, type BenchParts, type Tap } from "./bench-measure.ts";
 import { applySkyPin, frame, pinSky, type Beat, type FrameEngine } from "./bench-frame.ts";
 import { FRAME } from "./bench-hitch.ts";
-import { DETAIL_ARMS, type SkyPin } from "./engine-bench-report.ts";
+import { COARSE_LABEL, DETAIL_ARMS, FINE_LABEL, type SkyPin } from "./engine-bench-report.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
 
 /** What the sweep puts in force: every setting the bench's window and A/Bs will later switch. */
@@ -51,7 +51,7 @@ export const HOLD: Record<SweepHow, { seconds: number; minFrames: number; capS: 
 function sweepStops(engine: SweepEngine, parts: BenchParts, plan: BenchPlan, tiers: readonly FxTier[], how: SweepHow, beat: Beat, t: Tap, own: QualityPicks): SweepStop[] {
   const stops: SweepStop[] = tiers.map((tier) => ({ name: `fx ${tier}`, set: () => engine.setFxTier(tier) }));
   if (how === "full") {
-    stops.push({ name: "pacer 1/80 s", set: () => void (engine.pace.pin = true) }, { name: "pacer 1/240 s", set: () => void (engine.pace.pin = false) });
+    stops.push({ name: `pacer ${COARSE_LABEL}`, set: () => void (engine.pace.pin = true) }, { name: `pacer ${FINE_LABEL}`, set: () => void (engine.pace.pin = false) });
     for (const a of DETAIL_ARMS) stops.push({ name: `detail ${a.key}`, set: () => setDetailArm(parts, a.level) });
     if (!plan.lab) stops.push({ name: "sky off", set: () => pinSky(engine, parts, t, beat, "off") }, { name: "sky full", set: () => pinSky(engine, parts, t, beat, "full") }, { name: "sky procedural", set: () => pinSky(engine, parts, t, beat, "procedural") });
   }
