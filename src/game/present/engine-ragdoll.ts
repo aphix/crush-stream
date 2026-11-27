@@ -71,6 +71,11 @@ export class RagdollSystem extends RagdollThrower {
     this.freeScenePatch();
   }
 
+  /** A phone in the open world keeps the standing props in the world only near a moving body (`PropReach`); anywhere else every one is in. */
+  gateProps(on: boolean): void {
+    this.props.gating(on);
+  }
+
   /**
    * One frame: step the dummies and the knocked props `dt` sim seconds against the cars' poses (`authority`: this peer
    * owns the glass, so it smashes the exit pane of a throw). `sandbox`: neither a race nor a derby (`onThrow`);

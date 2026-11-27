@@ -276,6 +276,7 @@ export class PropBodies {
   private patchOf = new Int16Array(0);
   /** Which standing bodies are in the world (`PropReach`). */
   private readonly gated = new PropReach();
+  private gatingOn = false;
   private readonly groups: (car: number) => number;
   private readonly footGroups: number;
   private readonly grace: number;
@@ -354,6 +355,7 @@ export class PropBodies {
     for (let k = 0; k < this.count; k++) this.stand(this.out[k]!);
     this.count = 0;
     this.state.fill(STAND);
+    this.gated.restore(this.bodies);
     this.freePatches();
     this.draw?.reset();
   }
@@ -572,14 +574,21 @@ export class PropBodies {
     this.regroup(i, car);
   }
 
+  /** Whether the standing bodies are kept in the world only near a moving body (`PropReach`); off, every one is in. A phone in the open world turns it on. */
+  gating(on: boolean): void {
+    if (on === this.gatingOn) return;
+    this.gatingOn = on;
+    if (!on) this.gated.restore(this.bodies);
+  }
+
   /** Before a frame's steps: the standing bodies in the world are the ones a moving body is near. */
   gate(): void {
-    if (this.built) this.gated.tend(this.world!, this.bodies, this.state, STAND, this.placed);
+    if (this.built && this.gatingOn) this.gated.tend(this.world!, this.bodies, this.state, STAND, this.placed);
   }
 
   /** The camera's sweep from (`ax`, `az`) to (`bx`, `bz`) this frame: the standing props near it are in the world from the next frame's steps, before its next sweep is cast. */
   watch(ax: number, az: number, bx: number, bz: number): void {
-    this.gated.watch(ax, az, bx, bz);
+    if (this.gatingOn) this.gated.watch(ax, az, bx, bz);
   }
 
   /** Is every knocked prop asleep? */

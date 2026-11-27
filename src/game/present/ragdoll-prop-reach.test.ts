@@ -27,7 +27,7 @@ async function throwInto(gated: boolean): Promise<{ trace: number[]; out: number
   await sys.preload();
   setGround(track.ground());
   sys.setCourse(track, placeProps(track), null);
-  if (!gated) sys["props"].gate = () => {};
+  sys.gateProps(gated);
   sys.update(FRAME, [], true, false, null);
   sys["spawn"]({ car: 0, p: new THREE.Vector3(50, 1.2, 59), q: new THREE.Quaternion(), v: new THREE.Vector3(14, 3, 1.5), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
   const trace: number[] = [];
@@ -65,7 +65,7 @@ describe("given a crate standing 15 m from the walker's eye, with the walker 15 
     await sys.preload();
     setGround(track.ground());
     sys.setCourse(track, placeProps(track), null);
-    if (!gated) sys["props"].gate = () => {};
+    sys.gateProps(gated);
     sys.startWalker(new THREE.Vector3(60, 0, 45), 0, { cop: false, look: driverLook(0, 0) });
     for (let f = 0; f < 10; f++) sys.update(FRAME, [], true, false, null);
     // The first sweep is seen by the next frame's steps (the camera sweeps every frame): the second is the one measured.
@@ -81,5 +81,22 @@ describe("given a crate standing 15 m from the walker's eye, with the walker 15 
     const all = await sweep(false);
     expect(all, "control: with every prop in, the crate stops the sweep").toBeLessThan(15);
     expect(await sweep(true), "the sweep with the props kept near moving bodies only").toBeCloseTo(all, 6);
+  });
+});
+
+describe("given a world nobody asked to gate its props", () => {
+  // mutation: sed -i 's/^  private gatingOn = false;/  private gatingOn = true;/' src/game/present/ragdoll-props.ts
+  it("when a dummy is thrown on a course with far props, then every standing prop stays in the world: only a phone in the open world gates", async () => {
+    const track = new Track(parseTrack(square({ props: [...NEAR, ...FAR].map((p) => ({ ...p, yaw: 0, scale: 1 })) })));
+    const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await sys.preload();
+    setGround(track.ground());
+    sys.setCourse(track, placeProps(track), null);
+    sys.update(FRAME, [], true, false, null);
+    sys["spawn"]({ car: 0, p: new THREE.Vector3(50, 1.2, 59), q: new THREE.Quaternion(), v: new THREE.Vector3(14, 3, 1.5), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
+    for (let f = 0; f < 30; f++) sys.update(FRAME, [], true, false, null);
+    const out = (sys["props"]["bodies"] as ({ isEnabled(): boolean } | null)[]).filter((b) => b && !b.isEnabled()).length;
+    sys.dispose();
+    expect(out).toBe(0);
   });
 });

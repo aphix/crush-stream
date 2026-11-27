@@ -48,6 +48,13 @@ export class PropReach {
     this.on = new Uint8Array(count).fill(1);
   }
 
+  /** Every standing body back in the world as at the build, and no sweep watched: a new run, or the gate turned off. */
+  restore(bodies: readonly (RigidBody | null)[]): void {
+    for (let i = 0; i < bodies.length; i++) if (this.on[i] === 0) bodies[i]?.setEnabled(true);
+    this.on.fill(1);
+    this.watching = false;
+  }
+
   /** Prop `i`'s `body` is in the world: it is about to fly. */
   wake(i: number, body: RigidBody): void {
     if (this.on[i] === 1) return;
