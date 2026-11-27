@@ -34,7 +34,7 @@ export function longestSegment(path: GridPath): number {
 }
 
 /** A path's segments by cell (CSR: `items[start[c]..start[c + 1]]` are the segments whose bounding box touches cell c). */
-type SegGrid = { x0: number; z0: number; nx: number; nz: number; start: Int32Array; items: Int32Array; seen: Int32Array; stamp: number };
+type SegGrid = { x0: number; z0: number; nx: number; nz: number; start: Int32Array; items: Int32Array; seen: Int32Array; stamp: number; memo: Float64Array; memoNext: number };
 const segGrids = new WeakMap<GridPath, SegGrid>();
 
 function segGrid(path: GridPath): SegGrid {
@@ -78,7 +78,7 @@ function segGrid(path: GridPath): SegGrid {
       fill = start.slice(0, nx * nz);
     }
   }
-  g = { x0: minX, z0: minZ, nx, nz, start, items, seen: new Int32Array(n), stamp: 0 };
+  g = { x0: minX, z0: minZ, nx, nz, start, items, seen: new Int32Array(n), stamp: 0, memo: new Float64Array(MEMO * MEMO_FIELDS).fill(NaN), memoNext: 0 };
   segGrids.set(path, g);
   return g;
 }
@@ -128,27 +128,26 @@ function scanCell(path: GridPath, g: SegGrid, c: number, out: GridHit): void {
   }
 }
 
-/** Points whose whole-path answer is kept: every car's probe in a race step (each car asks about the others) and a parked car's, asked again and again at the same place. */
+/** How many points' whole-path answers a path keeps (every car in a race step is asked about by every other car, and a parked car at the same place each step), and the floats of one: x, z, then the six fields of the hit. */
 const MEMO = 32;
 const MEMO_FIELDS = 8;
-const memo = new Float64Array(MEMO * MEMO_FIELDS);
-const memoPath: (GridPath | null)[] = new Array<GridPath | null>(MEMO).fill(null);
-const memoNext = new Int32Array(1);
 
 /**
  * The nearest segment of the whole path to the point in `PATH_POINT` into `out` (whose `dist2` the caller set to Infinity). The answer depends on the point alone, so one asked
- * at the same x and z as a recent query (`MEMO` of them) is copied, not found again; the hint a caller searched with first never enters it.
+ * at the same x and z as a recent query (the path's last `MEMO`, in its grid, freed with it) is copied, not found again; the hint a caller searched with first never enters it.
  */
 export function nearestOnPath(path: GridPath, out: GridHit): void {
-  const x = PATH_POINT[0]!;
-  const z = PATH_POINT[1]!;
   if (out.dist2 !== Infinity) {
     scanNearest(path, out);
     return;
   }
+  const x = PATH_POINT[0]!;
+  const z = PATH_POINT[1]!;
+  const g = segGrid(path);
+  const memo = g.memo;
   for (let m = 0; m < MEMO; m++) {
     const o = m * MEMO_FIELDS;
-    if (memo[o] !== x || memo[o + 1] !== z || memoPath[m] !== path) continue;
+    if (memo[o] !== x || memo[o + 1] !== z) continue;
     out.dist2 = memo[o + 2]!;
     out.k = memo[o + 3]!;
     out.s = memo[o + 4]!;
@@ -158,7 +157,7 @@ export function nearestOnPath(path: GridPath, out: GridHit): void {
     return;
   }
   scanNearest(path, out);
-  const at = memoNext[0]!;
+  const at = g.memoNext;
   const o = at * MEMO_FIELDS;
   memo[o] = x;
   memo[o + 1] = z;
@@ -168,8 +167,7 @@ export function nearestOnPath(path: GridPath, out: GridHit): void {
   memo[o + 5] = out.cx;
   memo[o + 6] = out.cz;
   memo[o + 7] = out.lateral;
-  memoPath[at] = path;
-  memoNext[0] = at + 1 === MEMO ? 0 : at + 1;
+  g.memoNext = at + 1 === MEMO ? 0 : at + 1;
 }
 
 /**

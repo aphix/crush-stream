@@ -65,8 +65,7 @@ describe("given a road and points asked about more than once", () => {
     expect(fresh.dist2, "a point not asked before is found on the road as it now stands").toBeCloseTo(61 ** 2, 6);
   });
 
-  // mutation: sed -i 's/ || memoPath\[m\] !== path) continue;/) continue;/' src/game/world/path-grid.ts
-  it("when two roads are asked about the same point, then each answers from its own samples", () => {
+  it("when two roads are asked about the same point, then each answers from its own samples (guard: each road keeps its own answers)", () => {
     const flat = road(120, 0);
     const bent = road(120, 40);
     const a = ask(flat, 150.2, 55);
@@ -74,6 +73,16 @@ describe("given a road and points asked about more than once", () => {
     expect(a.dist2, "the flat road is 55 m off").toBeCloseTo(55 ** 2, 6);
     expect(b.dist2, "the bent road is not").not.toBeCloseTo(a.dist2, 3);
     expect(ask(flat, 150.2, 55).dist2, "the flat road asked again").toBe(a.dist2);
+  });
+
+  // mutation: /usr/bin/sed -i 's/g.memoNext = at + 1 === MEMO ? 0 : at + 1;/g.memoNext = at + 1;/' src/game/world/path-grid.ts
+  it("when 40 distinct points are asked, more than the memo holds, then the last one asked is kept after the road's samples moved: the ring wraps to the oldest entry", () => {
+    const path = road(120, 10);
+    let last = blank();
+    for (let n = 0; n < 40; n++) last = ask(path, 10 + n * 3, 40 + n);
+    path.z.fill(0);
+    const again = ask(path, 10 + 39 * 3, 40 + 39);
+    expect(again.dist2, "the kept answer for the 40th point").toBe(last.dist2);
   });
 
   it("when the hit given in carries a finite distance, then the scan runs from it as it always did and keeps nothing (guard)", () => {
