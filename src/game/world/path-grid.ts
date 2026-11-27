@@ -128,12 +128,56 @@ function scanCell(path: GridPath, g: SegGrid, c: number, out: GridHit): void {
   }
 }
 
+/** Points whose whole-path answer is kept: every car's probe in a race step (each car asks about the others) and a parked car's, asked again and again at the same place. */
+const MEMO = 32;
+const MEMO_FIELDS = 8;
+const memo = new Float64Array(MEMO * MEMO_FIELDS);
+const memoPath: (GridPath | null)[] = new Array<GridPath | null>(MEMO).fill(null);
+const memoNext = new Int32Array(1);
+
+/**
+ * The nearest segment of the whole path to the point in `PATH_POINT` into `out` (whose `dist2` the caller set to Infinity). The answer depends on the point alone, so one asked
+ * at the same x and z as a recent query (`MEMO` of them) is copied, not found again; the hint a caller searched with first never enters it.
+ */
+export function nearestOnPath(path: GridPath, out: GridHit): void {
+  const x = PATH_POINT[0]!;
+  const z = PATH_POINT[1]!;
+  if (out.dist2 !== Infinity) {
+    scanNearest(path, out);
+    return;
+  }
+  for (let m = 0; m < MEMO; m++) {
+    const o = m * MEMO_FIELDS;
+    if (memo[o] !== x || memo[o + 1] !== z || memoPath[m] !== path) continue;
+    out.dist2 = memo[o + 2]!;
+    out.k = memo[o + 3]!;
+    out.s = memo[o + 4]!;
+    out.cx = memo[o + 5]!;
+    out.cz = memo[o + 6]!;
+    out.lateral = memo[o + 7]!;
+    return;
+  }
+  scanNearest(path, out);
+  const at = memoNext[0]!;
+  const o = at * MEMO_FIELDS;
+  memo[o] = x;
+  memo[o + 1] = z;
+  memo[o + 2] = out.dist2;
+  memo[o + 3] = out.k;
+  memo[o + 4] = out.s;
+  memo[o + 5] = out.cx;
+  memo[o + 6] = out.cz;
+  memo[o + 7] = out.lateral;
+  memoPath[at] = path;
+  memoNext[0] = at + 1 === MEMO ? 0 : at + 1;
+}
+
 /**
  * The nearest segment of the whole path to the point in `PATH_POINT` into `out` (whose `dist2` the caller set to Infinity), found from the cell under
  * it outward: it stops once the cells searched reach farther in every direction than the best distance. A point far
  * outside the path's box takes the plain scan.
  */
-export function nearestOnPath(path: GridPath, out: GridHit): void {
+function scanNearest(path: GridPath, out: GridHit): void {
   const x = PATH_POINT[0]!;
   const z = PATH_POINT[1]!;
   const g = segGrid(path);
