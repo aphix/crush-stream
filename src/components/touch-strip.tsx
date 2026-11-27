@@ -31,6 +31,8 @@ export function PedalStrip({ engine, onThumb, onArm }: StripProps) {
   const strip = useRef<HTMLDivElement>(null);
   const knob = useRef<HTMLDivElement>(null);
   const finger = useRef({ id: -1, inCap: false });
+  /** The strip's box as the finger landed (it holds still while a thumb is on it): a read per move forced a layout after the knob's last write. */
+  const bounds = useRef<DOMRect | null>(null);
   useReleaseOnUnmount(engine, PAD_BUTTON.south);
   const put = (position: number): void => {
     if (knob.current) knob.current.style.bottom = knobBottom(position);
@@ -42,13 +44,13 @@ export function PedalStrip({ engine, onThumb, onArm }: StripProps) {
     onThumb(reading.gas, reading.brake);
   };
   const move = (e: ReactPointerEvent<HTMLDivElement>): void => {
-    if (e.pointerId !== finger.current.id || !strip.current) return;
-    const bounds = strip.current.getBoundingClientRect();
-    put(1 - (e.clientY - bounds.top) / bounds.height);
+    if (e.pointerId !== finger.current.id || !bounds.current) return;
+    put(1 - (e.clientY - bounds.current.top) / bounds.current.height);
   };
   const release = (e: ReactPointerEvent<HTMLDivElement>): void => {
     if (e.pointerId !== finger.current.id) return;
     finger.current = { id: -1, inCap: false };
+    bounds.current = null;
     if (knob.current) delete knob.current.dataset.drag;
     put(REST_POSITION);
   };
@@ -64,6 +66,7 @@ export function PedalStrip({ engine, onThumb, onArm }: StripProps) {
         if (finger.current.id !== -1) return;
         onArm();
         finger.current.id = e.pointerId;
+        bounds.current = e.currentTarget.getBoundingClientRect();
         e.currentTarget.setPointerCapture(e.pointerId);
         if (knob.current) knob.current.dataset.drag = "";
         move(e);
