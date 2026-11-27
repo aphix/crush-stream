@@ -1507,8 +1507,9 @@ export class CrashEngine extends EngineGarage {
       const stride = car === followed ? 1 : this.skinStride(car);
       this.lodStride[i] = stride;
       car.setNearView(stride === 1);
-      car.setHoldDeferred(car !== followed && this.holdHidden(car, stride, i));
-      car.deform.skinDeferred = stride === 0 || (this.lodFrame + i) % stride !== 0;
+      const skinDeferred = stride === 0 || (this.lodFrame + i) % stride !== 0;
+      car.setHoldDeferred(car !== followed && this.holdWaits(car, stride, i, skinDeferred));
+      car.deform.skinDeferred = skinDeferred;
     }
   }
 
@@ -1527,7 +1528,7 @@ export class CrashEngine extends EngineGarage {
       if (!owed && !car.holdOwed) continue;
       if (followed === undefined) followed = this.followedCar();
       const stride = car === followed ? 1 : this.skinStride(car);
-      car.setHoldDeferred(car !== followed && this.holdHidden(car, stride, i));
+      car.setHoldDeferred(car !== followed && this.holdWaits(car, stride, i, car.deform.skinDeferred));
       if (owed) {
         car.setNearView(stride === 1);
         if (stride === 1 || (stride > 1 && this.lodStride[i] === 0)) car.flushDeferredSkin();
@@ -1541,6 +1542,11 @@ export class CrashEngine extends EngineGarage {
   private aimCover(newFrame: boolean): void {
     const e = this.camera.matrixWorld.elements;
     this.cover.aim(e[12]!, e[13]!, e[14]!, -e[8]!, -e[9]!, -e[10]!, newFrame);
+  }
+
+  /** Whether `car`'s tyre hold may wait: no camera sees it, or it is drawn small (skinned every 2nd or 4th frame) and its skin is not written this frame, so a wheel's move is laid with the next skin. */
+  private holdWaits(car: DeformableCar, stride: number, i: number, skinDeferred: boolean): boolean {
+    return (stride > 1 && skinDeferred) || this.holdHidden(car, stride, i);
   }
 
   /** Whether no camera sees `car` (list index `i`) this frame, so its tyre hold may wait: off every camera, or a wreck wholly behind a solid (`CarCover`). Needs `witness.aim` and `aimCover` this frame. */
