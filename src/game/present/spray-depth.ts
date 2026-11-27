@@ -82,36 +82,60 @@ function spraySurfaceOf(layout: SprayLayout, rest: ArrayLike<number>, index: Arr
 function rasterise(surface: SpraySurface, width: number, rect: Rect, { corner, depth, part, fine }: Triangle, slack: number): void {
   const [fx, fy, fw, fh] = rect;
   const [a, b, c] = corner;
-  const area = (b[0]! - a[0]!) * (c[1]! - a[1]!) - (c[0]! - a[0]!) * (b[1]! - a[1]!);
+  const a0 = a[0]!;
+  const a1 = a[1]!;
+  const b0 = b[0]!;
+  const b1 = b[1]!;
+  const c0 = c[0]!;
+  const c1 = c[1]!;
+  const area = (b0 - a0) * (c1 - a1) - (c0 - a0) * (b1 - a1);
   if (Math.abs(area) < 1e-9) return;
-  const x0 = Math.max(fx, Math.floor(Math.min(a[0]!, b[0]!, c[0]!)));
-  const x1 = Math.min(fx + fw - 1, Math.floor(Math.max(a[0]!, b[0]!, c[0]!)));
-  const y0 = Math.max(fy, Math.floor(Math.min(a[1]!, b[1]!, c[1]!)));
-  const y1 = Math.min(fy + fh - 1, Math.floor(Math.max(a[1]!, b[1]!, c[1]!)));
-  const nearest = Math.min(...depth);
-  const outermost = Math.max(...depth);
+  const x0 = Math.max(fx, Math.floor(Math.min(a0, b0, c0)));
+  const x1 = Math.min(fx + fw - 1, Math.floor(Math.max(a0, b0, c0)));
+  const y0 = Math.max(fy, Math.floor(Math.min(a1, b1, c1)));
+  const y1 = Math.min(fy + fh - 1, Math.floor(Math.max(a1, b1, c1)));
+  if (x0 > x1 || y0 > y1) return;
+  const d0 = depth[0];
+  const d1 = depth[1];
+  const d2 = depth[2];
+  const nearest = Math.min(d0, d1, d2);
+  const outermost = Math.max(d0, d1, d2);
+  // The triangle's edge vectors, hoisted: the same differences the weights are made of, so every weight is the same double.
+  const ca = c1 - a1;
+  const cb = c0 - a0;
+  const ba = b0 - a0;
+  const bb = b1 - a1;
+  const surfaceDepth = surface.depth;
+  const surfacePart = surface.part;
+  // No texel of this triangle takes a code or a key above these (`depthCode` rises with the depth, and the remainder is at most `SPRAY_FINE_STEPS`): a texel already at or past it can only be skipped.
+  const topCode = depthCode(outermost);
+  const topKey = topCode * (SPRAY_FINE_STEPS + 1) + SPRAY_FINE_STEPS;
   for (let y = y0; y <= y1; y++) {
+    const py = y + 0.5;
+    const dy = py - a1;
     for (let x = x0; x <= x1; x++) {
+      const held = y * width + x;
+      if (fine ? surfaceDepth[held]! * (SPRAY_FINE_STEPS + 1) + Math.floor(surfacePart[held]! / SPRAY_PART_RANGE) >= topKey : surfaceDepth[held]! >= topCode) continue;
       const px = x + 0.5;
-      const py = y + 0.5;
-      const wb = ((px - a[0]!) * (c[1]! - a[1]!) - (c[0]! - a[0]!) * (py - a[1]!)) / area;
-      const wc = ((b[0]! - a[0]!) * (py - a[1]!) - (px - a[0]!) * (b[1]! - a[1]!)) / area;
+      const dx = px - a0;
+      const wb = (dx * ca - cb * dy) / area;
+      const wc = (ba * dy - dx * bb) / area;
       const wa = 1 - wb - wc;
       if (wa < -slack || wb < -slack || wc < -slack) continue;
-      const place = Math.min(outermost, Math.max(nearest, wa * depth[0] + wb * depth[1] + wc * depth[2]));
+      const place = Math.min(outermost, Math.max(nearest, wa * d0 + wb * d1 + wc * d2));
       const code = depthCode(place);
       const at = y * width + x;
       if (!fine) {
-        if (code <= surface.depth[at]!) continue;
-        surface.depth[at] = code;
-        surface.part[at] = part;
+        if (code <= surfaceDepth[at]!) continue;
+        surfaceDepth[at] = code;
+        surfacePart[at] = part;
         continue;
       }
       // The remainder within the step, 0..SPRAY_FINE_STEPS, above the part's low bits (`SPRAY_PART_RANGE`): a cover's outer one wins by code, then by remainder.
       const remainder = Math.round((place * DEPTH_STEPS - Math.round(place * DEPTH_STEPS) + 0.5) * SPRAY_FINE_STEPS);
-      if (code * (SPRAY_FINE_STEPS + 1) + remainder <= surface.depth[at]! * (SPRAY_FINE_STEPS + 1) + Math.floor(surface.part[at]! / SPRAY_PART_RANGE)) continue;
-      surface.depth[at] = code;
-      surface.part[at] = part + remainder * SPRAY_PART_RANGE;
+      if (code * (SPRAY_FINE_STEPS + 1) + remainder <= surfaceDepth[at]! * (SPRAY_FINE_STEPS + 1) + Math.floor(surfacePart[at]! / SPRAY_PART_RANGE)) continue;
+      surfaceDepth[at] = code;
+      surfacePart[at] = part + remainder * SPRAY_PART_RANGE;
     }
   }
 }
@@ -206,15 +230,22 @@ function fillGapsAcross(surface: SpraySurface, width: number, rect: Rect): void 
   }
 }
 
-/** Every texel of `rect` beside a bare one (of its 8 neighbours) goes bare. */
+/** Every texel of `rect` beside a bare one (of its 8 neighbours) goes bare: a 3 x 3 erosion, made along each row and then down each column (the same texels as the 9 neighbours at once). */
 function bareOutlines(surface: SpraySurface, width: number, rect: Rect): void {
   const [fx, fy, fw, fh] = rect;
-  const before = surface.depth.slice();
-  for (let y = fy; y < fy + fh; y++) {
-    for (let x = fx; x < fx + fw; x++) {
-      for (let ny = Math.max(fy, y - 1); ny <= Math.min(fy + fh - 1, y + 1); ny++) {
-        for (let nx = Math.max(fx, x - 1); nx <= Math.min(fx + fw - 1, x + 1); nx++) if (before[ny * width + nx] === 0) surface.depth[y * width + x] = 0;
-      }
+  const depth = surface.depth;
+  // Per texel: 1 where it or a horizontal neighbour inside the rect is bare.
+  const beside = new Uint8Array(fw * fh);
+  for (let y = 0; y < fh; y++) {
+    const row = (fy + y) * width + fx;
+    for (let x = 0; x < fw; x++) {
+      beside[y * fw + x] = depth[row + x] === 0 || (x > 0 && depth[row + x - 1] === 0) || (x + 1 < fw && depth[row + x + 1] === 0) ? 1 : 0;
+    }
+  }
+  for (let y = 0; y < fh; y++) {
+    const row = (fy + y) * width + fx;
+    for (let x = 0; x < fw; x++) {
+      if (beside[y * fw + x] === 1 || (y > 0 && beside[(y - 1) * fw + x] === 1) || (y + 1 < fh && beside[(y + 1) * fw + x] === 1)) depth[row + x] = 0;
     }
   }
 }

@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DEPTH_STEPS, NO_CAR_PICK, SPRAY_FINE_STEPS, SPRAY_PART_RANGE } from "../match/look-data.ts";
 import { CAR_SPRAY, sprayFace, sprayPlace, SPRAY_FACE } from "../vehicle/spray-box.ts";
-import { REST_POSITION } from "../vehicle/car-detail-map.ts";
+import { ensureRestFrame, REST_POSITION } from "../vehicle/car-detail-map.ts";
 import { compileHooks } from "../vehicle/car-detail-map.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { PRIMER_ATTRIBUTE } from "../vehicle/constants.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { sprayCovers, wearCarLook } from "./car-look.ts";
 import { SprayBitmap } from "./spray.ts";
-import { CAR_SPRAY_DEPTH_BAND, type RestTriangles } from "./spray-depth.ts";
+import { CAR_SPRAY_DEPTH_BAND, carSprayDepthTexture, type RestTriangles } from "./spray-depth.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const INK = 4;
@@ -160,4 +160,25 @@ describe("given a police car sprayed all over", () => {
     const hit = firstHit(ray, police.all, f.p, AXES[face]!);
     return hit !== undefined && Math.abs(RAY_START - hit.distance) < SURFACE_HIT;
   }
+});
+
+describe("given the spray depth map each car style's covers make", () => {
+  /** FNV-1a over the bytes of a depth map. */
+  const fnv = (bytes: ArrayLike<number>): number => {
+    let h = 2166136261;
+    for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i]!, 16777619) >>> 0;
+    return h;
+  };
+  // Made by the code before its rasterise and outline passes were hoisted, early-skipped and made separable: the maps are bit for bit what they were.
+  const DIGESTS = { sedan: 1230918604, hatchback: 69049883, wagon: 2131159430, coupe: 2949857609, pickup: 1490530516, police: 1230918604, monster: 1810257249 } as const;
+
+  // mutation: sed -i 's/^  const topKey = topCode \* (SPRAY_FINE_STEPS + 1) + SPRAY_FINE_STEPS;/  const topKey = topCode * (SPRAY_FINE_STEPS + 1);/' src/game/present/spray-depth.ts
+  it("when each style's map is made, then its bytes are the ones the unhoisted code made", () => {
+    for (const [style, digest] of Object.entries(DIGESTS)) {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, style as keyof typeof DIGESTS);
+      const meshes = car.lookMeshes();
+      for (const mesh of [meshes.body, meshes.hood, meshes.trunk, ...meshes.doors]) ensureRestFrame(mesh, car.group);
+      expect(fnv(carSprayDepthTexture(sprayCovers(car)).image.data as Uint8Array), `${style}'s depth map`).toBe(digest);
+    }
+  });
 });
