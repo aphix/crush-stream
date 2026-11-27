@@ -109,6 +109,7 @@ const HOT = {
   "src/game/contact/prop-contact.ts": ["propContact", "solidContact", "sideContact", "measure", "coplanar"],
   "src/game/contact/external-contact.ts": ["partContactPair", "partContact", "faceOverlap", "shiftVelocities", "carRow", "takeRow", "moveAsOneBody", "exchange"],
   "src/game/vehicle/car-drive.ts": ["applyDrive", "input"],
+  "src/game/vehicle/car-rest.ts": ["keepsSleeping", "settleIntact", "restHold", "driveAtRest"],
   "src/game/vehicle/drive-input.ts": ["readIntent", "shapeDrive"],
   "src/game/match/derby.ts": ["step", "think", "consumeBoosts", "snapshotAiCar", "leader"],
   "src/game/match/session.ts": ["step", "stepCar", "gates", "reroute", "measure", "stretch", "drafting", "busting", "settle", "deadline"],

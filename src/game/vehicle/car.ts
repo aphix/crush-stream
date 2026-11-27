@@ -29,6 +29,7 @@ import { SCRATCH_MIN_SLIP } from "./paint-scrapes.ts";
 import { rideSkin } from "./trim-ride.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { CREASE_STRIDE, creaseStations, raiseRidge, ridgeHeight } from "./lid-fold.ts";
+import { keepsSleeping, settleIntact } from "./car-rest.ts";
 
 const _p = new THREE.Vector3();
 const _m = new THREE.Matrix4();
@@ -649,6 +650,7 @@ export class DeformableCar extends CarParts {
       this.integrateWreck(dt);
       return;
     }
+    if (this.asleep && keepsSleeping(this)) return;
     this.invYaw = 0;
     if (!this.falling) this.spinWheels(dt, !this.airborne);
     this.flewDt = dt;
@@ -666,6 +668,7 @@ export class DeformableCar extends CarParts {
     this.ride(dt);
     if (!this.crashed) this.deform.bindKinematic(this.group, this.velocity, this.angular);
     this.stepLooseParts(dt, this.slot, this.surfaces);
+    settleIntact(this, dt);
   }
 
   /** One fixed step of what the crash does to the car's parts (`settleStep`): sensors follow the masses, hinges move, parts tear off, lamps break, glass cracks.

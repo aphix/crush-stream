@@ -73,6 +73,8 @@ export type World = {
   partStirs: number[];
   /** The scene lets a car with nothing in its reach run the step as one slice of the step's whole length (`loneCars`): the race. Off, every car runs the step's slices (a derby bowl and the slab hold a car per slice). */
   lone: boolean;
+  /** The scene lets an intact car that has stood still, undriven, for a second sleep (`settleIntact`): the open world's parked cars. Off, every intact car steps every slice. */
+  restSleep: boolean;
   /** The cables between cars and the world (`solveTethers`): empty unless the player fires one. Never recorded: a clip that saw one is not filed (`CrashRecorder.tethered`). */
   readonly tethers: TetherSet;
   /** The cars the last `stepWorld` ran as lone cars (bit i: `cars[i]`, the first 32): the recorder keeps it (`HighlightClip.lone`), next to `shape`. */
@@ -97,6 +99,7 @@ export function newWorld(cars: readonly DeformableCar[], barrier: JerseyBarrier 
     strongest: new StrongestContact(),
     beforeSlice: null,
     lone: false,
+    restSleep: false,
     tethers: new TetherSet(),
     loners: 0,
     planLoners: 0,
@@ -243,7 +246,8 @@ function loneCars(cars: readonly DeformableCar[], dt: number): number {
       const pb = cars[b]!.group.position;
       const dx = pa.x - pb.x;
       const dz = pa.z - pb.z;
-      const reach = (cars[a]!.asleep || cars[b]!.asleep ? WAKE_REACH : CONTACT_REACH) + LONE_MARGIN + (speed[a]! + speed[b]!) * dt;
+      // A sleeper wakes to a top coming within `REACH` of it; a car that sleeps for want of motion (`restSleep`) is tested by its hull as an awake one is.
+      const reach = ((cars[a]!.asleep && !(cars[a]!.restSleep && hulled[a] === 1)) || (cars[b]!.asleep && !(cars[b]!.restSleep && hulled[b] === 1)) ? WAKE_REACH : CONTACT_REACH) + LONE_MARGIN + (speed[a]! + speed[b]!) * dt;
       if (dx * dx + dz * dz > reach * reach) continue;
       if (hulled[a] === 1 && hulled[b] === 1 && hullsClear(hulls, a, b, dt)) continue;
       flag[a] = 0;
@@ -330,6 +334,7 @@ export function stepWorld(w: World, dt: number): void {
     cars[ci]!.stirSlice = -1;
     cars[ci]!.clearStirredBodies();
     cars[ci]!.surfaces = w.surfaces;
+    cars[ci]!.restSleep = w.restSleep;
     cars[ci]!.group.updateWorldMatrix(false, false);
     w.surfaces.sync(ci, cars[ci]!);
   }

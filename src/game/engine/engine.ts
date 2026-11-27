@@ -1685,6 +1685,7 @@ export class CrashEngine extends EngineGarage {
     w.partMet = this.partMet;
     w.collide = this.collide;
     w.lone = this.race.active;
+    w.restSleep = this.showOpenWorld;
     if (!this.race.active && !this.showLab) this.syncRigs();
     this.ejection.ctx = this.derbyMode ? "derby" : "default";
     this.ejection.minigame = this.minigameMode !== null;

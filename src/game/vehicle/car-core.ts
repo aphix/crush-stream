@@ -443,6 +443,10 @@ export abstract class CarCore {
   stirSlice = -1;
   /** Contact rows the last rigid step solved (tyres + points). */
   contacts = 0;
+  /** The world lets intact cars rest (`World.restSleep`, set by `stepWorld` each step): a still, undriven car on its tyres sleeps (`settleIntact`). */
+  restSleep = false;
+  /** `applyDrive` was called on this car since its last rigid step: a driver (or a hold) is on it, so it does not sleep. */
+  drove = false;
 
   wake(): void {
     this.asleep = false;

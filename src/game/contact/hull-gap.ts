@@ -29,9 +29,9 @@ export const ACCEL_BOUND = 60;
 /** What the speeds do not say a step may move a hull by (m): the ride's pitch and the contact passes' capped pushes. */
 const HULL_SLACK = 0.02;
 
-/** `car`'s hull into `out` from index `o`; false (`out` unwritten) where the plan box does not describe the car: a wreck, airborne, falling, on a roof, leaning, a door ajar or a part off, asleep. */
+/** `car`'s hull into `out` from index `o`; false (`out` unwritten) where the plan box does not describe the car: a wreck, airborne, falling, on a roof, leaning, a door ajar or a part off, asleep (but a car that sleeps for want of motion, `restSleep`, is still: its hull stands). */
 export function readHull(car: DeformableCar, out: Float64Array, o: number): boolean {
-  if (car.deform.massActive || car.crashed || car.vaporized || car.falling || car.airborne || car.asleep || car.restsOn !== null) return false;
+  if (car.deform.massActive || car.crashed || car.vaporized || car.falling || car.airborne || (car.asleep && !car.restSleep) || car.restsOn !== null) return false;
   if (!car.hingesLatched || car.hasLoosePart()) return false;
   if (Math.abs(car.forward.y) > LEVEL || Math.abs(car.right.y) > LEVEL) return false;
   const plan = car.cage.fields.planBox;
