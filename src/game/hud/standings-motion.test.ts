@@ -71,8 +71,9 @@ describe("given the phone standings list", () => {
 
 describe("given the rows a standings list was measured with", () => {
   const li = (className: string) => ({ className });
-  const [a, b] = [li("x"), li("y")];
-  const stood = [{ el: a, cls: "x" }, { el: b, cls: "y" }];
+  // Same class on both, so a swap is caught by the elements alone.
+  const [a, b] = [li("x"), li("x")];
+  const stood = [{ el: a, cls: "x" }, { el: b, cls: "x" }];
 
   it("when the same elements stand in the same order with the same classes, then nothing moved", () => {
     expect(rowsUnmoved(stood, [a, b])).toBe(true);
@@ -85,7 +86,10 @@ describe("given the rows a standings list was measured with", () => {
 
   // mutation: sed -i 's/ || before\[i\]!.cls !== now\[i\]!.className//' src/game/hud/standings-motion.ts
   it("when a row's classes change (a phone row hidden), then they are measured again", () => {
-    expect(rowsUnmoved(stood, [a, li("y max-sm:hidden")])).toBe(false);
+    const c = li("y");
+    const before = [{ el: a, cls: "x" }, { el: c, cls: "y" }];
+    c.className = "y max-sm:hidden";
+    expect(rowsUnmoved(before, [a, c])).toBe(false);
   });
 
   // mutation: sed -i 's/before.length !== now.length/false/' src/game/hud/standings-motion.ts

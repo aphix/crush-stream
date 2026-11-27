@@ -165,7 +165,7 @@ export function RaceStandings({ race, onCommand }: { race: RaceHud; onCommand: S
       aria-label="Standings"
       inert={faded}
       className={cn(
-        "max-h-full w-36 space-y-px overflow-y-auto sm:w-48",
+        "relative max-h-full w-36 space-y-px overflow-y-auto sm:w-48",
         // The 3rem is the read-out line above (`RaceReadouts`); the list never reaches into the road zone's middle.
         "pointer-coarse:hud-fade pointer-coarse:hud-left pointer-coarse:absolute pointer-coarse:top-[calc(max(var(--hud-edge),env(safe-area-inset-top))+3rem)] pointer-coarse:w-36 portrait:pointer-coarse:w-28 portrait:pointer-coarse:top-[calc(max(var(--hud-edge),env(safe-area-inset-top))+6rem)]",
         faded ? "pointer-events-none opacity-0" : "pointer-events-auto idle:opacity-60",
