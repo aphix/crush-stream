@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { getCrackMap, makeGlassMaterial } from "../vehicle/car-materials.ts";
 import { applyCarFinish, finishedMaterials, finishForTier } from "../vehicle/car-finish.ts";
-import { warmCrashPath } from "./world-step.ts";
+import { crashWarmWanted, warmCrashPath } from "./crash-warm.ts";
 import { loadSkinKernel, skinKernel } from "../deform/skin-kernel.ts";
 import { EngineCore } from "./engine-core.ts";
 import type { Ultra } from "../present/ultra/ultra.ts";
@@ -104,7 +104,7 @@ export abstract class EngineWarm extends EngineCore {
     // After the kernel is in (a 3 kB file, fetched since the start of this method), so the warm crash also runs the
     // WASM skin: its first calls and each style's tables land here, not on the first real crash.
     await kernel;
-    warmCrashPath();
+    if (crashWarmWanted()) warmCrashPath();
     await scene;
     this.ragdolls.debug.set(this.showRig, this.showParticles);
     for (const car of this.live()) {
