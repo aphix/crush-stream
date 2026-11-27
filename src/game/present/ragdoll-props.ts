@@ -9,6 +9,7 @@ import { propColliders, type Placed, type PropCollider } from "../world/placemen
 import { AIR_ANGULAR, AIR_LINEAR, blendPose, type Doll, readPose } from "./ragdoll-body.ts";
 import type { PropTumble } from "./prop-tumble.ts";
 import { knocksDown } from "../scenes/figure-strike.ts";
+import { PropReach } from "./ragdoll-prop-reach.ts";
 
 /** What the props' world needs of their drawing: where one is placed, and all back on their spots. */
 export type PropDraw = Pick<PropTumble, "place" | "reset">;
@@ -273,6 +274,8 @@ export class PropBodies {
   private patchZ = new Float64Array(0);
   private refs = new Uint16Array(0);
   private patchOf = new Int16Array(0);
+  /** Which standing bodies are in the world (`PropReach`). */
+  private readonly gated = new PropReach();
   private readonly groups: (car: number) => number;
   private readonly footGroups: number;
   private readonly grace: number;
@@ -569,6 +572,16 @@ export class PropBodies {
     this.regroup(i, car);
   }
 
+  /** Before a frame's steps: the standing bodies in the world are the ones a moving body is near. */
+  gate(): void {
+    if (this.built) this.gated.tend(this.world!, this.bodies, this.state, STAND, this.placed);
+  }
+
+  /** The camera's sweep from (`ax`, `az`) to (`bx`, `bz`) this frame: the standing props near it are in the world from the next frame's steps, before its next sweep is cast. */
+  watch(ax: number, az: number, bx: number, bz: number): void {
+    this.gated.watch(ax, az, bx, bz);
+  }
+
   /** Is every knocked prop asleep? */
   asleep(): boolean {
     for (let k = 0; k < this.count; k++) if (!this.bodies[this.out[k]!]!.isSleeping()) return false;
@@ -733,6 +746,7 @@ export class PropBodies {
       this.own[i] = descs.map((d) => world.createCollider(d.setDensity(pieces[0]!.mass / volume).setFriction(FRICTION).setRestitution(0).setCollisionGroups(NONE), body));
       this.stand(i);
     }
+    this.gated.reset(this.placed.length);
     this.built = true;
   }
 
@@ -773,6 +787,7 @@ export class PropBodies {
   private fly(i: number): void {
     const body = this.bodies[i];
     if (!body) return;
+    this.gated.wake(i, body);
     let vx = this.kick[i * 3]!;
     const vy = this.kick[i * 3 + 1]!;
     let vz = this.kick[i * 3 + 2]!;

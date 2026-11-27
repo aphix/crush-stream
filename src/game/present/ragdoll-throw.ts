@@ -338,6 +338,7 @@ export abstract class RagdollThrower extends RagdollStepper {
       this.sightBall = new R.Ball(radius);
       this.sightRadius = radius;
     }
+    this.props.watch(x, z, x + dx * length, z + dz * length);
     _sightAt.x = x;
     _sightAt.y = y;
     _sightAt.z = z;

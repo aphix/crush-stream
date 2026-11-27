@@ -135,6 +135,7 @@ export abstract class RagdollStepper extends RagdollPool {
       this.step = step;
       world.timestep = step;
     }
+    if (steps > 0) this.props.gate();
     if (steps > 0) this.meetWalkers(steps * step);
     if (steps > 0) for (let s = 0; s < this.dolls.length; s++) this.walkers[s]!.control(steps * step, this.untangle.carry, s * 3);
     if (steps > 0) {
