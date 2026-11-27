@@ -3,10 +3,11 @@ import { computeNormalsNear } from "../deform/fast-normals.ts";
 import { skinKernel, type SkinKernel } from "../deform/skin-kernel.ts";
 import type { SagSkin } from "../deform/tyre-sag-kernel.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
+import { restEdges, type RestEdges } from "./car-tyre-skin-edges.ts";
 import type { CarFrame } from "./car-rig.ts";
 import type { PartSeat } from "./part-geometry.ts";
 import { INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
-import { admitCarried, capAtRest, carryLift, clearOver, DIRTY_WORD, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, poseWithin, REACH, ROW_KEEP, type Carried } from "./tyre-carried.ts";
+import { admitCarried, capAtRest, carryLift, clearOver, DIRTY_WORD, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, poseWithin, REACH, type Carried } from "./tyre-carried.ts";
 
 /** How far (m) a held skin point stands over the tyre: the triangles between held points sag under their chords (edges up to 25 cm over a tyre). */
 const TYRE_GAP = 0.05;
@@ -222,63 +223,6 @@ function sagFloor(pos: Float32Array, a: number, b: number, c: number, ya: number
   const toB = gx * (pos[b]! - cx) + gy * (yb - cy) + gz * (pos[b + 2]! - cz);
   const toC = gx * (pos[c]! - cx) + gy * (yc - cy) + gz * (pos[c + 2]! - cz);
   return clear + Math.min(toA, toB, toC);
-}
-
-/** How fast (m per m of rest distance) a carried lift falls off along the skin at least: past the rows above a held point it spreads a hand's width, where a near-flat deck would carry it whole. */
-const SPREAD = 0.5;
-
-/** A mesh's edges between distinct rest points (a crease's copies welded into one), each from its lower end to its higher one. The points are numbered lowest first, so an edge always leads to a higher number. */
-type RestEdges = { weld: Int32Array; start: Int32Array; to: Int32Array; drop: Float32Array };
-
-/** The upward edges of the mesh over `rest` (`index` its triangles); `drop`: how much of a lift the higher end may stand short of it (`ROW_KEEP`, `SPREAD`). */
-function restEdges(rest: Float32Array, index: THREE.BufferAttribute | null): RestEdges {
-  const count = rest.length / 3;
-  const weld = new Int32Array(count);
-  const firstAt = new Map<string, number>();
-  const points: number[] = [];
-  for (let v = 0; v < count; v++) {
-    const key = `${rest[v * 3]},${rest[v * 3 + 1]},${rest[v * 3 + 2]}`;
-    const known = firstAt.get(key);
-    if (known !== undefined) {
-      weld[v] = known;
-      continue;
-    }
-    weld[v] = points.length;
-    firstAt.set(key, points.length);
-    points.push(v);
-  }
-  const up: number[][] = points.map(() => []);
-  const corners = index ? index.count : count;
-  for (let t = 0; t + 2 < corners; t += 3) {
-    for (let k = 0; k < 3; k++) {
-      const a = weld[index ? index.getX(t + k) : t + k]!;
-      const b = weld[index ? index.getX(t + ((k + 1) % 3)) : t + ((k + 1) % 3)]!;
-      const ya = rest[points[a]! * 3 + 1]!;
-      const yb = rest[points[b]! * 3 + 1]!;
-      if (ya < yb) up[a]!.push(b);
-      else if (yb < ya) up[b]!.push(a);
-    }
-  }
-  const order = Int32Array.from(points.keys()).sort((p, q) => rest[points[p]! * 3 + 1]! - rest[points[q]! * 3 + 1]!);
-  const rank = new Int32Array(points.length);
-  for (let k = 0; k < order.length; k++) rank[order[k]!] = k;
-  for (let v = 0; v < count; v++) weld[v] = rank[weld[v]!]!;
-  const start = new Int32Array(points.length + 1);
-  for (let k = 0; k < order.length; k++) start[k + 1] = start[k]! + up[order[k]!]!.length;
-  const to = new Int32Array(start[points.length]!);
-  const drop = new Float32Array(to.length);
-  for (let k = 0; k < order.length; k++) {
-    const p = order[k]!;
-    const from = points[p]! * 3;
-    for (let e = 0; e < up[p]!.length; e++) {
-      const q = up[p]![e]!;
-      const at = points[q]! * 3;
-      to[start[k]! + e] = rank[q]!;
-      const rise = rest[at + 1]! - rest[from + 1]!;
-      drop[start[k]! + e] = Math.max((1 - ROW_KEEP) * rise, SPREAD * hypot3(rest[at]! - rest[from]!, rise, rest[at + 2]! - rest[from + 2]!));
-    }
-  }
-  return { weld, start, to, drop };
 }
 
 /** Each welded point's neighbours over every edge of the mesh (CSR, `start`/`to`), and `rep`, a vertex standing for each point. */
