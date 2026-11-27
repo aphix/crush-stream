@@ -137,8 +137,15 @@ function dentsOn(car: DeformableCar, face: number, share = 1): number[] {
   return out;
 }
 
-/** A crush step's skin write on `car`'s body. */
+/** A crush step's skin write on `car`'s body: the drawn skin's version moves, and the tyre hold that follows takes it as its written skin. */
 function skinWritten(car: DeformableCar): void {
+  liftWritten(car);
+  const tyres = car["bodyTyres"];
+  if (tyres !== null) tyres["writes"]++;
+}
+
+/** A tyre hold's lift laid over `car`'s body skin: the drawn skin's version moves, the written skin stays. */
+function liftWritten(car: DeformableCar): void {
   car.lookMeshes().body.geometry.getAttribute("position").needsUpdate = true;
 }
 
@@ -353,6 +360,19 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     }
     expect(drawn, "the control: redrawn").toBeGreaterThan(1);
     expect(drawn, "redraws in 1 s").toBeLessThanOrEqual(1 / DENT_REBUILD_S + 1);
+  });
+
+  // mutation: sed -i 's/    if (same) return true;/    if (false) return true;/' src/game/present/paint-scratch.ts
+  it("when only a tyre hold's lift moves its drawn skin (the written skin stands), then its dents are not redrawn, and they are once the skin is written again", () => {
+    const drawnBy = (write: () => void): number => {
+      const before = redraws();
+      write();
+      touchedFrame();
+      return redraws() - before;
+    };
+    expect(drawnBy(() => skinWritten(crushed)), "the control: a skin write redraws").toBeGreaterThan(0);
+    expect(drawnBy(() => liftWritten(crushed)), "a lift moved the drawn skin only").toBe(0);
+    expect(drawnBy(() => skinWritten(crushed)), "the skin was written again").toBeGreaterThan(0);
   });
 
   // Main's version of this row never redrew (it read settled frames). Staged so every frame redraws: the redraw is the work the row bounds.
