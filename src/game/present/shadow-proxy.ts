@@ -25,13 +25,6 @@ function isOrthographic(frustum: AnyFrustum): frustum is THREE.Frustum {
   return a.x * b.x + a.y * b.y + a.z * b.z < OPPOSED && c.x * d.x + c.y * d.y + c.z * d.z < OPPOSED;
 }
 
-/** The next upload of `attribute` takes its first `floats` only. */
-function sendRange(attribute: THREE.BufferAttribute, floats: number): void {
-  attribute.clearUpdateRanges();
-  attribute.addUpdateRange(0, floats);
-  attribute.needsUpdate = true;
-}
-
 /**
  * The sun's shadow pass drew every instance of a city-wide mesh whatever the shadow box held. The proxy is the shadow pass's copy of `source`:
  * only the instances whose reach touches the box's four sides (three's own frustum test sees one sphere round all of them), rebuilt when the box or the instances move.
@@ -47,6 +40,9 @@ export class ShadowProxy {
   private version = -1;
   private sourceCount = -1;
   private kept = 0;
+  /** The upload ranges handed to three, reused so a rebuild allocates nothing. */
+  private readonly matrixRange = { start: 0, count: 0 };
+  private readonly colourRange = { start: 0, count: 0 };
 
   constructor(source: THREE.InstancedMesh) {
     this.source = source;
@@ -64,6 +60,8 @@ export class ShadowProxy {
     proxy.count = 0;
     proxy.castShadow = true;
     proxy.customDepthMaterial = source.customDepthMaterial;
+    // The proxy's instances are a moving subset: a ray would meet stale copies of what the source already answers.
+    proxy.raycast = () => {};
     proxy.matrixAutoUpdate = false;
     proxy.matrixWorldAutoUpdate = false;
     proxy.intersectsFrustum = (frustum) => isOrthographic(frustum) && this.intersects(frustum);
@@ -118,8 +116,8 @@ export class ShadowProxy {
         inside = planes[at]! * x + planes[at + 1]! * y + planes[at + 2]! * z + planes[at + 3]! >= -slack;
       }
       if (!inside) continue;
-      to.set(from.subarray(o, o + MATRIX_FLOATS), kept * MATRIX_FLOATS);
-      if (colourFrom !== undefined && colourTo !== undefined) colourTo.set(colourFrom.subarray(instance * COLOUR_FLOATS, instance * COLOUR_FLOATS + COLOUR_FLOATS), kept * COLOUR_FLOATS);
+      for (let k = 0; k < MATRIX_FLOATS; k++) to[kept * MATRIX_FLOATS + k] = from[o + k]!;
+      if (colourFrom !== undefined && colourTo !== undefined) for (let k = 0; k < COLOUR_FLOATS; k++) colourTo[kept * COLOUR_FLOATS + k] = colourFrom[instance * COLOUR_FLOATS + k]!;
       kept++;
     }
     this.kept = kept;
@@ -127,7 +125,14 @@ export class ShadowProxy {
     this.version = source.instanceMatrix.version;
     this.sourceCount = count;
     if (kept === 0) return;
-    sendRange(this.mesh.instanceMatrix, kept * MATRIX_FLOATS);
-    if (this.mesh.instanceColor !== null) sendRange(this.mesh.instanceColor, kept * COLOUR_FLOATS);
+    this.matrixRange.count = kept * MATRIX_FLOATS;
+    this.mesh.instanceMatrix.updateRanges.length = 0;
+    this.mesh.instanceMatrix.updateRanges[0] = this.matrixRange;
+    this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh.instanceColor === null) return;
+    this.colourRange.count = kept * COLOUR_FLOATS;
+    this.mesh.instanceColor.updateRanges.length = 0;
+    this.mesh.instanceColor.updateRanges[0] = this.colourRange;
+    this.mesh.instanceColor.needsUpdate = true;
   }
 }

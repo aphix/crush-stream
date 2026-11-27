@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { mulberry32 } from "../world/placements.ts";
+import { stubBrowser } from "../engine/engine-headless.test-util.ts";
+import { TRACK_ID } from "../world/constants.ts";
+import { mulberry32, placeCourse } from "../world/placements.ts";
+import { parseTrack } from "../world/track-schema.ts";
+import { Track } from "../world/track.ts";
+import { TRACKS } from "../world/tracks/index.ts";
+import { WorldStage } from "./engine-world.ts";
+import { TrackArt } from "./track-art.ts";
 import { PROXY_MIN_INSTANCES, ShadowProxy } from "./shadow-proxy.ts";
 
 const INSTANCES = 600;
@@ -76,7 +83,6 @@ describe("given a city's worth of big boxes in one shadow-casting instanced mesh
     expect(needed.size, "control: the box touches some of them").toBeGreaterThan(5);
     for (const key of needed) expect(kept.has(key), `instance at ${key}`).toBe(true);
     expect(proxy.mesh.count, "instances the shadow pass draws").toBeLessThan(INSTANCES / 2);
-    expect(INSTANCES, "above the size that gets a proxy").toBeGreaterThanOrEqual(PROXY_MIN_INSTANCES);
   });
 
   // mutation: sed -i 's/^  return a.x \* b.x + a.y.*$/  return true;/' src/game/present/shadow-proxy.ts
@@ -121,5 +127,59 @@ describe("given a city's worth of big boxes in one shadow-casting instanced mesh
     expect(held(proxy).has("-1,-1"), "the moved instance").toBe(true);
     const at = Array.from({ length: proxy.mesh.count }, (_, i) => i).find((i) => proxy.mesh.instanceMatrix.array[i * 16 + 12] === -1)!;
     expect(proxy.mesh.instanceColor!.array[at * 3 + 1], "its colour").toBe(1);
+  });
+});
+
+describe("given the sun turning at a fixed box centre, and instances added", () => {
+  /** The sun's frustum about the origin, its light turned `turn` rad about the vertical. */
+  function turnedSun(turn: number): THREE.Frustum {
+    const camera = new THREE.OrthographicCamera(-HALF, HALF, HALF, -HALF, 2, 400);
+    camera.position.set(120 * Math.cos(turn), 160, 80 * Math.sin(turn + 1));
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    camera.updateProjectionMatrix();
+    return new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  }
+
+  // mutation: sed -i 's/      if (drift > NORMAL_DRIFT || /      if (/' src/game/present/shadow-proxy.ts
+  it("when the light turns by more than the drift, then the proxy is rebuilt", () => {
+    const proxy = new ShadowProxy(cityMesh());
+    proxy.mesh.intersectsFrustum(turnedSun(0));
+    const version = proxy.mesh.instanceMatrix.version;
+    proxy.mesh.intersectsFrustum(turnedSun(0.0001));
+    expect(proxy.mesh.instanceMatrix.version, "a tiny turn is not rebuilt").toBe(version);
+    proxy.mesh.intersectsFrustum(turnedSun(0.2));
+    expect(proxy.mesh.instanceMatrix.version, "a real turn is").toBeGreaterThan(version);
+  });
+
+  // mutation: sed -i 's/ || this.source.count !== this.sourceCount//' src/game/present/shadow-proxy.ts
+  it("when the source draws more instances with the same matrices, then the proxy is rebuilt", () => {
+    const source = cityMesh();
+    source.count = 100;
+    const proxy = new ShadowProxy(source);
+    const sun = sunFrustum(0, 0);
+    proxy.mesh.intersectsFrustum(sun);
+    const version = proxy.mesh.instanceMatrix.version;
+    source.count = INSTANCES;
+    proxy.mesh.intersectsFrustum(sun);
+    expect(proxy.mesh.instanceMatrix.version).toBeGreaterThan(version);
+  });
+});
+
+describe("given the National Mall's art", () => {
+  // mutation: sed -i 's/ \&\& mesh.count >= PROXY_MIN_INSTANCES) this.group.add(new ShadowProxy(mesh).mesh);/) void 0;/' src/game/present/track-art.ts
+  it("when it is built, then every large casting instanced mesh has a shadow proxy beside it in the group", () => {
+    stubBrowser();
+    const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
+    const course = placeCourse(track);
+    const art = new TrackArt(track, course.placed, new WorldStage(new THREE.Scene()), course.drawn);
+    const meshes: THREE.InstancedMesh[] = [];
+    art.group.traverse((o) => {
+      if (o instanceof THREE.InstancedMesh) meshes.push(o);
+    });
+    const large = meshes.filter((m) => m.castShadow && m.frustumCulled && m.count >= PROXY_MIN_INSTANCES && m.name !== "");
+    expect(large.length, "control: the Mall has large casting meshes").toBeGreaterThan(0);
+    for (const mesh of large) expect(meshes.some((other) => other !== mesh && other.geometry === mesh.geometry && other.intersectsFrustum !== mesh.intersectsFrustum && other.name === ""), `a proxy beside ${mesh.name}`).toBe(true);
+    art.dispose();
   });
 });
