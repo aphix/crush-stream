@@ -236,11 +236,17 @@ export async function loadSkinKernel(src: BufferSource | Response | PromiseLike<
   loaded.kernel ??= new SkinKernel(instance.exports);
 }
 
+/** FNV-1a over `w`'s words: a function of its own, so its long loop is no OSR entry of a caller whose tail has not run yet (which deopted on every exit). */
+function fnvWords(h: number, w: Uint32Array): number {
+  for (let i = 0; i < w.length; i++) h = Math.imul(h ^ w[i]!, 16777619);
+  return h;
+}
+
 /** 32-bit FNV-1a over `a`'s bytes (whole words, then the tail). */
 function fnv(h: number, a: Float32Array | Float64Array | Int32Array | Uint8Array | Uint32Array): number {
-  const w = new Uint32Array(a.buffer, a.byteOffset, a.byteLength >>> 2);
-  for (let i = 0; i < w.length; i++) h = Math.imul(h ^ w[i]!, 16777619);
-  const tail = new Uint8Array(a.buffer, a.byteOffset + (w.length << 2), a.byteLength & 3);
+  const words = a.byteLength >>> 2;
+  h = fnvWords(h, new Uint32Array(a.buffer, a.byteOffset, words));
+  const tail = new Uint8Array(a.buffer, a.byteOffset + (words << 2), a.byteLength & 3);
   for (let i = 0; i < tail.length; i++) h = Math.imul(h ^ tail[i]!, 16777619);
   return h >>> 0;
 }

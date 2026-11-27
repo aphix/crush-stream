@@ -55,6 +55,11 @@ function write(o: THREE.Object3D, a: Float64Array, i: number, order: THREE.Euler
   o.rotation._onChangeCallback = ec;
 }
 
+/** `out` as `prev` moved `t` of the way to `cur`: a function of its own, so the long loop is no OSR entry of `show`, whose tail then deopted on every exit. */
+function blend(out: Float32Array, prev: Float32Array, cur: Float32Array, t: number): void {
+  for (let i = 0; i < out.length; i++) out[i] = prev[i]! + (cur[i]! - prev[i]!) * t;
+}
+
 /**
  * One attribute the crush skin writes (a mesh's positions or normals) and its last two writes: `cur` the latest, `prev`
  * the one before, the skin at `from` and at `to` on `PoseBlend`'s step count. Writes are seen by the attribute's version.
@@ -101,7 +106,7 @@ class SkinTrack {
     const t = (now - this.from) / (this.to - this.from);
     const { prev, cur } = this;
     const out = this.attr.array as Float32Array;
-    for (let i = 0; i < out.length; i++) out[i] = prev[i]! + (cur[i]! - prev[i]!) * t;
+    blend(out, prev, cur, t);
     this.attr.needsUpdate = true;
     this.version = this.attr.version;
     this.drawn = true;

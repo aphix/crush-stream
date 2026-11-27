@@ -117,64 +117,67 @@ function listMoved(c: Carried): number {
  * counts, and none while the skin is uncrushed. The last set is put back first, so the set never depends on what earlier holds read. Returns the wheels (bit w) whose set changed. `skinWritten`: the skin was written since the last call, so the vertices it moved are listed again.
  */
 export function admitCarried(c: Carried, tyre: { r: number; halfW: number }, count: number, gone: number, crushed: boolean, skinWritten: boolean): number {
-  const { written, restInside, liftable, scratch: next, moved } = c;
   if (crushed && skinWritten) c.movedN = listMoved(c);
-  const e = c.wheelNow;
   let changed = 0;
-  for (let w = 0; w < count; w++) {
-    const over = c.over[w];
-    if (over === undefined) continue;
-    const wasN = c.n[w]!;
-    const was = c.at[w]!;
-    for (let k = 0; k < wasN; k++) {
-      over[was[k]!] = NaN;
-      liftable[was[k]!]! &= ~(1 << w);
-    }
-    let n = 0;
-    const o = w * HELD_ELEMENTS.length;
-    const scale = hypot3(e[o]!, e[o + 1]!, e[o + 2]!);
-    if (crushed && !((gone >> w) & 1) && scale > 0) {
-      const ax = e[o]! / scale;
-      const ay = e[o + 1]! / scale;
-      const az = e[o + 2]! / scale;
-      const flat = hypot2(ax, az);
-      const fx = -az / flat;
-      const fz = ax / flat;
-      const ux = -fz * ay;
-      const uy = fz * ax - fx * az;
-      const uz = fx * ay;
-      const r = tyre.r * scale;
-      const halfW = tyre.halfW * scale;
-      const reach = halfW + CARRIED_REACH;
-      const hx = e[o + 3]!;
-      const hy = e[o + 4]!;
-      const hz = e[o + 5]!;
-      // Plan test first: `FALL` carries the tyre's surface on past the tread, where most of a crushed nose stands under it.
-      for (let m = 0; m < c.movedN; m++) {
-        const v = moved[m]!;
-        const i = v * 3;
-        const dx = written[i]! - hx;
-        const dz = written[i + 2]! - hz;
-        const ahead = dx * fx + dz * fz;
-        if (Math.abs(ahead) >= r) continue;
-        const dy = written[i + 1]! - hy;
-        const along = dx * ax + dy * ay + dz * az;
-        if (Math.abs(along) >= reach || !Number.isNaN(over[v]!) || (restInside[v]! >> w) & 1) continue;
-        const up = ux * dx + uy * dy + uz * dz;
-        if (up > 0 && up - Math.sqrt(r * r - ahead * ahead) + FALL * Math.max(0, Math.abs(along) - halfW) < CARRIED_REACH) next[n++] = v;
-      }
-    }
-    let same = n === wasN;
-    for (let k = 0; same && k < n; k++) same = next[k] === was[k];
-    for (let k = 0; k < n; k++) {
-      was[k] = next[k]!;
-      over[next[k]!] = REACH;
-      liftable[next[k]!]! |= 1 << w;
-    }
-    c.n[w] = n;
-    if (!same) changed |= 1 << w;
-  }
+  for (let w = 0; w < count; w++) changed |= admitWheel(c, tyre, w, gone, crushed);
   return changed;
+}
+
+/** `admitCarried` for wheel `w`: a function of its own, so its long loops are not OSR entries of a caller that left them deopting on every exit. Bit `w` when its set changed. */
+function admitWheel(c: Carried, tyre: { r: number; halfW: number }, w: number, gone: number, crushed: boolean): number {
+  const { written, restInside, liftable, scratch: next, moved } = c;
+  const e = c.wheelNow;
+  const over = c.over[w];
+  if (over === undefined) return 0;
+  const wasN = c.n[w]!;
+  const was = c.at[w]!;
+  for (let k = 0; k < wasN; k++) {
+    over[was[k]!] = NaN;
+    liftable[was[k]!]! &= ~(1 << w);
+  }
+  let n = 0;
+  const o = w * HELD_ELEMENTS.length;
+  const scale = hypot3(e[o]!, e[o + 1]!, e[o + 2]!);
+  if (crushed && !((gone >> w) & 1) && scale > 0) {
+    const ax = e[o]! / scale;
+    const ay = e[o + 1]! / scale;
+    const az = e[o + 2]! / scale;
+    const flat = hypot2(ax, az);
+    const fx = -az / flat;
+    const fz = ax / flat;
+    const ux = -fz * ay;
+    const uy = fz * ax - fx * az;
+    const uz = fx * ay;
+    const r = tyre.r * scale;
+    const halfW = tyre.halfW * scale;
+    const reach = halfW + CARRIED_REACH;
+    const hx = e[o + 3]!;
+    const hy = e[o + 4]!;
+    const hz = e[o + 5]!;
+    // Plan test first: `FALL` carries the tyre's surface on past the tread, where most of a crushed nose stands under it.
+    for (let m = 0; m < c.movedN; m++) {
+      const v = moved[m]!;
+      const i = v * 3;
+      const dx = written[i]! - hx;
+      const dz = written[i + 2]! - hz;
+      const ahead = dx * fx + dz * fz;
+      if (Math.abs(ahead) >= r) continue;
+      const dy = written[i + 1]! - hy;
+      const along = dx * ax + dy * ay + dz * az;
+      if (Math.abs(along) >= reach || !Number.isNaN(over[v]!) || (restInside[v]! >> w) & 1) continue;
+      const up = ux * dx + uy * dy + uz * dz;
+      if (up > 0 && up - Math.sqrt(r * r - ahead * ahead) + FALL * Math.max(0, Math.abs(along) - halfW) < CARRIED_REACH) next[n++] = v;
+    }
+  }
+  let same = n === wasN;
+  for (let k = 0; same && k < n; k++) same = next[k] === was[k];
+  for (let k = 0; k < n; k++) {
+    was[k] = next[k]!;
+    over[next[k]!] = REACH;
+    liftable[next[k]!]! |= 1 << w;
+  }
+  c.n[w] = n;
+  return same ? 0 : 1 << w;
 }
 
 /**
