@@ -4,7 +4,7 @@
 // one is the user's pick, on every device class); a match keeps the tier and is not judged until 3 s after green. A
 // manual pick turns it off. Whether the device may host a public match is judged on the main thread's total, sim included.
 import type { FxTier } from "./engine-post.ts";
-import { climbFits, FRAME_BUDGET_MS, FrameWork, type Judge } from "./frame-work.ts";
+import { CLIMB_OVERHEAD, climbFits, FRAME_BUDGET_MS, FrameWork, type Judge } from "./frame-work.ts";
 
 const SOFTWARE_GPU = /swiftshader|llvmpipe|softpipe|basic render/i;
 
@@ -46,6 +46,13 @@ const REVERSAL_WINDOWS = 20;
 const MAX_UP_STREAK = 64;
 /** A match is judged from this long (s) after its green light (match clock 0): the seconds before are a burst of first-use load. */
 const MATCH_SETTLE_S = 3;
+/** A fall within this many windows of a climb is that climb's: the climb's cost is read from it. */
+const LEARN_WINDOWS = 90;
+/** The most a measured climb cost may raise `CLIMB_OVERHEAD` to, and how much of it is forgotten each window (so a spell of heavy content does not bar a climb for the session). */
+const MAX_OVERHEAD = 3;
+/** A fall teaches the climb's cost only when the tier's own present work (`kernel/tier-work.ts`) was this share of the window's render: other load is not the tier's cost. */
+const TIER_SHARE = 0.25;
+const OVERHEAD_DECAY = 0.003;
 const STEP_DOWN: Partial<Record<FxTier, FxTier>> = { high: "low", low: "minimal" };
 /** "ultra" is never among the tiers auto climbs to. */
 const STEP_UP: Partial<Record<FxTier, FxTier>> = { minimal: "low", low: "high" };
@@ -78,6 +85,11 @@ export class AutoFx {
   private windows = 0;
   private downAt = -1000;
   private climbedAt = -1000;
+  /** The busier side's mean over the windows before the last climb, and the factor a climb must now clear: `CLIMB_OVERHEAD`, or what the last fall after a climb showed that tier costs over the one below it. */
+  private climbBusy = 0;
+  /** The window count at the last lift (the load check's or a climb): `LEARN_WINDOWS` counts from it. */
+  private liftedAt = -1000;
+  private overhead = CLIMB_OVERHEAD;
 
   /**
    * `capable`: the load check runs (not a software GPU). `hostable`: may host a public match (a desktop; a phone never does).
@@ -106,9 +118,9 @@ export class AutoFx {
    * it, the newest GPU ms (-1: no timer or no reading yet); returns the tier to switch to, or null. `matchTime` is the race's or
    * derby's clock (s, negative before green, 0 at green), null outside a match.
    */
-  frame(ms: number, workMs: number, renderMs: number, gpuMs: number, matchTime: number | null): FxTier | null {
+  frame(ms: number, workMs: number, renderMs: number, gpuMs: number, matchTime: number | null, tierMs = 0): FxTier | null {
     if (!this.auto) return null;
-    this.host?.frame(ms, workMs, renderMs, gpuMs, matchTime);
+    this.host?.frame(ms, workMs, renderMs, gpuMs, matchTime, tierMs);
     const match = matchTime !== null;
     if (match !== this.match) {
       this.match = match;
@@ -118,7 +130,7 @@ export class AutoFx {
       this.win.restart(0);
       return null;
     }
-    if (!this.capable || !this.win.add(ms, workMs, renderMs, gpuMs)) return null;
+    if (!this.capable || !this.win.add(ms, workMs, renderMs, gpuMs, tierMs)) return null;
     return this.verdict();
   }
 
@@ -127,6 +139,7 @@ export class AutoFx {
     const w = this.win;
     this.record();
     this.windows++;
+    this.overhead = Math.max(CLIMB_OVERHEAD, this.overhead - OVERHEAD_DECAY);
     const roomy = w.roomy();
     if (this.ceiling === null) {
       // A load burst is not the device: minimal is decided only by `MISS_WINDOWS` windows without room in a row. The tier policy
@@ -135,6 +148,10 @@ export class AutoFx {
       const lift = roomy && (this.host === null || climbFits(w.busy));
       if (!lift && ++this.slow < MISS_WINDOWS) return null;
       this.ceiling = lift ? "high" : "minimal";
+      if (lift) {
+        this.climbBusy = w.busy;
+        this.liftedAt = this.windows;
+      }
       return this.switch(this.ceiling);
     }
     if (w.slow(DROP_FPS)) {
@@ -142,6 +159,10 @@ export class AutoFx {
       const down = STEP_DOWN[this.tier];
       if (++this.slow < MISS_WINDOWS || down === undefined) return null;
       if (this.windows - this.climbedAt <= REVERSAL_WINDOWS) this.upNeed = Math.min(MAX_UP_STREAK, this.upNeed * 2);
+      // What the tier we climbed to cost over the one below, as the window that fell from it shows: the next climb needs that much room, not the fixed overhead (a crash's dents cost a tier far more than the measured calm).
+      if (this.windows - this.liftedAt <= LEARN_WINDOWS && this.climbBusy > 0 && w.tierMs >= TIER_SHARE * w.renderMs) this.overhead = Math.min(MAX_OVERHEAD, Math.max(this.overhead, w.busy / this.climbBusy));
+      // One lift is learned from once: a second fall in the same spell is the content's weight, not the tier's.
+      this.liftedAt = -1000;
       this.downAt = this.windows;
       this.ceiling = down;
       return this.switch(down);
@@ -153,7 +174,9 @@ export class AutoFx {
       return null;
     }
     this.upBusy += w.busy;
-    if (++this.upRun < this.upNeed || this.windows - this.downAt < REVERSAL_WINDOWS || !climbFits(this.upBusy / this.upRun)) return null;
+    if (++this.upRun < this.upNeed || this.windows - this.downAt < REVERSAL_WINDOWS || !climbFits(this.upBusy / this.upRun, this.overhead)) return null;
+    this.climbBusy = this.upBusy / this.upRun;
+    this.liftedAt = this.windows;
     this.climbedAt = this.windows;
     this.ceiling = up;
     return this.switch(up);
@@ -173,6 +196,7 @@ export class AutoFx {
     this.auto = true;
     this.tier = current;
     this.match = null;
+    this.liftedAt = -1000;
     this.host?.resume(current);
   }
 

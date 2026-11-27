@@ -27,6 +27,8 @@ interface Cover {
   readonly color: THREE.Color;
   /** The `sync` that last drew it. */
   seen: number;
+  /** Whether its indices stand in the index buffer's drawn run (`pack`). */
+  packed: boolean;
 }
 
 /**
@@ -44,6 +46,8 @@ class CoverLane {
   private vertexCount = SEED;
   private indexCount = SEED;
   private frame = 0;
+  /** The index buffer's drawn run no longer matches the covers seen this frame (`end` lays it out again). */
+  private stale = true;
 
   constructor(material: THREE.MeshStandardMaterial, parts: number, vertices: number, indices: number) {
     material.color.setRGB(1, 1, 1);
@@ -76,22 +80,45 @@ class CoverLane {
     cover.bone.matrixWorld.copy(part.matrixWorld);
   }
 
-  /** Collapse what this frame did not draw; the lane draws nothing while it covers nothing, unless `keep` (the warm draws it: every bone collapsed, nothing lands). */
+  /** Collapse what this frame did not draw; the lane draws nothing while it covers nothing, unless `keep` (the warm draws it: every bone collapsed, nothing lands). The draw runs over the covers drawn this frame only. */
   end(keep: boolean): void {
     let shown = keep;
+    let stale = this.stale;
     for (let i = 0; i < this.covers.length; i++) {
       const cover = this.covers[i]!;
-      if (cover.seen === this.frame) shown = true;
+      const seen = cover.seen === this.frame;
+      if (seen) shown = true;
       else cover.bone.matrixWorld.copy(GONE);
+      if (seen !== cover.packed) stale = true;
     }
     this.mesh.visible = shown;
+    if (stale) this.pack();
+  }
+
+  /** The index buffer's run after the seed holds the indices of the covers seen this frame and no others: a cover a car left (its bone collapsed) is no longer sent through the skinned vertex shader. */
+  private pack(): void {
+    const index = this.mesh.geometry.index!;
+    const out = index.array as Uint32Array;
+    let at = SEED;
+    for (let i = 0; i < this.covers.length; i++) {
+      const cover = this.covers[i]!;
+      cover.packed = cover.seen === this.frame;
+      if (!cover.packed) continue;
+      const from = cover.source.index!.array;
+      for (let k = 0; k < from.length; k++) out[at + k] = from[k]! + cover.vertexStart;
+      at += from.length;
+    }
+    index.addUpdateRange(0, at);
+    index.needsUpdate = true;
+    this.mesh.geometry.setDrawRange(0, at);
+    this.stale = false;
   }
 
   private register(source: THREE.BufferGeometry, version: number): Cover {
     const vertices = source.attributes.position!.count;
     const indices = source.index!.count;
     if (this.vertexCount + vertices > this.maxVertices || this.indexCount + indices > this.maxIndices || this.covers.length + 1 >= this.bones.length) this.makeRoom(vertices, indices);
-    const cover: Cover = { source, bone: this.bones[this.covers.length + 1]!, vertexStart: this.vertexCount, version, color: new THREE.Color(-1, -1, -1), seen: this.frame };
+    const cover: Cover = { source, bone: this.bones[this.covers.length + 1]!, vertexStart: this.vertexCount, version, color: new THREE.Color(-1, -1, -1), seen: this.frame, packed: false };
     const g = this.mesh.geometry;
     const skinIndex = g.attributes.skinIndex as THREE.BufferAttribute;
     const skinWeight = g.attributes.skinWeight as THREE.BufferAttribute;
@@ -100,16 +127,12 @@ class CoverLane {
       skinIndex.setX(v, bone);
       skinWeight.setX(v, 1);
     }
-    const index = g.index!;
-    const from = source.index!.array;
-    for (let k = 0; k < indices; k++) index.setX(this.indexCount + k, from[k]! + cover.vertexStart);
     skinIndex.addUpdateRange(cover.vertexStart * 4, vertices * 4);
     skinWeight.addUpdateRange(cover.vertexStart * 4, vertices * 4);
-    index.addUpdateRange(this.indexCount, indices);
-    skinIndex.needsUpdate = skinWeight.needsUpdate = index.needsUpdate = true;
+    skinIndex.needsUpdate = skinWeight.needsUpdate = true;
     this.vertexCount += vertices;
     this.indexCount += indices;
-    g.setDrawRange(0, this.indexCount);
+    this.stale = true;
     this.covers.push(cover);
     this.bySource.set(source, cover);
     this.copyShape(cover);
@@ -159,6 +182,7 @@ class CoverLane {
     this.bySource.clear();
     this.vertexCount = SEED;
     this.indexCount = SEED;
+    this.stale = true;
     // In order: a part's new bone is never after its old one, so no copy lands on a bone still to be read.
     for (const c of kept) {
       const moved = this.register(c.source, c.version);
@@ -176,7 +200,7 @@ class CoverLane {
     const index = new THREE.BufferAttribute(new Uint32Array(this.maxIndices), 1);
     index.array.set([0, 1, 2]);
     g.setIndex(index);
-    g.setDrawRange(0, this.indexCount);
+    g.setDrawRange(0, SEED);
     return g;
   }
 

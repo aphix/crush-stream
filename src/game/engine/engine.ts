@@ -853,7 +853,7 @@ export class CrashEngine extends EngineGarage {
       knockProp: (index, car, vx, vy, vz) => this.ragdolls.knockProp(index, car, vx, vy, vz),
       buildArt: (track, placed, drawn, arm) => {
         this.queueWarm();
-        const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, sceneryShare(track.id, this.cine.tier, this.deviceClass === "desktop"), this.drawsFar(track.id)), reliefForTier(this.cine.tier, this.cine.marks.phone));
+        const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, sceneryShare(track.id, this.cine.tier, this.deviceClass === "desktop"), this.drawsFar(track.id)), reliefForTier(this.cine.tier, this.cine.marks.phone), this.deviceClass !== "desktop");
         this.ragdolls.setCourse(track, placed, art.props, arm);
         return art;
       },

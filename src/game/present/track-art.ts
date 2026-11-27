@@ -51,6 +51,9 @@ import { StreetNameBlades } from "./street-name-blades.ts";
  */
 
 type RaceMeshKind = "road" | "runoff" | "terrain" | "wall" | "marking" | "kerb" | "deck" | "pillar" | "tunnel" | "prop";
+/** Street furniture whose sun shadow a phone does not draw: on its 512 map a hydrant, bench or bin shadow moves no pixel by more than 4/255 (measured at eight views, hours 13 and 17), and each kind is one shadow draw. Not the cafe set and the dumpster: their shade is metres across. */
+const PHONE_NO_SHADOW: ReadonlySet<PrefabId> = new Set<PrefabId>([PREFAB.hydrant, PREFAB.bollard, PREFAB.litterBin, PREFAB.bench, PREFAB.bikeRack, PREFAB.newsBox, PREFAB.parkingMeter, PREFAB.cellarDoor]);
+
 /** Junked shells' faded paint and rust (rust, oxide red, faded blue, cream, olive): the wreck's per-instance tint over its light grey. */
 const WRECK_PAINTS = [0x8a4a2a, 0x8f2f25, 0x46637f, 0xc9b994, 0x4f6141];
 
@@ -91,14 +94,16 @@ export class TrackArt {
   private readonly track: Track;
   /** The Debug views' "Track" overlay (node indices, checkpoint gates), built the first time it is switched on. */
   private debug: TrackDebug | null = null;
+  private readonly phone: boolean;
   /** The scenery assets' materials (made as read), disposed with the art even where no mesh wears one. */
   private readonly assetMaterials: PrefabMaterials["assets"];
 
   /**
    * `stage` takes the course's own daylight while the art stands (its sun, hemisphere and fill; none: the default) and its sky colour. `fullAssetMaps`: the scenery assets wear
-   * their full-size atlases (the finish tiers on a desktop, `reliefForTier`), else the half-size ones.
+   * their full-size atlases (the finish tiers on a desktop, `reliefForTier`), else the half-size ones. `phone`: the street furniture of `PHONE_NO_SHADOW` casts none.
    */
-  constructor(track: Track, placed: readonly Placed[], stage: Pick<WorldStage, "look">, drawn: readonly Placed[], fullAssetMaps = false) {
+  constructor(track: Track, placed: readonly Placed[], stage: Pick<WorldStage, "look">, drawn: readonly Placed[], fullAssetMaps = false, phone = false) {
+    this.phone = phone;
     this.group.name = "track-art";
     this.track = track;
     this.stage = stage;
@@ -237,7 +242,7 @@ export class TrackArt {
       (mesh, id, shared, cast) => {
         if (shared) this.shared.push(shared);
         // Lamp heads and light pools neither cast shadows nor need to; nor do the parts that say so (ground cover, paving).
-        this.add(mesh, { kind: "prop", prefab: id }, !shared && cast);
+        this.add(mesh, { kind: "prop", prefab: id }, !shared && cast && !(this.phone && PHONE_NO_SHADOW.has(id)));
         // Paint and paving draw at the decal level of the ground stack, after the roads.
         if (GROUND_PAINT_PREFABS.has(id)) mesh.renderOrder = levelOrder(GROUND_LEVEL.decal);
       },

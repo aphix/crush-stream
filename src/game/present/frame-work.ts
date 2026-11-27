@@ -46,7 +46,7 @@ const ROOM_BUSY = 0.75;
  * calm desktop still climbs back (its windows read 0.38-0.62 of the budget). Hosting is judged on plain room. Retune or remove
  * once the perf pass lands.
  */
-const CLIMB_OVERHEAD = 1.3;
+export const CLIMB_OVERHEAD = 1.3;
 /** Without a GPU reading the typical frame must be this short (ms) to count as room: 60 fps with 5 % for timer noise. */
 const ROOM_WALL_MS = 1000 / 57;
 
@@ -69,6 +69,8 @@ export class FrameWork {
   simMs = 0;
   /** Its median GPU ms per frame; -1 when too few frames brought a reading. */
   gpuMs = -1;
+  /** Its mean tier-gated present work per frame (ms; part of the render ms): what the tier alone added. */
+  tierMs = 0;
   /** The busier of the two medians on the judged basis (the GPU's alone on `gpu`), as a share of that basis's budget (`FRAME_BUDGET_MS` for `work` and `gpu`, `RENDER_BUDGET_MS` for `render`). */
   busy = 0;
   /** The wall time the judged basis does not answer for: the sim's share on the `render` basis, the main thread's on `gpu` (a frame the CPU fills is not the render's, nor the GPU's, to fix). */
@@ -76,6 +78,7 @@ export class FrameWork {
   private readonly judge: Judge;
   private settle = SETTLE_MS;
   private winMs = 0;
+  private tierSum = 0;
   private frames = 0;
   private gpuN = 0;
   private readonly work = new Float32Array(MAX_SAMPLES);
@@ -95,19 +98,20 @@ export class FrameWork {
   /** Drop the window under way; the next `settleMs` of frames are not counted. */
   restart(settleMs = SETTLE_MS): void {
     this.settle = settleMs;
-    this.winMs = this.frames = this.gpuN = 0;
+    this.winMs = this.frames = this.gpuN = this.tierSum = 0;
   }
 
   /**
    * One frame: its wall interval, the main thread's ms for the last frame (`workMs`, the draw submit inside it `renderMs`), and
    * the newest GPU ms (-1: none this frame). True when this frame ends a window, whose figures are then the fields above.
    */
-  add(wallMs: number, workMs: number, renderMs: number, gpuMs: number): boolean {
+  add(wallMs: number, workMs: number, renderMs: number, gpuMs: number, tierMs = 0): boolean {
     if (this.settle > 0) {
       this.settle -= wallMs;
       return false;
     }
     this.winMs += wallMs;
+    this.tierSum += tierMs;
     if (this.frames < MAX_SAMPLES) {
       this.work[this.frames] = workMs;
       this.draw[this.frames] = renderMs;
@@ -123,6 +127,7 @@ export class FrameWork {
     this.renderMs = median(this.draw, n);
     this.simMs = Math.max(0, this.workMs - this.renderMs);
     this.wallMedMs = median(this.wall, n);
+    this.tierMs = this.tierSum / this.frames;
     this.gpuMs = this.gpuN >= GPU_SHARE * n ? median(this.gpu, this.gpuN) : -1;
     if (this.judge === "render") {
       this.cutMs = this.simMs;
@@ -134,7 +139,7 @@ export class FrameWork {
       this.cutMs = 0;
       this.busy = Math.max(this.workMs, this.gpuMs) / FRAME_BUDGET_MS;
     }
-    this.winMs = this.frames = this.gpuN = 0;
+    this.winMs = this.frames = this.gpuN = this.tierSum = 0;
     return true;
   }
 
@@ -155,7 +160,7 @@ export class FrameWork {
   }
 }
 
-/** A climb's room (`CLIMB_OVERHEAD`) for windows whose busier side averaged `meanBusy` of the budget. */
-export function climbFits(meanBusy: number): boolean {
-  return meanBusy * CLIMB_OVERHEAD < ROOM_BUSY;
+/** A climb's room (`CLIMB_OVERHEAD`, or the larger `overhead` a fall after a climb measured) for windows whose busier side averaged `meanBusy` of the budget. */
+export function climbFits(meanBusy: number, overhead = CLIMB_OVERHEAD): boolean {
+  return meanBusy * overhead < ROOM_BUSY;
 }
