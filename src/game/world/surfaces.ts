@@ -995,7 +995,7 @@ export const BAKE = { on: true };
  * The static surface in force (a scene's ground) and the cars' tops while a step runs; `surf` is `offer`'s best candidate's surface; `topCap`
  * the height (m) over the asker a car's top may stand and still count: each top's own reach (`Infinity` here), 0 while a tyre's footprint asks (`wheelContact`).
  */
-const live: { statics: Surface | null; solids: Surface | null; tops: Surface | null; surf: Surface | null; side: Surface | null; topCap: number } = { statics: null, solids: null, tops: null, surf: null, side: null, topCap: Infinity };
+const live: { statics: Surface | null; solids: Surface | null; tops: Surface | null; surf: Surface | null; side: Surface | null; topCap: number; noSolids: boolean } = { statics: null, solids: null, tops: null, surf: null, side: null, topCap: Infinity, noSolids: false };
 
 /** Make `s` the scene's static surface (`null`: none). Sealed on first use. */
 export function activate(s: Surface | null): void {
@@ -1955,7 +1955,7 @@ function seek(q: Float64Array, skip: number, tops: Surface | null, list: Int32Ar
   }
   if (live.statics !== null) find(live.statics, q, skip, NEED_ALL);
   if (GQ.on && GQ.cells.inFree) sharedCells(live.statics);
-  if (live.solids !== null) find(live.solids, q, skip, NEED_ALL);
+  if (live.solids !== null && !live.noSolids) find(live.solids, q, skip, NEED_ALL);
   if (tops !== null) offerListed(tops, list, 0, count, q, skip, NEED_ALL);
 }
 
@@ -2854,6 +2854,29 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
   take(out, _w, r, k);
 }
 
+/** The farthest (m, any direction) a footprint point lies from its hub: the greatest ring's x (times `across`) and radius (times `scale`) together. */
+const RING_X = Math.max(...RINGS.map((ring) => Math.abs(ring[0])));
+const RING_R = Math.max(...RINGS.map((ring) => ring[1]));
+
+/**
+ * Whether the solids hold no patch for any point within `reach` (m) of plan (`x`, `z`): none that every query tests, and every index cell the square spans empty
+ * (a cell past the index lists none). `find` over them would then change nothing, so a wheel's footprint need not ask them.
+ */
+function solidsEmpty(s: Surface, x: number, z: number, reach: number): boolean {
+  if (!s.sealed || s.nAlways > 0 || s.plainOne !== PLAIN_BY_CELL || s.plainOutside !== -1 || x !== x || z !== z || reach !== reach) return false;
+  const i0 = Math.max(0, Math.floor((x - reach) / CELL) - s.cx0);
+  const i1 = Math.min(s.cnx - 1, Math.floor((x + reach) / CELL) - s.cx0);
+  const j0 = Math.max(0, Math.floor((z - reach) / CELL) - s.cz0);
+  const j1 = Math.min(s.cnz - 1, Math.floor((z + reach) / CELL) - s.cz0);
+  for (let cj = j0; cj <= j1; cj++) {
+    for (let ci = i0; ci <= i1; ci++) {
+      const c = cj * s.cnx + ci;
+      if (s.cellStart[c + 1]! !== s.cellStart[c]!) return false;
+    }
+  }
+  return true;
+}
+
 /** Footprint point `k` left unasked by its bound, asked now (its store only: it cannot set the rise, which is at or over the bound). */
 function askSkipped(hub: Float64Array, axes: Float64Array, skip: number, k: number, out: Float64Array): void {
   const top = _foot[FOOT_TOP]!;
@@ -2949,6 +2972,8 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
   const n = treadReach.tops !== null || (live.statics !== null && edgeIn(live.statics, _pq, skip)) || (live.solids !== null && edgeIn(live.solids, _pq, skip)) ? FOOT : BASE;
   // The footprint turns in the rolling plane to face the surface under the hub: each ring's bottom is then its point nearest that
   // surface, as the drawn tyre's is (a car pitched 10° on three wheels held a rear tyre's shoulder 5 mm off the floor at its body-down point).
+  // The footprint's points are all within `reach` of the hub (the axes turn it without stretching): where the solids list nothing there, they are not asked. Off the bake every query is made.
+  live.noSolids = BAKE.on && live.solids !== null && solidsEmpty(live.solids, x, z, 1.001 * hypot2(RING_X * across, RING_R * scale) + 1e-6);
   seek(_pq, skip, treadReach.tops, treadReach.list, treadReach.count);
   normalOf(_w);
   let c = 1;
@@ -2975,6 +3000,7 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
       ? Infinity
       : Math.max(live.statics === null ? NONE : staticTop(live.statics, x - r, x + r, z - r, z + r), solidTop(x - r, x + r, z - r, z + r));
   for (let k = 0; k < n; k++) tread(hub, axes, skip, k, out);
+  live.noSolids = false;
   // Near an edge a ring's highest point is where it crosses onto the patch that holds it, between two arcs: the chord to the
   // neighbour on another patch is halved (`edgeCross`; a front tyre leaving the wedge's side read 1.6 cm lower at its nearest arc
   // than the drawn tyre's tread).
