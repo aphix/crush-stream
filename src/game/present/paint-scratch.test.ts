@@ -383,11 +383,14 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     () => {
       // The skin write as the skin makes it: the attribute's version, not a `lookMeshes()` read (its arrays are the row's, not the frame's).
       const skin = crushed.lookMeshes().body.geometry.getAttribute("position");
+      // The tyre hold that follows a skin write takes it as its written skin (`unheldSerial`): a version bump alone reads as a lift, which draws no new dents.
+      const tyres = crushed["bodyTyres"]!;
       const { renderer } = stubGpu(mask(), false);
       // The sim's own contact mark, not a spy (a spy records every call it sees): `elapsed` stands still here, so the car's quiet stays 0.
       const frames = (count: number) => {
         for (let i = 0; i < count; i++) {
           skin.needsUpdate = true;
+          tyres["writes"]++;
           crushed.deform.notifyContact();
           view.frame(cars, DENT_REBUILD_S);
           view.flush(renderer);
