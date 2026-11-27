@@ -222,7 +222,7 @@ describe("given a person standing on the car's way (a crossing, a lane)", () => 
     expect(driver["leadLimit"](snap, route, 0, 0, [snap, other]), "a car there holds it").toBeLessThan(Infinity);
   });
 
-  // mutation: sed -i 's/  private personNearAhead(x: number, z: number): boolean {/  private personNearAhead(x: number, z: number): boolean {\n    return false;/' src/game/ai/openworld-traffic/traffic-driver.ts
+  // mutation: sed -i 's/  private personNearAhead(x: number, z: number): boolean {/  private personNearAhead(x: number, z: number): boolean {\n    return true;/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when she stands on the pavement beside the lane, then the car does not stop for her", () => {
     const { route, car } = newTrip();
     const person = personAhead(route);
