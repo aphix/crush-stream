@@ -211,7 +211,7 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
       // A wreck takes no contact row from another wreck's top (the answer is dropped below), so with `EPICENTER.wreckTops` only the other tops can keep such a point from being clear.
       if (clear && tops) {
         const reachable = i < bellyFrom;
-        clear = reachable && (wreckTops ? topsTopLive(skip, body.surf.cars, own, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) : (own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel)) < low;
+        clear = reachable && (wreckTops ? topsTopLive(skip, body.surf.cars, own, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low : own ? topsTopNear(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low : topsTop(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low);
         // `--verify`: a point only `wreckTops` cleared is asked the old way too, and what that would have done is counted (nothing may be: no row, no `nearing`).
         if (clear && wreckTops && GQ.check && !((own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low)) checkSkipped(GQ.wreckTops, own, px, py, pz, r);
       } else if (clear && checkTops && i < bellyFrom && !((own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low)) checkSkipped(GQ.wreckTops, own, px, py, pz, r);

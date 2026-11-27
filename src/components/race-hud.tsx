@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   Ban,
   ChevronLeft,
@@ -43,6 +43,14 @@ import { fmtGap, fmtTime } from "@/game/hud/race-clock";
 import { cn } from "@/lib/utils";
 
 type Send = (cmd: RaceCommand) => void;
+
+/** A click handler that watches car `id` through the latest `send`, the same function every render: React re-assigns `onclick` (a new listener object, garbage by the thousand) whenever the prop's identity changes. */
+function useWatch(send: Send, id: number): () => void {
+  const latest = useRef(send);
+  // Written in render, not in an effect: an effect per row per HUD publish costs more than the ref it saves.
+  latest.current = send;
+  return useCallback(() => latest.current({ type: "watch", id }), [id]);
+}
 
 /** Keeps a click from parking focus on a HUD button while driving (Space / Enter would press it). */
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
@@ -173,7 +181,7 @@ export function RaceStandings({ race, onCommand }: { race: RaceHud; onCommand: S
     >
       {race.spectating !== null ? (
         <li>
-          <AutoRow on={race.auto} onWatch={() => onCommand({ type: "watch", id: -1 })} />
+          <AutoRow on={race.auto} onCommand={onCommand} />
         </li>
       ) : null}
       {slots.map(({ row, leaving }) => (
@@ -182,7 +190,7 @@ export function RaceStandings({ race, onCommand }: { race: RaceHud; onCommand: S
           leaving={leaving}
           className={cn(STANDING_LI, row.place !== 1 && !row.you && row.place !== focusPlace && "max-sm:hidden", row.place !== 1 && row.place !== focusPlace && "phone-landscape:hidden")}
         >
-          <StandingRow row={row} lead={race.standings[0]!.lap} onWatch={() => onCommand({ type: "watch", id: row.id })} />
+          <StandingRow row={row} lead={race.standings[0]!.lap} onCommand={onCommand} />
         </StandingItem>
       ))}
     </ol>
@@ -190,7 +198,8 @@ export function RaceStandings({ race, onCommand }: { race: RaceHud; onCommand: S
 }
 
 /** The standings' Auto entry (spectating): the director picks the car. Same row as a driver's. */
-function AutoRow({ on, onWatch }: { on: boolean; onWatch: () => void }) {
+function AutoRow({ on, onCommand }: { on: boolean; onCommand: Send }) {
+  const onWatch = useWatch(onCommand, -1);
   return (
     <button
       type="button"
@@ -216,7 +225,8 @@ function lapsDown(lead: number, laps: number): string {
   return d <= 0 ? "" : `+${d} lap${d === 1 ? "" : "s"}`;
 }
 
-function StandingRow({ row, lead, onWatch }: { row: RaceHudRow; lead: number; onWatch: () => void }) {
+function StandingRow({ row, lead, onCommand }: { row: RaceHudRow; lead: number; onCommand: Send }) {
+  const onWatch = useWatch(onCommand, row.id);
   const status = STATUS_ICON[row.status];
   const gone = row.status === "out" || row.status === "dnf";
   // On a phone the viewer's row is a pill of translucent light with a ring, not a solid white block: readable on any road, and in the HUD's round, see-through style. Elsewhere it keeps the solid accent.

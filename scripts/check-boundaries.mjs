@@ -65,7 +65,7 @@ const HOT = {
   "src/game/present/road-grid.ts": ["projectGrid"],
   "src/game/world/track.ts": ["projectPathAt"],
   "src/game/world/path-grid.ts": ["nearestOnPath", "scanCell", "trySegment"],
-  "src/game/world/surfaces.ts": ["heightInto", "bil", "cellHeight"],
+  "src/game/world/surfaces.ts": ["heightInto", "bil", "cellHeight", "staticTopBox", "topsTopNearBox", "patchTop", "patchTopBox"],
   "src/game/engine/engine-onfoot.ts": ["shoot", "knocked", "dragged", "settle", "aimsAtCentre"],
   "src/game/engine/engine-onfoot-steer.ts": ["faceToward"],
   "src/game/engine/onfoot-camera.ts": ["aim", "drawBack"],
