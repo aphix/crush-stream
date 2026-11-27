@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { nearestOnPath, PATH_POINT } from "./path-grid.ts";
 
 type Path = { count: number; closed: boolean; length: number; x: Float64Array; z: Float64Array };
@@ -48,8 +49,8 @@ describe("given a road and points asked about more than once", () => {
       const first = ask(path, x, z);
       const again = ask(path, x, z);
       const plain = scan(path, x, z);
-      expect([first.k, first.dist2, first.cx, first.cz], `point ${n}: the plain scan's`).toEqual([plain.k, plain.dist2, plain.cx, plain.cz]);
-      expect([again.k, again.s, again.lateral, again.dist2, again.cx, again.cz], `point ${n} asked again`).toEqual([first.k, first.s, first.lateral, first.dist2, first.cx, first.cz]);
+      expect(firstMismatch([first.k, first.dist2, first.cx, first.cz], [plain.k, plain.dist2, plain.cx, plain.cz]), `point ${n}: the plain scan's`).toBeUndefined();
+      expect(firstMismatch([again.k, again.s, again.lateral, again.dist2, again.cx, again.cz], [first.k, first.s, first.lateral, first.dist2, first.cx, first.cz]), `point ${n} asked again`).toBeUndefined();
     }
   });
 
