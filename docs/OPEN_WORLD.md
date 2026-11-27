@@ -368,6 +368,7 @@ Per device (desktop or phone, by `deviceClass`):
 |Shadow map / box half / reach at Auto|unchanged (1024 / 24 m / 34 m)|512 / 18 m / 28 m|
 |Residents / dummy slots / detail slots|150 / 64 / 12|60 / 20 / 4|
 |Scenery share|1|0.6|
+|Street furniture's sun shadow (hydrant, bollard, bin, bench, rack, news box, meter, cafe set, dumpster, cellar door: `PHONE_NO_SHADOW`)|cast|not cast (no pixel moves by more than 4/255 on a 512 map)|
 
 The table is as measured: the one render matrix taken (high, desktop and phone, day and night; [`PERF_BENCH.md`](PERF_BENCH.md#open-world-the-frame-and-the-picks)) gives no reading that moves a row, so none changed. Host-side work that ran per step or per shot, now faster and with less garbage:
 a body's "inside a building?" reads an 8 m grid of the footprints (`PlaceFootprints`, built once from `placeRecord`'s one-shape places), the look and gun wall test reads each place's yaw from a per-map table,
