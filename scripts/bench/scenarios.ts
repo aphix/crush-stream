@@ -171,6 +171,7 @@ export const SCENARIOS: Record<string, Scenario> = {
   "derby-8-s8": { build: async () => new (await import("./derby-sim.ts")).DerbySim(8, 8), label: derbyLabel },
   "dam-spine-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("dam-spine", seed), label: cityLabel },
   "national-mall-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("national-mall", seed), label: cityLabel },
+  "figure-8-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("figure-8", seed), label: cityLabel },
   "havana-race": { build: async () => (await import("./engine-sim.ts")).EngineSim.course("havana", seed), label: cityLabel },
   "fleet-ramps": { build: () => fleetRamps(), label: intactLabel },
 };

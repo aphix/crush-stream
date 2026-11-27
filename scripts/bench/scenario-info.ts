@@ -212,6 +212,14 @@ export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
     warmS: 10,
     windowS: 20,
   },
+  "figure-8-race": {
+    about: "the city bench field on the figure-8 course on the race's step schedule",
+    sizes: "the ground proof: `--verify` over Havana's static ground and its wall",
+    lone: true,
+    race: true,
+    warmS: 10,
+    windowS: 20,
+  },
   "fleet-ramps": {
     about: "the Fleet's two ramps (moving prisms in the ground's store), two cars head-on up them at 15 m/s with the throttle held",
     sizes: "the ground proof: `--verify` where the static store holds `moves` patches (they fall back to the layered path, counted as whole answers)",
