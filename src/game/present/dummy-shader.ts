@@ -296,6 +296,9 @@ const SKIN_SHADE_FRAGMENT = "outgoingLight += max(1.0 - length(outgoingLight), 0
 /** Every outfit's decals, one layer each (`DRESS_DECALS`), baked once for every dummy. */
 const DECALS = decalMap(DRESS_DECALS);
 
+/** A slot the mesh hides (an instance matrix whose first two columns are zero: a zero scale) is clipped before it is skinned: a draw that ends after the highest live slot still runs the vertex shader over the hidden ones below it. */
+const HIDDEN_SLOT_EXIT = "if (dot(instanceMatrix[0].xyz, instanceMatrix[0].xyz) == 0.0 && dot(instanceMatrix[1].xyz, instanceMatrix[1].xyz) == 0.0) {\ngl_Position = vec4(2.0, 2.0, 2.0, 1.0);\nreturn;\n}\n";
+
 /**
  * Patch `material` to skin from `dolls`; `lit` also skins the normal and draws the cloth: the slot's cut colours, fabrics,
  * decals and prints in the fragment, the fabric's relief as a bump, each role's roughness and metal, and the rim light (`RIM_LIGHT`).
@@ -310,7 +313,7 @@ export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: 
     shader.uniforms.dolls = { value: dolls };
     if (!lit) {
       shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>\n${DOLL_COMMON}`);
-      shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\ntransformed = dollP;");
+      shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", `${HIDDEN_SLOT_EXIT}#include <begin_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\ntransformed = dollP;`);
       return;
     }
     Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS }, uRim: RIM_LIGHT, uSkinSss: SKIN_SSS, materialStrength: MATERIAL_STRENGTH, uViewHidden: viewHidden });
@@ -319,7 +322,7 @@ export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: 
         "#include <common>",
         `#include <common>\n${DOLL_COMMON}\n${DOLL_CUTS}\nattribute vec4 ${PRINT_ATTRIBUTE};\nvarying vec4 vPrint;\nflat varying int vDollRole;\ncentroid varying vec4 vDollRegion;\nvarying vec3 vDollColour;\nflat varying int vDollSlot;\nvarying float vDollHidden;`,
       )
-      .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\nobjectNormal = dollN;")
+      .replace("#include <beginnormal_vertex>", `${HIDDEN_SLOT_EXIT}#include <beginnormal_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\nobjectNormal = dollN;`)
       .replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>

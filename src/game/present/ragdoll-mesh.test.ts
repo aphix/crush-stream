@@ -808,3 +808,18 @@ describe("given two dummy meshes", () => {
     expect(Array.from({ length: kinds.count }, (_, i) => kinds.getZ(i)).some((share) => share > 0), "bust weights in roleKind's z").toBeTruthy();
   });
 });
+
+describe("given the people's shader and its shadow depth shader", () => {
+  // mutation: sed -i 's/^const HIDDEN_SLOT_EXIT = .*$/const HIDDEN_SLOT_EXIT = "";/' src/game/present/dummy-shader.ts
+  it("when both are compiled, then a hidden slot (zero first two instance-matrix columns) is clipped before the body is skinned", () => {
+    const mesh = new DummyMesh(1);
+    const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
+    for (const material of [mesh.material, mesh.customDepthMaterial!]) {
+      const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+      material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+      const exit = shader.vertexShader.indexOf("gl_Position = vec4(2.0, 2.0, 2.0, 1.0);");
+      expect(exit, "the exit is in the vertex stage").toBeGreaterThan(0);
+      expect(exit, "and comes before the body is skinned").toBeLessThan(shader.vertexShader.indexOf("dollSkin(dollP, dollN);"));
+    }
+  });
+});
