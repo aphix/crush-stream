@@ -348,6 +348,46 @@ describe("given a reel's crash camera holding the crane over a hit, and the subj
   });
 });
 
+describe("given a reel's crash camera following a car 40 m from the hit, and a later crash beside the hit that takes its own angle", () => {
+  const open: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0.6, rim: Infinity, occ: [] };
+  const camera = new THREE.PerspectiveCamera();
+  const STEP = 0.05;
+  /** The later crash's window (wall s into the cam), and how far (m) the aim may be from it a third of a second after the angle changed. */
+  const FROM = 2.0;
+  const UNTIL = 3.0;
+  const ON_THE_HIT = 0.5;
+
+  it("when the later crash's angle takes the cam, then the new shot begins on that crash, not gliding to it from the car 40 m away", () => {
+    const cam = new CrashCam(false);
+    cam.begin(new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(1, 0, 0), open, SLOMO_HOLD);
+    const later = laterHits(1);
+    later.n = 1;
+    later.from[0] = FROM;
+    later.until[0] = UNTIL;
+    later.at[0]!.set(3, 1, 2);
+    const hold = { target: new THREE.Vector3(0, 0.55, 40), sight: () => open, hit: 0.3, later };
+    while (cam.camT < FROM + 0.3) cam.direct(camera, STEP, true, hold);
+    expect(cam["aim"].distanceTo(later.at[0]!), "the aim's distance from the later crash (m)").toBeLessThan(ON_THE_HIT);
+  });
+
+  /** How far (m) below its aim point the later crash's car is judged. */
+  const SINK = 1;
+
+  it("when the later crash's car is judged 1 m below its aim point, then the shot is aimed half way between the two, so both stay in the narrow lens", () => {
+    const cam = new CrashCam(false);
+    cam.begin(new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(1, 0, 0), open, SLOMO_HOLD);
+    const later = laterHits(1);
+    later.n = 1;
+    later.from[0] = FROM;
+    later.until[0] = UNTIL;
+    later.at[0]!.set(3, 1.7, 2);
+    later.sink[0] = SINK;
+    const hold = { target: new THREE.Vector3(3, 0.7, 2), sight: () => open, hit: 0.3, later };
+    while (cam.camT < FROM + 0.3) cam.direct(camera, STEP, true, hold);
+    expect(cam["aim"].y, "the aim's height (m)").toBeCloseTo(1.7 - SINK / 2, 1);
+  });
+});
+
 /** A car this far above the road (m) at its hit: in flight over the stunt course. */
 const FLIGHT_HEIGHT = 5;
 /** A car this deep in the road (m) at its hit: a wheel through the surface. */
