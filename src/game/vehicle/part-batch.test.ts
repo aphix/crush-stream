@@ -12,6 +12,7 @@ import { cageInterior } from "./interior-geometry.ts";
 import { PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry, type PartKind } from "./part-geometry.ts";
 import { partBatchGeometries } from "./part-variants.ts";
 import { assertSameNumbers, paint, stageBatch } from "./test-support.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** The instance matrix is float32: a seat's position of a few hundred metres is stored within 1e-4 m. */
 const FLOAT32_SLACK = 1e-4;
@@ -438,6 +439,30 @@ describe("given cars in batches, one that loses a door or its front bumper", () 
     }
     expect(moved, "the dent moved nothing on the grille's mesh").toBeGreaterThan(0);
     assertSameNumbers(shared, sharedBefore, "the shared grille positions");
+  });
+
+  // mutation: sed -i 's/(m.parent instanceof PartSeat ? m.parent.drawn : m.geometry)/m.geometry/' src/game/vehicle/loose-dent.ts
+  test("when a torn door's dents capture its mirror's clone, the mirror tears off and is dented too, then after a reset the clone is the mirror seat's drawn shape", () => {
+    const { car } = stage();
+    const only = car(10);
+    const door = only["parts"].find((p) => p.name === "doorR")!;
+    const mirror = only["parts"].find((p) => p.name === "mirrorR")!;
+    const seat = only.partSeats[PART_KIND.mirrorR]!;
+    only["detachPart"](door, 0, SHOVE);
+    door.object.quaternion.identity();
+    // Struck from the car's side, the door's contact is its mirror's outermost point.
+    recordDent(door.dent, door.object, new THREE.Vector3(-1, 0, 0).multiplyScalar(HARD_BOUNCE));
+    applyDents(door.dent, door.object);
+    const clone = looseMeshes(seat)[0]!;
+    expect(door.dent.meshes!.includes(clone), "control: the door's dents captured the mirror's clone").toBe(true);
+    only["detachPart"](mirror, 0, SHOVE);
+    mirror.object.quaternion.identity();
+    recordDent(mirror.dent, mirror.object, GRILLE_NORMAL.clone().multiplyScalar(HARD_BOUNCE));
+    applyDents(mirror.dent, mirror.object);
+    expect(firstMismatch(positions(clone.geometry), positions(seat.drawn)), "control: the clone is dented").toBeDefined();
+    expect(only["parts"].indexOf(door) < only["parts"].indexOf(mirror), "control: the door's dents are cleared before the mirror's").toBe(true);
+    only.resetVisual();
+    expect(firstMismatch(positions(clone.geometry), positions(seat.drawn)), "the clone after a reset").toBeUndefined();
   });
 });
 

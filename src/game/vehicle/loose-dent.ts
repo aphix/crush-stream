@@ -92,6 +92,12 @@ function frameOffset(m: THREE.Mesh, object: THREE.Object3D): THREE.Vector3 {
   return frame === object ? _zero : frame.position;
 }
 
+/** Whether `m` still hangs under `object`: a mirror's clone that tore off the door is another part's now, and no contact of this one's is on it. */
+function under(m: THREE.Object3D, object: THREE.Object3D): boolean {
+  for (let o: THREE.Object3D | null = m; o; o = o.parent) if (o === object) return true;
+  return false;
+}
+
 function carve(d: DentState, object: THREE.Object3D, o: number): void {
   const nx = d.hits[o]!;
   const ny = d.hits[o + 1]!;
@@ -105,6 +111,7 @@ function carve(d: DentState, object: THREE.Object3D, o: number): void {
   const meshes = d.meshes!;
   for (let mi = 0; mi < meshes.length; mi++) {
     const m = meshes[mi]!;
+    if (!under(m, object)) continue;
     const a = (m.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
     const off = frameOffset(m, object);
     for (let i = 0; i < a.length; i += 3) {
@@ -122,6 +129,7 @@ function carve(d: DentState, object: THREE.Object3D, o: number): void {
   }
   for (let k = 0; k < meshes.length; k++) {
     const m = meshes[k]!;
+    if (!under(m, object)) continue;
     const attr = m.geometry.getAttribute("position") as THREE.BufferAttribute;
     const a = attr.array as Float32Array;
     const rest = d.rest![k]!;
