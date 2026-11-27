@@ -9,6 +9,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { square } from "../world/track.test-util.ts";
 import { driverLook } from "./driver-look.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { PropReach } from "./ragdoll-prop-reach.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const SECONDS = 3;
@@ -147,6 +148,61 @@ describe("given a gated course where props far from a walker are knocked, taken 
     const at = new THREE.Vector3();
     expect(sys.propAt(far, at, new THREE.Vector3()), "the far prop flew").toBe(true);
     expect(Math.abs(at.x - FAR[0]!.x), "it left its spot").toBeGreaterThan(0.5);
+    sys.dispose();
+  });
+});
+
+describe("given a world where the count of moving bodies wobbles round the bound of 128", () => {
+  /** A world with 129 moving bodies (the world's own count in), FAR's props and a gate over them; `out` counts each prop taken out. */
+  async function wobbling() {
+    const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await sys.preload();
+    const R = sys["props"]["R"]!;
+    const world = sys["world"]!;
+    const placed = FAR.map((p) => ({ x: p.x, z: p.z }));
+    const idle = new PropReach();
+    idle.reset(placed.length);
+    idle.tend(world, { inWorld: () => {} }, new Uint8Array(placed.length), new Uint8Array(placed.length), 0, placed);
+    const movers = Array.from({ length: 129 - idle["movers"] }, (_, k) => world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(k * 0.1, 5, 400)));
+    const made: number[] = [];
+    const out: number[] = [];
+    const owner = { inWorld: (i: number, on: boolean) => void (on ? made : out).push(i) };
+    const reach = new PropReach();
+    reach.reset(placed.length);
+    const knockable = new Uint8Array(placed.length).fill(1);
+    const state = new Uint8Array(placed.length);
+    /** `sitting` of the movers sit out, then one `tend`. */
+    const tend = (sitting: number): void => {
+      for (let k = 0; k < movers.length; k++) movers[k]!.setEnabled(k >= sitting);
+      reach.tend(world, owner, knockable, state, 0, placed);
+    };
+    return { sys, reach, owner, made, out, tend };
+  }
+
+  // mutation: sed -i 's/^    else if (this.movers < RELEASE_MOVERS) this.allIn = false;/    else this.allIn = false;/' src/game/present/ragdoll-prop-reach.ts
+  it("when it alternates 129 and 127 for 20 frames, then the props are made at most once: every prop stays in from the first frame past the bound", async () => {
+    const { sys, made, tend } = await wobbling();
+    for (let f = 0; f < 20; f++) tend(f % 2 === 0 ? 0 : 2);
+    expect(made.length, "props made").toBeLessThanOrEqual(1);
+    sys.dispose();
+  });
+
+  // mutation: sed -i 's/^const RELEASE_MOVERS = 96;/const RELEASE_MOVERS = 0;/' src/game/present/ragdoll-prop-reach.ts
+  it("when the count falls to 95 after it was past the bound, then every far prop is taken out", async () => {
+    const { sys, out, tend } = await wobbling();
+    tend(0);
+    tend(34);
+    expect(out.length, "far props taken out").toBe(FAR.length);
+    sys.dispose();
+  });
+
+  // mutation: sed -i '/^    this.watching = false;/{n;d}' src/game/present/ragdoll-prop-reach.ts
+  it("when a new run puts every prop back while the latch is on, then at 127 movers the far props are taken out as on a fresh boot", async () => {
+    const { sys, reach, owner, out, tend } = await wobbling();
+    tend(0);
+    reach.restore(owner);
+    tend(2);
+    expect(out.length, "far props taken out").toBe(FAR.length);
     sys.dispose();
   });
 });
