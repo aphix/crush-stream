@@ -1,8 +1,8 @@
 import type { RigidBody, World } from "@dimforge/rapier3d-simd";
+import { readTranslation } from "../kernel/rapier.ts";
 
 /** What `PropReach` asks of the props: prop `i` in the world or out of it. */
 type PropOwner = { inWorld(i: number, on: boolean): void };
-import { readTranslation } from "../kernel/rapier.ts";
 
 /**
  * A standing prop's fixed body is in the dummies' world only while a body that moves is near it: Rapier's broad phase costs a step in
@@ -13,13 +13,16 @@ import { readTranslation } from "../kernel/rapier.ts";
  */
 const REACH_ON = 6;
 const REACH_OFF = 9;
-/** Moving bodies read a frame; more than this and every prop stays in. */
+/** Moving bodies read a frame; more than this and every prop stays in, until fewer than `RELEASE_MOVERS` (a count that wobbles round the bound would make and take out every prop each frame). */
 const MAX_MOVERS = 128;
+const RELEASE_MOVERS = 96;
 
 export class PropReach {
   private readonly at = new Float64Array(MAX_MOVERS * 2);
   private readonly pos = new Float64Array(3);
   private movers = 0;
+  /** Every prop is in whatever its distance, since more than `MAX_MOVERS` bodies move. */
+  private allIn = false;
   private readonly sight = new Float64Array(4);
   private watching = false;
   /** Per placement: its body is in the world. */
@@ -69,7 +72,9 @@ export class PropReach {
     // Rapier's `RigidBodySet.forEach`, not an array's: the one walk of the set that makes nothing.
     // oxlint-disable-next-line unicorn/no-array-for-each
     world.bodies.forEach(this.visit);
-    const all = this.movers > MAX_MOVERS;
+    if (this.movers > MAX_MOVERS) this.allIn = true;
+    else if (this.movers < RELEASE_MOVERS) this.allIn = false;
+    const all = this.allIn;
     for (let i = 0; i < placed.length; i++) {
       if (knockable[i] !== 1 || state[i] !== standing) continue;
       let near = all;

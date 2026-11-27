@@ -9,6 +9,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { square } from "../world/track.test-util.ts";
 import { driverLook } from "./driver-look.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { PropReach } from "./ragdoll-prop-reach.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const SECONDS = 3;
@@ -148,5 +149,34 @@ describe("given a gated course where props far from a walker are knocked, taken 
     expect(sys.propAt(far, at, new THREE.Vector3()), "the far prop flew").toBe(true);
     expect(Math.abs(at.x - FAR[0]!.x), "it left its spot").toBeGreaterThan(0.5);
     sys.dispose();
+  });
+});
+
+describe("given a world where the count of moving bodies wobbles round the bound of 128", () => {
+  // mutation: sed -i 's/^    else if (this.movers < RELEASE_MOVERS) this.allIn = false;/    else this.allIn = false;/' src/game/present/ragdoll-prop-reach.ts
+  it("when it alternates 129 and 127 for 20 frames, then the props are made at most once: every prop stays in from the first frame past the bound", async () => {
+    const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await sys.preload();
+    const R = sys["props"]["R"]!;
+    const world = sys["world"]!;
+    const placed = FAR.map((p) => ({ x: p.x, z: p.z }));
+    const idle = new PropReach();
+    idle.reset(placed.length);
+    idle.tend(world, { inWorld: () => {} }, new Uint8Array(placed.length), new Uint8Array(placed.length), 0, placed);
+    // The world's own moving bodies count too: 129 in all, and 127 with two sitting out.
+    const movers = Array.from({ length: 129 - idle["movers"] }, (_, k) => world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(k * 0.1, 5, 400)));
+    const made: number[] = [];
+    const owner = { inWorld: (i: number, on: boolean) => void (on && made.push(i)) };
+    const reach = new PropReach();
+    reach.reset(placed.length);
+    const knockable = new Uint8Array(placed.length).fill(1);
+    const state = new Uint8Array(placed.length);
+    for (let f = 0; f < 20; f++) {
+      // Two movers sit out the odd frames: 127 move, then 129.
+      movers[0]!.setEnabled(f % 2 === 0);
+      movers[1]!.setEnabled(f % 2 === 0);
+      reach.tend(world, owner, knockable, state, 0, placed);
+    }
+    expect(made.length, "props made").toBeLessThanOrEqual(1);
   });
 });
