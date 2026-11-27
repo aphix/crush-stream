@@ -1746,12 +1746,34 @@ export function pointContactNear(q: Float64Array, skip: number, out: Float64Arra
 
 /** `topsTop` over the tops `holdNearTops` readied. */
 export function topsTopNear(skip: number, xMin: number, xMax: number, zMin: number, zMax: number): number {
+  PLAN_BOX[BOX_X0] = xMin;
+  PLAN_BOX[BOX_X1] = xMax;
+  PLAN_BOX[BOX_Z0] = zMin;
+  PLAN_BOX[BOX_Z1] = zMax;
+  topsTopNearBox(skip);
+  return PLAN_BOX[BOX_TOP]!;
+}
+
+/** Whether `topsTopNear` of the box is under `limit`; no double crosses the call or comes back from it. */
+export function topsTopNearUnder(skip: number, xMin: number, xMax: number, zMin: number, zMax: number, limit: number): boolean {
+  PLAN_BOX[BOX_X0] = xMin;
+  PLAN_BOX[BOX_X1] = xMax;
+  PLAN_BOX[BOX_Z0] = zMin;
+  PLAN_BOX[BOX_Z1] = zMax;
+  topsTopNearBox(skip);
+  return PLAN_BOX[BOX_TOP]! < limit;
+}
+
+function topsTopNearBox(skip: number): void {
+  const xMin = PLAN_BOX[BOX_X0]!;
+  const xMax = PLAN_BOX[BOX_X1]!;
+  const zMin = PLAN_BOX[BOX_Z0]!;
+  const zMax = PLAN_BOX[BOX_Z1]!;
   if (GQ.on) GQ.calls[G.topsTopNear] = GQ.calls[G.topsTopNear]! + 1;
   const tops = live.tops;
-  if (tops === null) return -Infinity;
   let top = -Infinity;
-  for (let k = 0; k < nearTops.count; k++) top = Math.max(top, patchTop(tops, nearTops.list[k]!, xMin, xMax, zMin, zMax, skip));
-  return top;
+  if (tops !== null) for (let k = 0; k < nearTops.count; k++) top = Math.max(top, patchTop(tops, nearTops.list[k]!, xMin, xMax, zMin, zMax, skip));
+  PLAN_BOX[BOX_TOP] = top;
 }
 
 /** What `topsTopLive` asks of the world's cars: whether one is a wreck (its masses run). */
@@ -2407,6 +2429,18 @@ function partialV(f: Float32Array, c: number, nu: number, side: number): number 
  * unbounded).
  */
 function patchTop(s: Surface, i: number, xMin: number, xMax: number, zMin: number, zMax: number, skip: number): number {
+  PLAN_BOX[0] = xMin;
+  PLAN_BOX[1] = xMax;
+  PLAN_BOX[2] = zMin;
+  PLAN_BOX[3] = zMax;
+  return patchTopBox(s, i, skip);
+}
+
+function patchTopBox(s: Surface, i: number, skip: number): number {
+  const xMin = PLAN_BOX[0]!;
+  const xMax = PLAN_BOX[1]!;
+  const zMin = PLAN_BOX[2]!;
+  const zMax = PLAN_BOX[3]!;
   const P = s.p;
   const o = i * P_STRIDE;
   if (xMax < P[o + P_MINX]! || xMin > P[o + P_MAXX]! || zMax < P[o + P_MINZ]! || zMin > P[o + P_MAXZ]!) return -Infinity;
@@ -2527,19 +2561,54 @@ function buildRaster(s: Surface): void {
   s.rasterNz = nz;
 }
 
+/** What the `*Box` reads take and give through `PLAN_BOX`, so no boxed double crosses their calls: the plan box, then the answer. */
+const BOX_X0 = 0;
+const BOX_X1 = 1;
+const BOX_Z0 = 2;
+const BOX_Z1 = 3;
+const BOX_TOP = 4;
+const PLAN_BOX = new Float64Array(5);
+
 /**
  * The highest the static surface `s` stands over the plan box [xMin, xMax] × [zMin, zMax] (m, world y; -Infinity: nothing there): a body
  * above it meets nothing of `s`. Read off its raster, the patches that moved since tested one by one; past the raster, patch by patch,
  * or with `cellsOnly` no bound at all (Infinity): the raster's answer never falls as the box grows, the patch by patch one can.
  */
 export function staticTop(s: Surface, xMin: number, xMax: number, zMin: number, zMax: number, cellsOnly = false): number {
+  PLAN_BOX[BOX_X0] = xMin;
+  PLAN_BOX[BOX_X1] = xMax;
+  PLAN_BOX[BOX_Z0] = zMin;
+  PLAN_BOX[BOX_Z1] = zMax;
+  staticTopBox(s, cellsOnly);
+  return PLAN_BOX[BOX_TOP]!;
+}
+
+/** Whether `staticTop` of the box is under `limit`; no double crosses the call or comes back from it. */
+export function staticTopUnder(s: Surface, xMin: number, xMax: number, zMin: number, zMax: number, limit: number): boolean {
+  PLAN_BOX[BOX_X0] = xMin;
+  PLAN_BOX[BOX_X1] = xMax;
+  PLAN_BOX[BOX_Z0] = zMin;
+  PLAN_BOX[BOX_Z1] = zMax;
+  staticTopBox(s, false);
+  return PLAN_BOX[BOX_TOP]! < limit;
+}
+
+function staticTopBox(s: Surface, cellsOnly: boolean): void {
+  const xMin = PLAN_BOX[BOX_X0]!;
+  const xMax = PLAN_BOX[BOX_X1]!;
+  const zMin = PLAN_BOX[BOX_Z0]!;
+  const zMax = PLAN_BOX[BOX_Z1]!;
   if (GQ.on) GQ.calls[G.staticTop] = GQ.calls[G.staticTop]! + 1;
   if (!s.rasterBuilt) buildRaster(s);
   const i0 = Math.floor((xMin - s.rasterX0) / RASTER);
   const i1 = Math.floor((xMax - s.rasterX0) / RASTER);
   const j0 = Math.floor((zMin - s.rasterZ0) / RASTER);
   const j1 = Math.floor((zMax - s.rasterZ0) / RASTER);
-  if (i0 < 0 || j0 < 0 || i1 >= s.rasterNx || j1 >= s.rasterNz) return cellsOnly ? Infinity : topIn(s, xMin, xMax, zMin, zMax, NO_PATCHES);
+  if (i0 < 0 || j0 < 0 || i1 >= s.rasterNx || j1 >= s.rasterNz) {
+    const outside = cellsOnly ? Infinity : topIn(s, xMin, xMax, zMin, zMax, NO_PATCHES);
+    PLAN_BOX[BOX_TOP] = outside;
+    return;
+  }
   const raster = s.raster;
   const nx = s.rasterNx;
   let top = -Infinity;
@@ -2548,7 +2617,7 @@ export function staticTop(s: Surface, xMin: number, xMax: number, zMin: number, 
   }
   const moving = s.moving;
   for (let k = 0; k < moving.length; k++) top = Math.max(top, patchTop(s, moving[k]!, xMin, xMax, zMin, zMax, -1));
-  return top;
+  PLAN_BOX[BOX_TOP] = top;
 }
 
 /** The highest the car tops near body `skip` (`CarSurfaces.near`) stand over the plan box (m, world y; -Infinity: none there). */
