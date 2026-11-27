@@ -2551,7 +2551,7 @@ function buildRaster(s: Surface): void {
   s.rasterNz = nz;
 }
 
-/** What the `*Box` reads take and give through `PLAN_BOX`: the plan box, then the answer. Called with the box as arguments, the small wrappers over them inline into a hot caller, where nothing is boxed; the bodies never box. */
+/** What the `*Box` reads take and give through `PLAN_BOX`: the plan box, then the answer. Called with the box as arguments, the small wrappers over them inline into a hot caller, where nothing is boxed; the bodies take no double arguments. */
 const BOX_X0 = 0;
 const BOX_X1 = 1;
 const BOX_Z0 = 2;
