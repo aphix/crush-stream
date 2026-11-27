@@ -59,14 +59,15 @@ export function applyDents(d: DentState, object: THREE.Object3D): void {
   while (d.applied < d.count) carve(d, object, d.applied++ * 4);
 }
 
-/** The part's meshes and their positions before the first dent (once per part, on its first dent). */
+/** The part's meshes and their positions before the first dent (once per part, on its first dent); a torn seat's clone starts from its seat's drawn shape. */
 function captureMeshes(d: DentState, object: THREE.Object3D): void {
   d.meshes = [];
   object.traverse((o) => {
     const m = o as THREE.Mesh;
     if (m.isMesh && !(m as THREE.InstancedMesh).isInstancedMesh) d.meshes!.push(m);
   });
-  d.rest = d.meshes.map((m) => Float32Array.from((m.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array));
+  // A seat's torn clone is also in the traverse of another part's dents (a door's mirror): its rest is the seat's drawn shape, not whatever the other part carved first, so every clear puts it back the same.
+  d.rest = d.meshes.map((m) => Float32Array.from(((m.parent instanceof PartSeat ? m.parent.drawn : m.geometry).getAttribute("position") as THREE.BufferAttribute).array as Float32Array));
 }
 
 /** Put the skin back as it was before the first dent, its record of hits empty as a new part's. */
