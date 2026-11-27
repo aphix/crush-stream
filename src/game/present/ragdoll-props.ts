@@ -577,6 +577,11 @@ export class PropBodies {
     if (this.built) this.gated.tend(this.world!, this.bodies, this.state, STAND, this.placed);
   }
 
+  /** The camera's sweep from (`ax`, `az`) to (`bx`, `bz`) this frame: the standing props near it are in the world from the next frame's steps, before its next sweep is cast. */
+  watch(ax: number, az: number, bx: number, bz: number): void {
+    this.gated.watch(ax, az, bx, bz);
+  }
+
   /** Is every knocked prop asleep? */
   asleep(): boolean {
     for (let k = 0; k < this.count; k++) if (!this.bodies[this.out[k]!]!.isSleeping()) return false;

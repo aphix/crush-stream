@@ -7,6 +7,7 @@ import { placeProps } from "../world/placements.ts";
 import { Track } from "../world/track.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { square } from "../world/track.test-util.ts";
+import { driverLook } from "./driver-look.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -53,5 +54,32 @@ describe("given a dummy thrown into two crates and a cone while ten props stand 
     // Rapier orders its contacts by the broad phase's proxies, so fewer of them move a result by float32 rounding (measured 0.07 mm worst over the 3 s), never by a behaviour.
     const worst = near.trace.reduce((m, v, k) => Math.max(m, Math.abs(v - all.trace[k]!)), 0);
     expect(worst, "the most a part's position differs (m)").toBeLessThan(0.001);
+  });
+});
+
+describe("given a crate standing 15 m from the walker's eye, with the walker 15 m from it and no other moving body near", () => {
+  /** How far (m) a camera ball of 0.2 m cast from (60, 1, 46) toward +z, 30 m long, runs on the course with one crate at (60, 60), the walker standing at (60, 45) after the world has stepped. */
+  async function sweep(gated: boolean): Promise<number> {
+    const track = new Track(parseTrack(square({ props: [{ prefab: "crate", x: 60, z: 60, yaw: 0, scale: 1 }] })));
+    const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await sys.preload();
+    setGround(track.ground());
+    sys.setCourse(track, placeProps(track), null);
+    if (!gated) sys["props"].gate = () => {};
+    sys.startWalker(new THREE.Vector3(60, 0, 45), 0, { cop: false, look: driverLook(0, 0) });
+    for (let f = 0; f < 10; f++) sys.update(FRAME, [], true, false, null);
+    // The first sweep is seen by the next frame's steps (the camera sweeps every frame): the second is the one measured.
+    sys.sightClear(60, 1, 46, 0, 0, 1, 30, 0.2);
+    sys.update(FRAME, [], true, false, null);
+    const length = sys.sightClear(60, 1, 46, 0, 0, 1, 30, 0.2);
+    sys.dispose();
+    return length;
+  }
+
+  // mutation: sed -i '/^    this.props.watch(x, z, x + dx \* length, z + dz \* length);/d' src/game/present/ragdoll-throw.ts
+  it("when the camera's sweep is cast through it, then it stops short of the crate, as with every prop in the world", async () => {
+    const all = await sweep(false);
+    expect(all, "control: with every prop in, the crate stops the sweep").toBeLessThan(15);
+    expect(await sweep(true), "the sweep with the props kept near moving bodies only").toBeCloseTo(all, 6);
   });
 });
