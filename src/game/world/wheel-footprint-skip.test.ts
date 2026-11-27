@@ -138,4 +138,22 @@ describe("given wheels over a patchwork of steps and edges", () => {
     expect(asked[0]!, "control: the prop's top is under the tread").toBeGreaterThan(-0.1);
     expect(firstMismatch(skipped, asked)).toBeUndefined();
   });
+
+  // mutation: sed -i 's/^const TREAD_MISS = 1e-3;/const TREAD_MISS = 1e-4;/' src/game/world/surfaces.ts
+  it("when a wheel stands on ground whose slope turns by 0.04 m/m (a tread's tenth to a millimetre of arc over its ring bottom), then only its five ring bottoms and its hub ask the ground", () => {
+    const g = new Ground();
+    const N = 40;
+    // A checkerboard of 0.02 m over 1 m nodes: slopes of +-0.02 side by side, a spread of 0.04 either way.
+    const heights = Float32Array.from({ length: N * N }, (_, k) => 0.02 * ((Math.floor(k / N) + (k % N)) % 2));
+    g.addGrid({ nu: N, nv: N, step: 1, stepV: 1, u0: 0, v0: 0, heights, ox: -N / 2, oy: 0, oz: -N / 2, reach: Infinity, unbounded: true });
+    setGround(g);
+    GQ.on = true;
+    GQ.calls[G.seek] = 0;
+    try {
+      wheelContact(Float64Array.of(0.3, 0.45, 0.3), Float64Array.of(1, 0, 0, 0, 1, 0, 0, 0, 1), 1, 1, -1, new Float64Array(HIT_SIZE));
+    } finally {
+      GQ.on = false;
+    }
+    expect(GQ.calls[G.seek], "seeks of one wheel").toBeLessThanOrEqual(6);
+  });
 });

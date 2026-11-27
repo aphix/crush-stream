@@ -2259,8 +2259,8 @@ function cellTopsOf(nu: number, nv: number, nodes: Float32Array, centre: Float32
   return tops;
 }
 
-/** The most (m) a tread's ring bottoms may read under its arcs where they stand for the whole footprint: a tenth of a tread's millimetre. */
-const TREAD_MISS = 1e-4;
+/** The most (m) a tread's ring bottoms may read under its arcs where they stand for the whole footprint: a tread's millimetre. */
+const TREAD_MISS = 1e-3;
 
 /**
  * Per cell of a static grid (`cellTopsOf`'s layout) the square of how far (m/m) the slope turns over it and its eight neighbours: the spread of
