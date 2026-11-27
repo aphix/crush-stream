@@ -5,6 +5,7 @@ import { NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { CRIME_HZ, ESCORT_ARRIVE, FOOT_COP_COUNT, MAX_SUBJECTS, PATROL_COPS, PATROL_RECENT } from "./crime-constants.ts";
 import { stationOf } from "./arrests.ts";
 import { FootLaw } from "./foot-law.ts";
+import type { WalkGraph } from "../../world/openworld/walk-graph.ts";
 import { FootWalkers } from "./foot-walkers.ts";
 import type { OffenceSource, Spot, Walk } from "./offence-source.ts";
 import { IDLE_FOOT_ARREST } from "./crime-fixture.test-util.ts";
@@ -29,6 +30,8 @@ const LEAST_MEAN_CELLS = 11;
 /** Sample points round the walk graph's nodes, each a few metres off one: a corner lot has some whose nearest node is across its wall. */
 const SAMPLES = 2000;
 const NODE_STRIDE = 7;
+/** The reference pass asks a sight line of nearly every node a sample, so the row reads fewer samples. */
+const REFERENCE_SAMPLES = 150;
 const SAMPLE_OFFSET = 5;
 
 /** The society's rows as the law reads them, for the doors of the real map: a crime at a door is wanted until the host's bust. */
@@ -171,6 +174,79 @@ describe("given a cop standing beside a corner lot of the real map", () => {
       expect(real.sight(x, z, nodeX[seen]!, nodeZ[seen]!), `a clear line from sample ${sample} to its node`).toBe(true);
     }
     expect(across, "samples whose nearest node was across a building").toBeGreaterThan(0);
+  });
+});
+
+describe("given points on and beside the real map's sidewalks, some inside buildings", () => {
+  // mutation: sed -i 's/      if (this.clear(x, z, nodeX\[next\]!, nodeZ\[next\]!)) return next;/      return next;/' src/game/ai/openworld-crime/foot-walkers.ts
+  it("when the nearest node in the clear is asked for, then it is the one a pass over every node in index order finds, with a fraction of the sight lines", () => {
+    let lines = 0;
+    let referenceLines = 0;
+    let seeingLines = 0;
+    let seeingReferenceLines = 0;
+    const counted = (ax: number, az: number, bx: number, bz: number): boolean => {
+      lines++;
+      return real.sight(ax, az, bx, bz);
+    };
+    const walkers = new FootWalkers(real.map.graph, 1, counted);
+    const { nodeX, nodeZ } = real.map.graph;
+    for (let sample = 0; sample < REFERENCE_SAMPLES; sample++) {
+      const node = (sample * NODE_STRIDE) % nodeX.length;
+      const x = nodeX[node]! + SAMPLE_OFFSET * detCos(sample);
+      const z = nodeZ[node]! + SAMPLE_OFFSET * detSin(sample);
+      let seen = -1;
+      let seenGap = Infinity;
+      let any = 0;
+      let anyGap = Infinity;
+      const referenceBefore = referenceLines;
+      const before = lines;
+      for (let n = 0; n < nodeX.length; n++) {
+        const gap = hypot2(nodeX[n]! - x, nodeZ[n]! - z);
+        if (gap < anyGap) {
+          anyGap = gap;
+          any = n;
+        }
+        if (gap >= seenGap) continue;
+        referenceLines++;
+        if (!real.sight(x, z, nodeX[n]!, nodeZ[n]!)) continue;
+        seenGap = gap;
+        seen = n;
+      }
+      expect(walkers.nearestSeenNode(x, z), `sample ${sample}`).toBe(seen >= 0 ? seen : any);
+      // A point that sees no node (inside a building) has every pass ask about every node: only the others tell the passes apart.
+      if (seen >= 0) {
+        seeingReferenceLines += referenceLines - referenceBefore;
+        seeingLines += lines - before;
+      }
+    }
+    expect(seeingLines, "sight lines asked from points that see a node, against the plain pass's").toBeLessThan(seeingReferenceLines / 3);
+  });
+});
+
+describe("given a graph of a few nodes and a sight that blocks some of them", () => {
+  const graphOf = (xs: number[], zs: number[]): WalkGraph => ({ nodeX: Float32Array.from(xs), nodeZ: Float32Array.from(zs), edgeStart: new Int32Array(xs.length + 1), edgeTo: new Int32Array(0), edgeLength: new Float32Array(0), edgeCrossing: new Uint8Array(0) });
+  /** A sight that asks `asked` its target's x and is clear to the nodes at x in `clear`. */
+  const sightTo = (asked: number[], clear: readonly number[]) => (_ax: number, _az: number, bx: number): boolean => {
+    asked.push(bx);
+    return clear.includes(bx);
+  };
+
+  // mutation: sed -i 's/        if (gap < triedGap || (gap === triedGap \&\& node <= tried) || gap >= nextGap) continue;/        if (gap < triedGap || gap >= nextGap) continue;/' src/game/ai/openworld-crime/foot-walkers.ts
+  it("when two nodes are as near and the lower one is blocked, then the higher one is the node he sees, and the lower is asked about once", () => {
+    const asked: number[] = [];
+    const walkers = new FootWalkers(graphOf([0, 3, 9], [-3, 0, 9]), 1, sightTo(asked, [3, 9]));
+    expect(walkers.nearestSeenNode(0, 0)).toBe(1);
+    expect(asked, "the x of each node asked, in order").toEqual([0, 3]);
+  });
+
+  // mutation: sed -i 's/^const SEEN_TRIES = 6;/const SEEN_TRIES = 8;/' src/game/ai/openworld-crime/foot-walkers.ts
+  it("when seven nearer nodes are blocked and a far one is clear, then the far one is the node he sees after the six nearest-first tries and the full pass; with every node blocked, the nearest", () => {
+    const xs = [1, 2, 3, 4, 5, 6, 7, 20];
+    const zs = xs.map(() => 0);
+    const asked: number[] = [];
+    expect(new FootWalkers(graphOf(xs, zs), 1, sightTo(asked, [20])).nearestSeenNode(0, 0)).toBe(7);
+    expect(asked.length, "six tries, then the pass over all eight").toBe(14);
+    expect(new FootWalkers(graphOf(xs, zs), 1, sightTo([], [])).nearestSeenNode(0, 0)).toBe(0);
   });
 });
 

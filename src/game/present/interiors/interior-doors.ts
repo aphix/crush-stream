@@ -21,6 +21,9 @@ export type DoorOpeners = {
 /** `count` spots (x, z of the first `count` entries): a hooked body's feet. */
 export type PinnedSpots = { count: number; x: Float32Array; z: Float32Array };
 
+/** The side (m) of a cell of the leaf grid `markOpeners` reads: never under `DOOR_REACH`, so the cells around a point hold every leaf in its reach. */
+const DOOR_CELL = Math.max(4, DOOR_REACH);
+
 /** How far a door swings open: a little short of square to the wall, so the leaf stands clear of the jamb it hinges on. */
 const OPEN_ANGLE = 0.47 * Math.PI;
 const LEAF_THICK = 0.05;
@@ -54,11 +57,45 @@ export class DoorSet {
   private readonly vestibuleMaterial = new THREE.MeshStandardMaterial({ color: VESTIBULE_WALL, roughness: 0.9, side: THREE.BackSide });
   /** The shown civilians near the eye this frame, by index into the poses: grown on the cold path when a crowd is bigger than any before. */
   private nearby = new Int32Array(0);
+  /** 1 for a leaf someone (the walker, a figure of `others`, a person of the crowd) stands within `DOOR_REACH` of this frame. */
+  private readonly touched: Uint8Array;
+  /** The leaves by cell of `DOOR_CELL` (CSR: `cellLeaves[cellStart[c]..cellStart[c + 1]]`), the grid's corner and size in cells. */
+  private readonly cellStart: Int32Array;
+  private readonly cellLeaves: Int32Array;
+  private readonly cellX0: number;
+  private readonly cellZ0: number;
+  private readonly cellCols: number;
+  private readonly cellRows: number;
+  /** The walker's spot, so `touch` takes it as it takes a crowd's: from arrays. */
+  private readonly walkerX = new Float64Array(1);
+  private readonly walkerZ = new Float64Array(1);
 
   constructor(leaves: readonly DoorLeaf[]) {
     this.leaves = leaves;
     this.openness = new Float32Array(leaves.length);
     this.locked = new Uint8Array(leaves.length);
+    this.touched = new Uint8Array(leaves.length);
+    let x0 = Infinity;
+    let z0 = Infinity;
+    let x1 = -Infinity;
+    let z1 = -Infinity;
+    for (const leaf of leaves) {
+      x0 = Math.min(x0, leaf.x);
+      z0 = Math.min(z0, leaf.z);
+      x1 = Math.max(x1, leaf.x);
+      z1 = Math.max(z1, leaf.z);
+    }
+    this.cellX0 = leaves.length === 0 ? 0 : x0;
+    this.cellZ0 = leaves.length === 0 ? 0 : z0;
+    this.cellCols = leaves.length === 0 ? 1 : Math.floor((x1 - x0) / DOOR_CELL) + 1;
+    this.cellRows = leaves.length === 0 ? 1 : Math.floor((z1 - z0) / DOOR_CELL) + 1;
+    this.cellStart = new Int32Array(this.cellCols * this.cellRows + 1);
+    const cellOf = (leaf: DoorLeaf): number => Math.floor((leaf.z - this.cellZ0) / DOOR_CELL) * this.cellCols + Math.floor((leaf.x - this.cellX0) / DOOR_CELL);
+    for (const leaf of leaves) this.cellStart[cellOf(leaf) + 1]!++;
+    for (let cell = 0; cell < this.cellCols * this.cellRows; cell++) this.cellStart[cell + 1]! += this.cellStart[cell]!;
+    this.cellLeaves = new Int32Array(leaves.length);
+    const fill = this.cellStart.slice(0, this.cellCols * this.cellRows);
+    for (let door = 0; door < leaves.length; door++) this.cellLeaves[fill[cellOf(leaves[door]!)]!++] = door;
     this.group.name = "interior-doors";
     this.leafMesh = new THREE.InstancedMesh(this.leafGeometry, this.leafMaterial, Math.max(1, leaves.length));
     this.leafMesh.count = leaves.length;
@@ -77,6 +114,7 @@ export class DoorSet {
   /** The doors near the eye swing toward open while someone stands within reach and toward closed while no one does; a door out of range is shut at once. */
   update(eyeX: number, eyeZ: number, dt: number, openers: DoorOpeners): void {
     const near = this.gatherNearby(eyeX, eyeZ, openers);
+    this.markOpeners(near, openers);
     const step = dt / DOOR_SWING_SECONDS;
     let moved = false;
     for (let door = 0; door < this.leaves.length; door++) {
@@ -84,7 +122,7 @@ export class DoorSet {
       const was = this.openness[door]!;
       const inRange = hypot2(leaf.x - eyeX, leaf.z - eyeZ) <= DOOR_RANGE;
       if (!inRange && was === 0) continue;
-      const next = !inRange ? 0 : this.locked[door] === 0 && this.someoneAt(leaf, near, openers) ? Math.min(1, was + step) : Math.max(0, was - step);
+      const next = !inRange ? 0 : this.locked[door] === 0 && this.touched[door] === 1 ? Math.min(1, was + step) : Math.max(0, was - step);
       if (next === was) continue;
       this.openness[door] = next;
       this.placeLeaf(door);
@@ -152,19 +190,39 @@ export class DoorSet {
     return count;
   }
 
-  private someoneAt(leaf: DoorLeaf, near: number, openers: DoorOpeners): boolean {
+  /** `touched` for this frame: each point that opens a door (the walker, every shown figure of `others`, the `near` people) marks the leaves within `DOOR_REACH` of it, found in the cells around it. */
+  private markOpeners(near: number, openers: DoorOpeners): void {
+    this.touched.fill(0);
     const walker = openers.walker;
-    if (walker !== null && hypot2(walker.x - leaf.x, walker.z - leaf.z) <= DOOR_REACH) return true;
+    if (walker !== null) {
+      this.walkerX[0] = walker.x;
+      this.walkerZ[0] = walker.z;
+      this.touch(this.walkerX, this.walkerZ, 0);
+    }
     for (let set = 0; set < openers.others.length; set++) {
       const other = openers.others[set]!;
-      for (let figure = 0; figure < other.count; figure++) if (other.shown[figure] === 1 && hypot2(other.x[figure]! - leaf.x, other.z[figure]! - leaf.z) <= DOOR_REACH) return true;
+      for (let figure = 0; figure < other.count; figure++) if (other.shown[figure] === 1) this.touch(other.x, other.z, figure);
     }
     const poses = openers.poses;
-    if (poses === null) return false;
-    for (let at = 0; at < near; at++) {
-      const person = this.nearby[at]!;
-      if (hypot2(poses.x[person]! - leaf.x, poses.z[person]! - leaf.z) <= DOOR_REACH) return true;
+    if (poses === null) return;
+    for (let at = 0; at < near; at++) this.touch(poses.x, poses.z, this.nearby[at]!);
+  }
+
+  /** Marks the leaves within `DOOR_REACH` of (`xs[at]`, `zs[at]`): arrays and an index, so no double crosses the call. */
+  private touch(xs: ArrayLike<number>, zs: ArrayLike<number>, at: number): void {
+    const col = Math.floor((xs[at]! - this.cellX0) / DOOR_CELL);
+    const row = Math.floor((zs[at]! - this.cellZ0) / DOOR_CELL);
+    for (let r = row - 1; r <= row + 1; r++) {
+      if (!(r >= 0 && r < this.cellRows)) continue;
+      for (let c = col - 1; c <= col + 1; c++) {
+        if (!(c >= 0 && c < this.cellCols)) continue;
+        const cell = r * this.cellCols + c;
+        for (let item = this.cellStart[cell]!; item < this.cellStart[cell + 1]!; item++) {
+          const door = this.cellLeaves[item]!;
+          const leaf = this.leaves[door]!;
+          if (hypot2(xs[at]! - leaf.x, zs[at]! - leaf.z) <= DOOR_REACH) this.touched[door] = 1;
+        }
+      }
     }
-    return false;
   }
 }
