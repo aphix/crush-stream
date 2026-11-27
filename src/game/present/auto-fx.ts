@@ -161,6 +161,8 @@ export class AutoFx {
       if (this.windows - this.climbedAt <= REVERSAL_WINDOWS) this.upNeed = Math.min(MAX_UP_STREAK, this.upNeed * 2);
       // What the tier we climbed to cost over the one below, as the window that fell from it shows: the next climb needs that much room, not the fixed overhead (a crash's dents cost a tier far more than the measured calm).
       if (this.windows - this.liftedAt <= LEARN_WINDOWS && this.climbBusy > 0 && w.tierMs >= TIER_SHARE * w.renderMs) this.overhead = Math.min(MAX_OVERHEAD, Math.max(this.overhead, w.busy / this.climbBusy));
+      // One lift is learned from once: a second fall in the same spell is the content's weight, not the tier's.
+      this.liftedAt = -1000;
       this.downAt = this.windows;
       this.ceiling = down;
       return this.switch(down);
@@ -194,6 +196,7 @@ export class AutoFx {
     this.auto = true;
     this.tier = current;
     this.match = null;
+    this.liftedAt = -1000;
     this.host?.resume(current);
   }
 

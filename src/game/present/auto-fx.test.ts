@@ -288,6 +288,23 @@ describe("given the tier judged by the render alone (a phone's sim fills its fra
     expect(moves.map((m) => m[1]).join(" "), "the tiers it moved through").toBe("high low");
   });
 
+  // mutation: sed -i '/^      this.liftedAt = -1000;/d' src/game/present/auto-fx.ts
+  it("when it falls twice within the learning span of one lift, then only the first fall teaches the tier's cost", () => {
+    const fx = new AutoFx(true, true, false);
+    /** Frames of `seconds` at a draw submit of `render` ms, `tier` ms of it tier-gated; the tier it fell to, if it did. */
+    const feed = (seconds: number, render: number, tier: number): FxTier | null => {
+      let fell: FxTier | null = null;
+      for (let t = 0; t < seconds * 1000 && fell === null; t += 50 + render) fell = fx.frame(50 + render, 40 + render, render, NO_GPU, null, tier);
+      return fell;
+    };
+    expect(feed(4, 5, 0), "the load check lifts it").toBe("high");
+    expect(feed(20, 14, 8), "the first fall").toBe("low");
+    const learned = fx["overhead"];
+    expect(learned, "control: the first fall taught a cost above the fixed overhead").toBeGreaterThan(1.3);
+    expect(feed(20, 40, 28), "the second fall").toBe("minimal");
+    expect(fx["overhead"], "the second fall taught nothing (less the decay of its windows)").toBeLessThanOrEqual(learned);
+  });
+
   it("when the sim alone fills the frame, then the device may not host: not a phone that lifts, and not a desktop either", () => {
     const fresh = new AutoFx(true, true, false);
     expect(fresh.canHost()).toBe(false);
