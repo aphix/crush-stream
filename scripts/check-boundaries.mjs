@@ -93,6 +93,7 @@ const HOT = {
   "src/game/vehicle/held-round.ts": ["roundHeld"],
   "src/game/vehicle/car-tyre-skin.ts": ["takeNormalsRewritten", "indexOver", "liftSaggingSkin"],
   "src/game/vehicle/cover-batch.ts": ["end", "pack"],
+  "src/game/present/ragdoll-prop-reach.ts": ["tend"],
   "src/game/vehicle/tyre-carried.ts": ["admitCarried", "findCaps", "capAtRest", "carryLift", "poseWithin", "recarry", "lowerToCap", "listMoved", "forgetTouched"],
   "src/game/vehicle/paint-scrapes.ts": ["scrape", "slice", "commit", "runsOn", "append", "mergeNearest", "gap", "mergeInto"],
   "src/game/vehicle/car-parts.ts": ["syncAttachedParts", "advanceFlap", "poseParts", "followGlass", "evaluateBreakage", "stepLooseParts", "freeObjects"],
