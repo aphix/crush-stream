@@ -37,7 +37,7 @@ import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { AI_DIFFICULTIES } from "@/game/ai/constants";
 import { missedCheckpointText, type ResetInput } from "@/game/hud/reset-prompt";
 import { courseTap, selectAll } from "@/game/hud/setup-patch";
-import { LEAVE_MS, nextFlashUntil, STANDING_LI, standingsVisible, withLeavers, type StandingSlot } from "@/game/hud/standings-motion";
+import { LEAVE_MS, nextFlashUntil, rowsUnmoved, STANDING_LI, standingsVisible, withLeavers, type StandingSlot } from "@/game/hud/standings-motion";
 import type { CarStatus, RaceCommand, RaceHud, RaceHudRow, RaceOptions } from "@/game/match/types";
 import { fmtGap, fmtTime } from "@/game/hud/race-clock";
 import { cn } from "@/lib/utils";
@@ -54,14 +54,27 @@ const STATUS_ICON: Partial<Record<CarStatus, { Icon: typeof Flag; label: string 
   dnf: { Icon: Ban, label: "Did not finish" },
 };
 
-/** FLIP over `ref`'s rows: one whose top moved since the last commit starts at its old place, and its CSS transition (`STANDING_LI`) slides it home. */
+/** FLIP over `ref`'s rows: one whose top moved since the last commit starts at its old place, and its CSS transition (`STANDING_LI`) slides it home. A commit that leaves the rows' order and classes as they were measures nothing (an `offsetTop` read forces a layout each HUD commit); a window resize measures again. */
 function useSlide(ref: RefObject<HTMLOListElement | null>): void {
   const tops = useRef(new Map<Element, number>());
+  const stood = useRef<{ el: Element; cls: string }[]>([]);
+  const resized = useRef(false);
+  useEffect(() => {
+    const mark = (): void => {
+      resized.current = true;
+    };
+    window.addEventListener("resize", mark);
+    return () => window.removeEventListener("resize", mark);
+  }, []);
   useLayoutEffect(() => {
     const ol = ref.current;
     if (!ol) return;
+    if (!resized.current && rowsUnmoved(stood.current, ol.children as HTMLCollectionOf<HTMLElement>)) return;
+    resized.current = false;
     const next = new Map<Element, number>();
+    stood.current = [];
     for (const li of Array.from(ol.children) as HTMLElement[]) {
+      stood.current.push({ el: li, cls: li.className });
       const top = li.offsetTop;
       const was = tops.current.get(li);
       next.set(li, top);

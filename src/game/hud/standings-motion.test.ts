@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RaceHudRow } from "../match/types.ts";
-import { GREEN_WINDOW_SECONDS, nextFlashUntil, PASS_FLASH_MS, STANDING_LI, standingsVisible, withLeavers, type StandingsVisibility } from "./standings-motion.ts";
+import { GREEN_WINDOW_SECONDS, nextFlashUntil, PASS_FLASH_MS, rowsUnmoved, STANDING_LI, standingsVisible, withLeavers, type StandingsVisibility } from "./standings-motion.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const row = (id: number, place: number): RaceHudRow => ({ id, name: `car ${id}`, place, lap: 1, status: "racing", gap: null, bestLap: null, you: false, watched: false });
@@ -67,4 +67,30 @@ describe("given the phone standings list", () => {
       expect(standingsVisible(testCase.state)).toBe(testCase.expected);
     });
   }
+});
+
+describe("given the rows a standings list was measured with", () => {
+  const li = (className: string) => ({ className });
+  const [a, b] = [li("x"), li("y")];
+  const stood = [{ el: a, cls: "x" }, { el: b, cls: "y" }];
+
+  it("when the same elements stand in the same order with the same classes, then nothing moved", () => {
+    expect(rowsUnmoved(stood, [a, b])).toBe(true);
+  });
+
+  // mutation: sed -i 's/before\[i\]!.el !== now\[i\] || //' src/game/hud/standings-motion.ts
+  it("when two rows pass each other, then they are measured again", () => {
+    expect(rowsUnmoved(stood, [b, a])).toBe(false);
+  });
+
+  // mutation: sed -i 's/ || before\[i\]!.cls !== now\[i\]!.className//' src/game/hud/standings-motion.ts
+  it("when a row's classes change (a phone row hidden), then they are measured again", () => {
+    expect(rowsUnmoved(stood, [a, li("y max-sm:hidden")])).toBe(false);
+  });
+
+  // mutation: sed -i 's/before.length !== now.length/false/' src/game/hud/standings-motion.ts
+  it("when a row arrives or leaves, then they are measured again", () => {
+    expect(rowsUnmoved(stood, [a])).toBe(false);
+    expect(rowsUnmoved(stood, [a, b, li("z")])).toBe(false);
+  });
 });

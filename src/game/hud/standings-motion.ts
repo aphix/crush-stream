@@ -61,3 +61,10 @@ export function standingsVisible({ spectating, phase, raceTime, reel, flashUntil
   if (phase === "grid" || phase === "countdown" || phase === "finished") return true;
   return raceTime < GREEN_WINDOW_SECONDS || now < flashUntil;
 }
+
+/** Whether the rows `now` (a list's children) are the elements `before` recorded, in that order, with the same class names: where nothing moved, `offsetTop` need not be read. */
+export function rowsUnmoved(before: readonly { el: object; cls: string }[], now: ArrayLike<{ className: string }>): boolean {
+  if (before.length !== now.length) return false;
+  for (let i = 0; i < now.length; i++) if (before[i]!.el !== now[i] || before[i]!.cls !== now[i]!.className) return false;
+  return true;
+}
