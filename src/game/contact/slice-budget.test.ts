@@ -142,3 +142,16 @@ describe("given a live wreck pushed by the pair solver (the amount the push cap 
     expect(total, `push ${(shift * 1000).toFixed(1)} mm, then the re-fit: ${(total * 1000).toFixed(1)} mm in all, cap ${(limit * 1000).toFixed(1)} mm`).toBeLessThanOrEqual(Math.max(shift, limit) + 1e-6);
   });
 });
+
+describe("given a step cut into two slices of half its length", () => {
+  // mutation: sed -i 's/Math.max(STEP_CEIL \* this.share, PushBudget.reach(dt, touchSpeed))/Math.max(STEP_CEIL, PushBudget.reach(dt, touchSpeed))/' src/game/deform/push-budget.ts
+  it("when a drift settles in each slice's window with the budget at share 0.5, then each takes half of STEP_CEIL and the two together STEP_CEIL, not twice it", () => {
+    const budget = new PushBudget();
+    budget.share = 0.5;
+    const first = budget.settle(1, 0, 1, 1, H, 0);
+    const second = budget.settle(2, 0, 1, 1, H, 0);
+    expect(Math.abs(first - STEP_CEIL / 2), "the first slice's ceiling").toBeLessThan(1e-12);
+    expect(Math.abs(second - STEP_CEIL / 2), "the second slice's ceiling").toBeLessThan(1e-12);
+    expect(first + second, "the step's drift").toBeLessThanOrEqual(STEP_CEIL + 1e-12);
+  });
+});
