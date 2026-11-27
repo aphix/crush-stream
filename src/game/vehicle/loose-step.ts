@@ -222,6 +222,26 @@ function cornersFilled(shape: LooseShape): boolean {
   return true;
 }
 
+/** The `SHELL.xyz` index of the shell point farthest along (bx, by, bz) from `c` (the nearer to it of those as far). Its own function: a caller's loop left it deopting on every OSR exit. */
+function shellFarthest(c: { x: number; y: number; z: number }, bx: number, by: number, bz: number): number {
+  let far = -Infinity;
+  let near = Infinity;
+  let at = 0;
+  for (let i = 0; i < SHELL.n * 3; i += 3) {
+    const x = SHELL.xyz[i]! - c.x;
+    const y = SHELL.xyz[i + 1]! - c.y;
+    const z = SHELL.xyz[i + 2]! - c.z;
+    const along = x * bx + y * by + z * bz;
+    const off = (x - bx) ** 2 + (y - by) ** 2 + (z - bz) ** 2;
+    if (along > far + 1e-9 || (along > far - 1e-9 && off < near)) {
+      far = Math.max(far, along);
+      near = off;
+      at = i;
+    }
+  }
+  return at;
+}
+
 /**
  * `shape`'s points as its shell's own: for each of its box's twenty points (`halfBox`, already in `points`), the shell point farthest along
  * the way from the middle to it (the nearer to it of those as far), so every point a contact meets is drawn. Its box's inertia and plate stay.
@@ -232,21 +252,7 @@ function supportShape(shape: LooseShape): void {
     const bx = shape.points[k * 3]!;
     const by = shape.points[k * 3 + 1]!;
     const bz = shape.points[k * 3 + 2]!;
-    let far = -Infinity;
-    let near = Infinity;
-    let at = 0;
-    for (let i = 0; i < SHELL.n * 3; i += 3) {
-      const x = SHELL.xyz[i]! - c.x;
-      const y = SHELL.xyz[i + 1]! - c.y;
-      const z = SHELL.xyz[i + 2]! - c.z;
-      const along = x * bx + y * by + z * bz;
-      const off = (x - bx) ** 2 + (y - by) ** 2 + (z - bz) ** 2;
-      if (along > far + 1e-9 || (along > far - 1e-9 && off < near)) {
-        far = Math.max(far, along);
-        near = off;
-        at = i;
-      }
-    }
+    const at = shellFarthest(c, bx, by, bz);
     shape.points[k * 3] = SHELL.xyz[at]! - c.x;
     shape.points[k * 3 + 1] = SHELL.xyz[at + 1]! - c.y;
     shape.points[k * 3 + 2] = SHELL.xyz[at + 2]! - c.z;
@@ -278,6 +284,20 @@ function repeatedSlot(shape: LooseShape): number {
   return -1;
 }
 
+/** The `SHELL.xyz` index of the shell point nearest (x, y, z) about `c` within `CORNER_FILL` (the last of equals), -1 for none. Its own function: a caller's loop left it deopting on every OSR exit. */
+function shellNearest(c: { x: number; y: number; z: number }, x: number, y: number, z: number): number {
+  let near = CORNER_FILL_SQ;
+  let at = -1;
+  for (let i = 0; i < SHELL.n * 3; i += 3) {
+    const off = (SHELL.xyz[i]! - c.x - x) ** 2 + (SHELL.xyz[i + 1]! - c.y - y) ** 2 + (SHELL.xyz[i + 2]! - c.z - z) ** 2;
+    if (off <= near) {
+      near = off;
+      at = i;
+    }
+  }
+  return at;
+}
+
 /**
  * A shell drawn the same either side of its car's middle plane (a bumper) is supported the same either side. The farthest point along a way
  * can tie between a pair of mirror images (a bumper's two lower front ends) and one slot takes one of them, which left the part on a lone
@@ -291,15 +311,7 @@ function completeTwins(shape: LooseShape): void {
     const y = shape.points[k * 3 + 1]!;
     const z = shape.points[k * 3 + 2]!;
     if (supportNear(shape, x, y, z)) continue;
-    let near = CORNER_FILL_SQ;
-    let at = -1;
-    for (let i = 0; i < SHELL.n * 3; i += 3) {
-      const off = (SHELL.xyz[i]! - c.x - x) ** 2 + (SHELL.xyz[i + 1]! - c.y - y) ** 2 + (SHELL.xyz[i + 2]! - c.z - z) ** 2;
-      if (off <= near) {
-        near = off;
-        at = i;
-      }
-    }
+    const at = shellNearest(c, x, y, z);
     const slot = at < 0 ? -1 : repeatedSlot(shape);
     if (slot < 0) continue;
     shape.points[slot * 3] = SHELL.xyz[at]! - c.x;
