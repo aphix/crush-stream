@@ -52,6 +52,7 @@ export class PropReach {
   /** All of `count` placements' bodies are in the world (just built). */
   reset(count: number): void {
     this.on = new Uint8Array(count).fill(1);
+    this.allIn = false;
   }
 
   /** Every standing prop back in the world as at the build, and no sweep watched: a new run, or the gate turned off. */
@@ -59,6 +60,7 @@ export class PropReach {
     for (let i = 0; i < this.on.length; i++) if (this.on[i] === 0) owner.inWorld(i, true);
     this.on.fill(1);
     this.watching = false;
+    this.allIn = false;
   }
 
   /** Prop `i` is in the world: it is about to fly. */
