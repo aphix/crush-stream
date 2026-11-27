@@ -94,7 +94,7 @@ describe("given a pickup's skin with one point crushed over its front tyre", () 
     const written = skin.unheldSerial();
     expect(written, "a hold with the skin written").toBeGreaterThanOrEqual(0);
     const toMesh = new THREE.Matrix4().multiplyMatrices(car.group.matrixWorld.clone().invert(), mesh.matrixWorld).invert();
-    const positions = mesh.geometry.getAttribute("position");
+    const positions = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
     const held = Array.from(skin["over"][FRONT_RIGHT_WHEEL]!).findIndex((rest) => !Number.isNaN(rest));
     expect(held, "fixture: a skin point resting over the tyre").toBeGreaterThanOrEqual(0);
     const place = new THREE.Vector3();
