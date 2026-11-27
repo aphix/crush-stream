@@ -229,12 +229,15 @@ describe("given a person standing on the car's way (a crossing, a lane)", () => 
     person.z[0] = person.z[0]! + PERSON_REACH + 1;
     driver.people = person;
     let slowest = Infinity;
+    const startX = car.group.position.x;
+    const startZ = car.group.position.z;
     const snap = blankAiCar(CAR_ID);
     for (let step = 0; step < 6 / STEP_SECONDS; step++) {
       car.snapshot(CAR_ID, snap);
       car.run(driver.think(snap, route, sedan, [snap], timeShowing(LIGHT.green), STEP_SECONDS, false), STEP_SECONDS);
-      if (car.group.position.x > 5) slowest = Math.min(slowest, car.speed);
+      if (hypot2(car.group.position.x - startX, car.group.position.z - startZ) > 5) slowest = Math.min(slowest, car.speed);
     }
+    expect(hypot2(car.group.position.x - startX, car.group.position.z - startZ), "it drove on past the 5 m mark").toBeGreaterThan(20);
     expect(slowest, "it did not slow to a stop on the way").toBeGreaterThan(1);
     driver.people = null;
   });
