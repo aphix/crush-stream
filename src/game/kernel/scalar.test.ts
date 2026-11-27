@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { allocatedBytes, untilQuiet } from "./alloc-sample.test-util.ts";
 import { generalizeFields } from "./scalar.ts";
 
 describe("given an object built with several kinds of field and one read-only field", () => {
@@ -29,5 +30,21 @@ describe("given an object built with several kinds of field and one read-only fi
     Object.defineProperty(o, "lazy", { get: () => 1, set: (v: unknown) => writes.push(v), enumerable: true });
     generalizeFields(o);
     expect(writes, "the setter never ran").toHaveLength(0);
+  });
+});
+
+describe("given an object with a number field that a loop later writes fractions to", () => {
+  const STORES = 50_000;
+  /** The loop under the reading: a plain store of a fresh fraction each time. */
+  const write = (o: { speed: number }): void => {
+    for (let i = 0; i < STORES; i++) o.speed = i * 0.37 + 0.1;
+  };
+
+  // mutation: /usr/bin/sed -i 's/? 0.5 : undefined;/? undefined : undefined;/' src/game/kernel/scalar.ts
+  it("when its fields are generalized, then storing fractions in the number field allocates nothing: it is still a raw double, not a tagged field that boxes every store", () => {
+    const o = { speed: 0 };
+    generalizeFields(o);
+    const bytes = untilQuiet(() => allocatedBytes(() => write(o)), 4096);
+    expect(bytes, `${bytes.toFixed(0)} B for ${STORES} stores`).toBeLessThanOrEqual(4096);
   });
 });

@@ -53,7 +53,7 @@ export function once<T>(make: () => T): () => T {
 }
 
 /**
- * Rewrites each own data field of `o` once, to another kind of value and back, as it is built. V8 treats a field as constant (and folds its value into optimised code)
+ * Rewrites each own data field of `o` once, to another value and back, as it is built. V8 treats a field as constant (and folds its value into optimised code)
  * until the first time it is stored again, and that first store gives every object of the class a new hidden class mid-run, deoptimising each function that touched one.
  */
 export function generalizeFields(o: object): void {
@@ -62,7 +62,8 @@ export function generalizeFields(o: object): void {
     const own = Object.getOwnPropertyDescriptor(fields, key);
     if (own === undefined || !("value" in own) || own.writable !== true) continue;
     const value = fields[key];
-    fields[key] = undefined;
+    // A number goes to a fraction: the field becomes a raw double now, so its first fractional store later neither changes the class (a whole number's field would) nor, as an `undefined` would, makes it a tagged field that boxes every store.
+    fields[key] = typeof value === "number" ? 0.5 : undefined;
     fields[key] = value;
   }
 }
