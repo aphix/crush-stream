@@ -223,6 +223,7 @@ function TiltBar({ engine, tilt, onArm, steerLive }: SteerProps & { tilt: TiltSe
   useEffect(() => {
     const bar = marker.current?.parentElement;
     if (!bar) return;
+    barWidth.current = bar.offsetWidth;
     const watch = new ResizeObserver(() => {
       barWidth.current = bar.offsetWidth;
     });

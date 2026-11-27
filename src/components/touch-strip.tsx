@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronsUp, OctagonX, Zap } from "lucide-react";
 import { useReleaseOnUnmount } from "@/components/use-pad-hold";
 import type { HudProps } from "@/components/hud";
@@ -28,11 +28,17 @@ type StripProps = Pick<HudProps, "engine"> & {
  * the knob follows the finger's height, so a thumb always knows where coasting is.
  */
 export function PedalStrip({ engine, onThumb, onArm }: StripProps) {
-  const strip = useRef<HTMLDivElement>(null);
   const knob = useRef<HTMLDivElement>(null);
   const finger = useRef({ id: -1, inCap: false });
-  /** The strip's box as the finger landed (it holds still while a thumb is on it): a read per move forced a layout after the knob's last write. */
+  /** The strip's box, read at the first move of a touch and dropped when the touch ends or the window resizes: a read per move forced a layout after the knob's last write. */
   const bounds = useRef<DOMRect | null>(null);
+  useEffect(() => {
+    const drop = (): void => {
+      bounds.current = null;
+    };
+    window.addEventListener("resize", drop);
+    return () => window.removeEventListener("resize", drop);
+  }, []);
   useReleaseOnUnmount(engine, PAD_BUTTON.south);
   const put = (position: number): void => {
     if (knob.current) knob.current.style.bottom = knobBottom(position);
@@ -44,7 +50,8 @@ export function PedalStrip({ engine, onThumb, onArm }: StripProps) {
     onThumb(reading.gas, reading.brake);
   };
   const move = (e: ReactPointerEvent<HTMLDivElement>): void => {
-    if (e.pointerId !== finger.current.id || !bounds.current) return;
+    if (e.pointerId !== finger.current.id) return;
+    bounds.current ??= e.currentTarget.getBoundingClientRect();
     put(1 - (e.clientY - bounds.current.top) / bounds.current.height);
   };
   const release = (e: ReactPointerEvent<HTMLDivElement>): void => {
@@ -56,7 +63,6 @@ export function PedalStrip({ engine, onThumb, onArm }: StripProps) {
   };
   return (
     <div
-      ref={strip}
       role="group"
       aria-label="Pedals: slide down to brake, up for gas, to the top for Boost"
       data-touch-control="pedal-strip"
@@ -66,7 +72,6 @@ export function PedalStrip({ engine, onThumb, onArm }: StripProps) {
         if (finger.current.id !== -1) return;
         onArm();
         finger.current.id = e.pointerId;
-        bounds.current = e.currentTarget.getBoundingClientRect();
         e.currentTarget.setPointerCapture(e.pointerId);
         if (knob.current) knob.current.dataset.drag = "";
         move(e);
