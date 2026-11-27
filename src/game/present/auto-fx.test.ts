@@ -267,6 +267,27 @@ describe("given the tier judged by the render alone (a phone's sim fills its fra
     expectMoves(runSpells(new AutoFx(true, true, false), [phone(4), phone(20, 14)]), [[2.6, "high"], [7.2, "low"], [11.8, "minimal"]], "phone with a 14 ms render");
   });
 
+  // mutation: sed -i 's/Math.max(this.overhead, w.busy \/ this.climbBusy)/this.overhead/' src/game/present/auto-fx.ts
+  it("when a phone's high tier costs 1.3 times low in calm but 2.8 times in a crash that comes every 50 s, then it falls once and does not climb again for the next 200 s of calms", () => {
+    const fx = new AutoFx(true, true, false);
+    const moves: [number, FxTier][] = [];
+    let tier: FxTier = "minimal";
+    let t = 0;
+    while (t < 250_000) {
+      const crash = t % 50_000 >= 40_000;
+      // The draw submit's ms at the tier now: low 5, minimal 3.5, high 1.3 times low and, in a crash, 1.5 times low more of tier-gated dent work (booked as the tier's); the sim takes 40 more.
+      const tierWork = tier === "high" && crash ? 5 * 1.5 : 0;
+      const render = (tier === "high" ? 5 * 1.3 : tier === "low" ? 5 : 3.5) + tierWork;
+      const ms = 50 + render;
+      t += ms;
+      const to = fx.frame(ms, 40 + render, render, NO_GPU, null, tierWork);
+      if (to === null) continue;
+      tier = to;
+      moves.push([Math.round(t / 100) / 10, to]);
+    }
+    expect(moves.map((m) => m[1]).join(" "), "the tiers it moved through").toBe("high low");
+  });
+
   it("when the sim alone fills the frame, then the device may not host: not a phone that lifts, and not a desktop either", () => {
     const fresh = new AutoFx(true, true, false);
     expect(fresh.canHost()).toBe(false);
