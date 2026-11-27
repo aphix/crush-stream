@@ -39,9 +39,8 @@ export class SeatDraw {
   private builtCount = 0;
   private readonly attributes: readonly string[];
   private room = { vertices: 0, indices: 0 };
-  /** Where the writes of rebuilds the GPU has not seen yet begin (vertex, index): a rebuild marks only the seats it moved, and a draw that three skipped (nothing packed) has seen none. */
-  private fromVertex = Infinity;
-  private fromIndex = Infinity;
+  /** Per buffer (`attributes`, the seat rows, the index), where the writes three has not uploaded yet begin (an item, Infinity: none): a rebuild marks only the seats it moved, and a buffer resets when three's upload of it calls back. */
+  private readonly pending: Float64Array;
   /** `seated` materials by their base. */
   private readonly flat = new Map<THREE.Material, THREE.Material>();
 
@@ -55,6 +54,7 @@ export class SeatDraw {
     this.packed = new Int32Array(capacity);
     this.built = new Int32Array(capacity);
     this.attributes = ["position", "normal", "uv", "color", ...(look === "tint" ? [PAINTED_ATTRIBUTE] : [])];
+    this.pending = new Float64Array(this.attributes.length + 2).fill(Infinity);
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), seatMaterial(material, this.texture, look));
     // Seats span the pad and move every frame; a stale bound would cull live ones.
     this.mesh.frustumCulled = false;
@@ -62,11 +62,6 @@ export class SeatDraw {
     this.mesh.matrixAutoUpdate = false;
     this.mesh.matrixWorldAutoUpdate = false;
     this.mesh.visible = false;
-    // Three uploads the marked ranges as it draws the mesh, right after this hook, in whichever pass draws it first.
-    this.mesh.onBeforeRender = () => {
-      this.fromVertex = Infinity;
-      this.fromIndex = Infinity;
-    };
     // The real attribute set from the start, so the boot warm links the program the race draws with.
     this.grow(1, 3);
   }
@@ -193,11 +188,17 @@ export class SeatDraw {
       k += src.length;
     }
     this.builtCount = n;
-    this.fromVertex = Math.min(this.fromVertex, v0);
-    this.fromIndex = Math.min(this.fromIndex, k0);
-    if (v > this.fromVertex) for (const name of [...this.attributes, SEAT_ATTRIBUTE]) upload(geo.getAttribute(name) as THREE.BufferAttribute, this.fromVertex, v);
-    if (k > this.fromIndex) upload(geo.index!, this.fromIndex, k);
+    const names = [...this.attributes, SEAT_ATTRIBUTE];
+    for (let b = 0; b < names.length; b++) this.mark(b, geo.getAttribute(names[b]!) as THREE.BufferAttribute, v0, v);
+    this.mark(names.length, geo.index!, k0, k);
     geo.setDrawRange(0, k);
+  }
+
+  /** Items `from` to `to` of buffer `b` (`pending`) were written: it uploads from the earliest write three has not taken yet. */
+  private mark(b: number, attr: THREE.BufferAttribute, from: number, to: number): void {
+    if (to <= from) return;
+    this.pending[b] = Math.min(this.pending[b]!, from);
+    upload(attr, this.pending[b]!, to);
   }
 
   /** A fresh geometry with room for `vertices` and `indices` and then some (a GL buffer never grows in place). Its buffers keep three's
@@ -206,9 +207,17 @@ export class SeatDraw {
     this.room = { vertices: Math.ceil(vertices * SEAT_GROW), indices: Math.ceil(indices * SEAT_GROW) };
     const geo = new THREE.BufferGeometry();
     const sizes = { position: 3, normal: 3, uv: 2, color: 3, [PAINTED_ATTRIBUTE]: 1 } as Record<string, number>;
-    for (const name of this.attributes) geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(this.room.vertices * sizes[name]!), sizes[name]!));
-    geo.setAttribute(SEAT_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(this.room.vertices), 1));
-    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(this.room.indices), 1));
+    const names = [...this.attributes, SEAT_ATTRIBUTE];
+    for (let b = 0; b < names.length; b++) {
+      const size = sizes[names[b]!] ?? 1;
+      geo.setAttribute(names[b]!, new THREE.BufferAttribute(new Float32Array(this.room.vertices * size), size).onUpload(() => {
+          this.pending[b] = Infinity;
+        }));
+    }
+    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(this.room.indices), 1).onUpload(() => {
+        this.pending[names.length] = Infinity;
+      }));
+    this.pending.fill(Infinity);
     geo.setDrawRange(0, 0);
     this.mesh.geometry.dispose();
     this.mesh.geometry = geo;
