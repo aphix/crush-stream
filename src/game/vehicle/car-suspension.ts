@@ -66,6 +66,8 @@ function archStop(cls: VehicleClassId): number {
 const UNSEAT = 15;
 /** A wreck's body eases onto its empty corners at this rate (1/s): 99 % in 1.2 s. */
 const SETTLE = 4;
+/** A spring offset that moved by less than this (m) in a step is at rest (`still`): the last-bit jitter of a parked car's load transfer. */
+const SETTLED_SHIFT = 1e-6;
 /** `frame.hullUnder`'s row: car-local x, z and height above the tyre plane. */
 const HU_X = 0;
 const HU_Z = 1;
@@ -156,6 +158,8 @@ export class Suspension {
   private rise = 0;
   /** The class `lift` the body was last posed at (`NaN` before the first pose): the lift fades as the body rolls onto its side, however still its springs are. */
   private posedLift = NaN;
+  /** The last `step` posed nothing and moved no offset: the ride is at its fixed point (a car may sleep). */
+  still = false;
   private readonly frame: CarFrame;
 
   constructor(frame: CarFrame) {
@@ -189,6 +193,7 @@ export class Suspension {
    * A wheel in `unheld` (bit i) stands on what the rigid step takes no row from (`onWreckTop`): it is not seated there either.
    */
   step(group: THREE.Object3D, wheels: readonly THREE.Object3D[], cls: VehicleClassId, lift: number, free: boolean, air: boolean, gone: number, unheld: number, hit: Float64Array, dt: number, wreck = false, slide = 0, spinSpeed = 0): void {
+    this.still = false;
     if (this.body === undefined) this.body = group.getObjectByName(CLASS_LIFT) ?? null;
     if (!free) {
       if (this.riding) {
@@ -210,7 +215,12 @@ export class Suspension {
     const e = group.matrixWorld.elements;
     this.load.step(e, dt, air, cls, w * w, slide, spinSpeed);
     let moved = !this.riding;
+    let shift = moved ? Infinity : 0;
     this.riding = true;
+    const was0 = this.offset[0]!;
+    const was1 = this.offset[1]!;
+    const was2 = this.offset[2]!;
+    const was3 = this.offset[3]!;
     for (let i = 0; i < 4; i++) {
       const o = Math.max(-room, Math.min(stop, this.load.target[i]!));
       if (o !== this.offset[i]) moved = true;
@@ -221,7 +231,10 @@ export class Suspension {
     const off = this.offset;
     const sunk = this.rise > 0 || off[0]! < 0 || off[1]! < 0 || off[2]! < 0 || off[3]! < 0;
     const bottom = wreck || (air && !sunk) ? 0 : this.bottomOut(e, lift);
-    if (this.seatWheels(e, hit, wheels, stop, room, air, gone, unheld, dt, invertedHang(cls, e[5]!) - (CLASSES[cls].lift - lift), wreck) || moved || bottom !== this.rise || lift !== this.posedLift) {
+    const posed = this.seatWheels(e, hit, wheels, stop, room, air, gone, unheld, dt, invertedHang(cls, e[5]!) - (CLASSES[cls].lift - lift), wreck) || bottom !== this.rise || lift !== this.posedLift;
+    shift = Math.max(shift, Math.abs(off[0]! - was0), Math.abs(off[1]! - was1), Math.abs(off[2]! - was2), Math.abs(off[3]! - was3));
+    this.still = shift < SETTLED_SHIFT && Math.abs(bottom - this.rise) < SETTLED_SHIFT && Math.abs(lift - this.posedLift) < SETTLED_SHIFT;
+    if (posed || moved) {
       this.rise = bottom;
       this.pose(lift);
     }

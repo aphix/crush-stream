@@ -13,6 +13,7 @@ import { GRIP_YAW_CAP, SLIDE_SPEED, FLIPPED_UP_Y } from "./constants.ts";
 import { standingBite } from "./wheel-bite.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { layOnGround } from "./car-air-points.ts";
+import { restHold } from "./car-rest.ts";
 
 /** Shared by derby AI and the player seat. */
 export type DriveInput = {
@@ -258,6 +259,9 @@ export function applyDrive(car: DeformableCar, input: DriveInput, dt: number, to
   const throttle = pedal(input.throttle, -1, THROTTLE_STEPS);
   const command = pedal(input.steer, -1, THROTTLE_STEPS);
   const brake = pedal(input.brake, 0, BRAKE_STEPS);
+  // A brake held on a car at rest acts on nothing: only the gas, the wheel, the handbrake or the boost are a driver's (`settleIntact`).
+  car.drove = throttle !== 0 || command !== 0 || input.ebrake || input.boost === true;
+  if (car.asleep && !car.drove && !car.deform.massActive) return restHold(car, brake);
   // No wheel within its springs' reach of a surface (flight, a belly on a roof) or no drivetrain: the car keeps its ballistic velocity and spin.
   // The wheels that are in reach drive as far as the surface under them carries the car (`standingBite`): none on a side or roof or against a wall, all on a bank the body lies along.
   const alive = car.deform.drivetrainAlive;
@@ -268,7 +272,8 @@ export function applyDrive(car: DeformableCar, input: DriveInput, dt: number, to
   // A pedal wakes a sleeping wreck only where it acts: the clip records the outputs (`idleDriveState` zeroes a dead or wheel-less car's), so a wake on the raw input would be one the replay never sees.
   // `EPICENTER.holdWakes`: a brake held on a wreck at rest acts on nothing (there is no speed to take off), so it neither wakes the wreck nor restarts its rest timer: without this a
   // braked wreck that stands still never sleeps (the timer is reset by every slice's pedal: 914 resets a second for 8 wrecks in the bench).
-  if ((throttle !== 0 || brake !== 0 || input.ebrake) && !(EPICENTER.holdWakes === 1 && throttle === 0 && car.deform.massActive && !car.moving)) car.wake();
+  // An intact car awake has no rest timer to restart (its own is `settleIntact`'s, which a held brake must not reset every step).
+  if ((car.asleep || car.deform.massActive) && (throttle !== 0 || brake !== 0 || input.ebrake) && !(EPICENTER.holdWakes === 1 && throttle === 0 && car.deform.massActive && !car.moving)) car.wake();
   const k = CLASSES[carClass(car)];
   const realism = HANDLING.realism;
   // assists() reads only realism, so it reruns when that changes: called out of line, it boxed realism per step.
