@@ -357,7 +357,7 @@ export function stepWorld(w: World, dt: number): void {
         continue;
       }
       const hc = lonely.flag[ci] ? dt : h;
-      car.deform.beginSlice(hc);
+      car.deform.beginSlice(hc, hc / dt);
       car.surfaces = w.surfaces;
       car.slot = ci;
       // A wreck is its rigid body's: `integrate` steps the body and carries its masses.
