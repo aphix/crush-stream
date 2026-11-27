@@ -51,3 +51,18 @@ export function once<T>(make: () => T): () => T {
   let value: T | undefined;
   return () => (value ??= make());
 }
+
+/**
+ * Rewrites each own data field of `o` once, to another kind of value and back, as it is built. V8 treats a field as constant (and folds its value into optimised code)
+ * until the first time it is stored again, and that first store gives every object of the class a new hidden class mid-run, deoptimising each function that touched one.
+ */
+export function generalizeFields(o: object): void {
+  const fields = o as Record<string, unknown>;
+  for (const key of Object.keys(fields)) {
+    const own = Object.getOwnPropertyDescriptor(fields, key);
+    if (own === undefined || !("value" in own) || own.writable !== true) continue;
+    const value = fields[key];
+    fields[key] = undefined;
+    fields[key] = value;
+  }
+}

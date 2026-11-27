@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { KonamiCode } from "./konami.ts";
+import { generalizeFields } from "../kernel/scalar.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { CarPaint } from "../vehicle/car-core.ts";
 import { applyCarFinish, finishForTier } from "../vehicle/car-finish.ts";
@@ -521,6 +522,8 @@ export abstract class EngineCore {
     car.group.visible = false;
     car.group.userData.carIndex = i;
     this.scene.add(car.group);
+    generalizeFields(car);
+    generalizeFields(car.deform);
     this.queueWarm();
     return car;
   }
