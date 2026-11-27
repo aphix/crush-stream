@@ -160,3 +160,28 @@ describe("given a far car whose parts a shared batch draws in two lanes (paint a
     expect(dynamic.join(",")).toBe("");
   });
 });
+
+describe("given a shared batch that has covered two far cars and one of them comes back near", () => {
+  // mutation: sed -i '/^    if (stale) this.pack();/d' src/game/vehicle/cover-batch.ts
+  test("when it draws, then its index run holds the car left far and no other: its vertices only, and the seed", () => {
+    const { batch, car, draw } = stage();
+    const left = car(FAR);
+    const back = car(FAR + 5);
+    draw([left, back]);
+    back.group.position.z = NEAR;
+    draw([left, back]);
+    for (const lane of ["paint", "glass"] as const) {
+      const l = batch[lane];
+      const live = l["covers"].filter((c) => c.seen === l["frame"]);
+      const idx = l.mesh.geometry.index!.array as Uint32Array;
+      const used = live.reduce((n, c) => n + c.source.index!.count, 3);
+      expect(l.mesh.geometry.drawRange.count, `the ${lane} lane draws the car left far only`).toBe(used);
+      const first = Math.min(...live.map((c) => c.vertexStart));
+      const last = Math.max(...live.map((c) => c.vertexStart + c.source.attributes.position!.count));
+      for (let k = 3; k < used; k++) expect(idx[k]! >= first && idx[k]! < last, `${lane} index ${k} is a vertex of a live cover`).toBe(true);
+      const dead = l["covers"].filter((c) => c.seen !== l["frame"]);
+      expect(dead.length, `the control: the ${lane} lane holds the car that left`).toBeGreaterThan(0);
+      for (let k = 3; k < used; k++) for (const c of dead) expect(idx[k]! >= c.vertexStart && idx[k]! < c.vertexStart + c.source.attributes.position!.count, `${lane} index ${k} is a vertex of a cover that left`).toBe(false);
+    }
+  });
+});
