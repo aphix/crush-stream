@@ -21,8 +21,8 @@ export type DoorOpeners = {
 /** `count` spots (x, z of the first `count` entries): a hooked body's feet. */
 export type PinnedSpots = { count: number; x: Float32Array; z: Float32Array };
 
-/** The side (m) of a cell of the leaf grid `markOpeners` reads: at least `DOOR_REACH`, so the cells around a point hold every leaf in its reach. */
-const DOOR_CELL = 4;
+/** The side (m) of a cell of the leaf grid `markOpeners` reads: never under `DOOR_REACH`, so the cells around a point hold every leaf in its reach. */
+const DOOR_CELL = Math.max(4, DOOR_REACH);
 
 /** How far a door swings open: a little short of square to the wall, so the leaf stands clear of the jamb it hinges on. */
 const OPEN_ANGLE = 0.47 * Math.PI;
