@@ -214,7 +214,7 @@ export const SCENARIO_INFO: Record<string, ScenarioInfo> = {
   },
   "figure-8-race": {
     about: "the city bench field on the figure-8 course on the race's step schedule",
-    sizes: "the ground proof: `--verify` over Havana's static ground and its wall",
+    sizes: "the ground proof: `--verify` over the figure-8's bending dirt ground and its 3446 solid props",
     lone: true,
     race: true,
     warmS: 10,
