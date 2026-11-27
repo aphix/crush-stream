@@ -962,6 +962,12 @@ export class DeformableCar extends CarParts {
     return k === 1 && !this.hoodOff() ? (this.hoodTyres?.unheld ?? null) : null;
   }
 
+  /** Painted shell `k`'s `unheldSkin` replacement count, -1 where it has none (then its drawn skin's version stands for it). */
+  unheldSerial(k: number): number {
+    if (k === 0) return this.bodyTyres?.unheldSerial() ?? -1;
+    return k === 1 && !this.hoodOff() ? (this.hoodTyres?.unheldSerial() ?? -1) : -1;
+  }
+
   /** The meshes the crush skin writes (`updateSkin`): the body, the lids, the door skins, the light bar and the skinned panes. */
   skinGeometries(): THREE.BufferGeometry[] {
     const geometries = [this.body.geometry, this.hood.geometry, this.trunk.geometry, this.doorMeshL.geometry, this.doorMeshR.geometry];

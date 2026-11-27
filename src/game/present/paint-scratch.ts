@@ -242,6 +242,8 @@ type Wear = {
   readonly places: (RestPlaces | null)[];
   /** The shells' position versions summed when the dents were last drawn: a skin write moves it. */
   skin: number;
+  /** Per shell, what its dents were last drawn from: its `unheldSerial`, else minus one less its drawn skin's version; NaN before the first draw. */
+  readonly keys: Float64Array;
   /** `PaintScratches`' clock (s) when the dents were last drawn. */
   dentAt: number;
   /** The car's `quietTime` at the last frame, and `PaintScratches`' clock when it was last touched (its quiet went down). */
@@ -287,6 +289,7 @@ export function applyScratch(car: DeformableCar): void {
       positions: shells.map((mesh) => mesh.geometry.getAttribute("position")).filter((attr) => attr instanceof THREE.BufferAttribute),
       places: shells.map(() => null),
       skin: -1,
+      keys: new Float64Array(shells.length).fill(NaN),
       dentAt: -Infinity,
       quiet: Infinity,
       touchedAt: -Infinity,
@@ -663,6 +666,15 @@ export class PaintScratches {
     if (!stale && (skin === wear.skin || this.clock < wear.dentAt + DENT_REBUILD_S)) return false;
     wear.skin = skin;
     wear.dentAt = this.clock;
+    // A tyre hold's lift moves the drawn skin's version, never the skin the dents read (`unheldSkin`): the same skin draws the same dents.
+    let same = wear.dented && wear.mask !== null && !stale;
+    for (let k = 0; k < wear.keys.length; k++) {
+      const serial = wear.car.unheldSerial(k);
+      const key = serial >= 0 ? serial : -1 - (wear.positions[k]?.version ?? 0);
+      if (key !== wear.keys[k]) same = false;
+      wear.keys[k] = key;
+    }
+    if (same) return true;
     this.dent(wear, true);
     return true;
   }

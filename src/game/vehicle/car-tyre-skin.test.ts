@@ -81,6 +81,45 @@ describe("given a pickup's skin of which one point rests over its front tyre and
   });
 });
 
+describe("given a pickup's skin with one point crushed over its front tyre", () => {
+  // mutation: sed -i '/^      this.writes++;/d' src/game/vehicle/car-tyre-skin.ts
+  it("when it is held with a skin written or rewritten, then its written skin's serial moves; when only a wheel's move changes the lift, the drawn skin's version moves and the serial stands", () => {
+    const car = buildCar("pickup", "truck");
+    const mesh = car["body"] as THREE.Mesh;
+    const skin = new TyreSkin(car.frame, mesh, car.deform.restSkin, true);
+    const lift = CLASSES[carClass(car)].lift;
+    car.group.updateMatrixWorld(true);
+    expect(skin.unheldSerial(), "before any hold").toBe(-1);
+    skin.hold(car.group, car.wheels, 0, lift, true);
+    const written = skin.unheldSerial();
+    expect(written, "a hold with the skin written").toBeGreaterThanOrEqual(0);
+    const toMesh = new THREE.Matrix4().multiplyMatrices(car.group.matrixWorld.clone().invert(), mesh.matrixWorld).invert();
+    const positions = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const held = Array.from(skin["over"][FRONT_RIGHT_WHEEL]!).findIndex((rest) => !Number.isNaN(rest));
+    expect(held, "fixture: a skin point resting over the tyre").toBeGreaterThanOrEqual(0);
+    const place = new THREE.Vector3();
+    for (let vertex = 0; vertex < positions.count; vertex++) {
+      place.fromArray(vertex === held ? HELD_POINT : FAR_POINT);
+      if (vertex !== held) place.set(place.x + FAR_SPREAD_X * (vertex % 5), place.y, place.z + FAR_SPREAD_Z * (vertex % FAR_SPREAD_COUNT));
+      place.applyMatrix4(toMesh);
+      positions.setXYZ(vertex, place.x, place.y, place.z);
+    }
+    skin.hold(car.group, car.wheels, 0, lift, true);
+    expect(skin.unheldSerial(), "a second skin write").toBeGreaterThan(written);
+    const afterWrite = skin.unheldSerial();
+    skin.rewritten();
+    skin.hold(car.group, car.wheels, 0, lift, false);
+    expect(skin.unheldSerial(), "a skin rewritten outside the writer").toBeGreaterThan(afterWrite);
+    const settled = skin.unheldSerial();
+    const version = positions.version;
+    car.wheels[FRONT_RIGHT_WHEEL]!.position.y += 5 * GRID_STEP_M;
+    car.group.updateMatrixWorld(true);
+    skin.hold(car.group, car.wheels, 0, lift, false);
+    expect(positions.version, "the wheel's move relifted the drawn skin").toBeGreaterThan(version);
+    expect(skin.unheldSerial(), "the written skin stands").toBe(settled);
+  });
+});
+
 /** The tyre's sag clearance (`SAG_CLEAR`): a corner the tyre does not carry rises to it over the tyre's surface at its own place and no further. */
 const SAG_CLEAR_M = 0.01;
 /** Where the deep corner is driven into the tyre's front: this share of the radius ahead of the hub, and this far (m) under it. */

@@ -322,6 +322,7 @@ export class TyreSkin {
   /** The skin as last written, which every hold starts from. */
   private readonly written: Float32Array;
   private hasWritten = false;
+  private writes = 0;
   private normalsRewritten = false;
   /** Whether the last hold moved any drawn point: until one does, the drawn skin is `written` as it stands, and nothing need be put back, re-shaded or re-uploaded. */
   private held = false;
@@ -403,6 +404,11 @@ export class TyreSkin {
   /** The skin as last written, before this hold lifted any of it; null until a hold has read one. */
   get unheld(): Float32Array | null {
     return this.hasWritten ? this.written : null;
+  }
+
+  /** How many times the written skin (`unheld`) has been replaced, -1 before any: a lift laid over it never moves it. */
+  unheldSerial(): number {
+    return this.hasWritten ? this.writes : -1;
   }
 
   /** The mesh's positions were rewritten outside the writer (a reset, a net or replay state): the next hold starts from them, not from the skin it kept, and a lift a hidden car owed (noted on the old skin) is dropped, never laid over the new one. */
@@ -572,6 +578,7 @@ export class TyreSkin {
     wheelMoved ||= fadeMoved;
     if (fresh) {
       this.written.set(pos);
+      this.writes++;
       this.hasWritten = true;
       this.crushed = movedOffRest(this.written, this.rest);
     }
