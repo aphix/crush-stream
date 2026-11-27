@@ -59,14 +59,15 @@ export function applyDents(d: DentState, object: THREE.Object3D): void {
   while (d.applied < d.count) carve(d, object, d.applied++ * 4);
 }
 
-/** The part's meshes and their positions before the first dent (once per part, on its first dent). */
+/** The part's meshes and their positions before the first dent (once per part, on its first dent); a torn seat's clone starts from its seat's drawn shape. */
 function captureMeshes(d: DentState, object: THREE.Object3D): void {
   d.meshes = [];
   object.traverse((o) => {
     const m = o as THREE.Mesh;
     if (m.isMesh && !(m as THREE.InstancedMesh).isInstancedMesh) d.meshes!.push(m);
   });
-  d.rest = d.meshes.map((m) => Float32Array.from((m.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array));
+  // A seat's torn clone is also in the traverse of another part's dents (a door's mirror): its rest is the seat's drawn shape, not whatever the other part carved first, so every clear puts it back the same.
+  d.rest = d.meshes.map((m) => Float32Array.from(((m.parent instanceof PartSeat ? m.parent.drawn : m.geometry).getAttribute("position") as THREE.BufferAttribute).array as Float32Array));
 }
 
 /** Put the skin back as it was before the first dent, its record of hits empty as a new part's. */
@@ -91,6 +92,12 @@ function frameOffset(m: THREE.Mesh, object: THREE.Object3D): THREE.Vector3 {
   return frame === object ? _zero : frame.position;
 }
 
+/** Whether `m` still hangs under `object`: a mirror's clone that tore off the door is another part's now, and no contact of this one's is on it. */
+function under(m: THREE.Object3D, object: THREE.Object3D): boolean {
+  for (let o: THREE.Object3D | null = m; o; o = o.parent) if (o === object) return true;
+  return false;
+}
+
 function carve(d: DentState, object: THREE.Object3D, o: number): void {
   const nx = d.hits[o]!;
   const ny = d.hits[o + 1]!;
@@ -104,6 +111,7 @@ function carve(d: DentState, object: THREE.Object3D, o: number): void {
   const meshes = d.meshes!;
   for (let mi = 0; mi < meshes.length; mi++) {
     const m = meshes[mi]!;
+    if (!under(m, object)) continue;
     const a = (m.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
     const off = frameOffset(m, object);
     for (let i = 0; i < a.length; i += 3) {
@@ -121,6 +129,7 @@ function carve(d: DentState, object: THREE.Object3D, o: number): void {
   }
   for (let k = 0; k < meshes.length; k++) {
     const m = meshes[k]!;
+    if (!under(m, object)) continue;
     const attr = m.geometry.getAttribute("position") as THREE.BufferAttribute;
     const a = attr.array as Float32Array;
     const rest = d.rest![k]!;
