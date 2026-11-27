@@ -234,48 +234,78 @@ type RestEdges = { weld: Int32Array; start: Int32Array; to: Int32Array; drop: Fl
 function restEdges(rest: Float32Array, index: THREE.BufferAttribute | null): RestEdges {
   const count = rest.length / 3;
   const weld = new Int32Array(count);
-  const firstAt = new Map<string, number>();
-  const points: number[] = [];
+  // A point is its first vertex's position, welded by exact value (-0 with 0): an open-addressed table of point numbers, probed in a power of two at least twice the vertices.
+  const bits = new Uint32Array(rest.buffer, rest.byteOffset, rest.length);
+  const mask = (1 << (32 - Math.clz32(Math.max(8, 2 * count) - 1))) - 1;
+  const table = new Int32Array(mask + 1).fill(-1);
+  const points = new Int32Array(count);
+  let found = 0;
   for (let v = 0; v < count; v++) {
-    const key = `${rest[v * 3]},${rest[v * 3 + 1]},${rest[v * 3 + 2]}`;
-    const known = firstAt.get(key);
-    if (known !== undefined) {
-      weld[v] = known;
-      continue;
+    const o = v * 3;
+    const x = rest[o]!;
+    const y = rest[o + 1]!;
+    const z = rest[o + 2]!;
+    let slot = (Math.imul(Math.imul(Math.imul(x === 0 ? 0 : bits[o]!, 0x9e3779b1) ^ (y === 0 ? 0 : bits[o + 1]!), 0x85ebca6b) ^ (z === 0 ? 0 : bits[o + 2]!), 0xc2b2ae35) >>> 7) & mask;
+    for (;;) {
+      const p = table[slot]!;
+      if (p < 0) {
+        table[slot] = found;
+        weld[v] = found;
+        points[found++] = v;
+        break;
+      }
+      const at = points[p]! * 3;
+      if (rest[at] === x && rest[at + 1] === y && rest[at + 2] === z) {
+        weld[v] = p;
+        break;
+      }
+      slot = (slot + 1) & mask;
     }
-    weld[v] = points.length;
-    firstAt.set(key, points.length);
-    points.push(v);
   }
-  const up: number[][] = points.map(() => []);
+  // The upward edges (lower point, higher point), in triangle order, then grouped by lower point (CSR) in that order.
   const corners = index ? index.count : count;
+  const lows = new Int32Array(corners);
+  const highs = new Int32Array(corners);
+  const upStart = new Int32Array(found + 1);
+  let edges = 0;
   for (let t = 0; t + 2 < corners; t += 3) {
     for (let k = 0; k < 3; k++) {
       const a = weld[index ? index.getX(t + k) : t + k]!;
       const b = weld[index ? index.getX(t + ((k + 1) % 3)) : t + ((k + 1) % 3)]!;
       const ya = rest[points[a]! * 3 + 1]!;
       const yb = rest[points[b]! * 3 + 1]!;
-      if (ya < yb) up[a]!.push(b);
-      else if (yb < ya) up[b]!.push(a);
+      if (ya < yb) {
+        lows[edges] = a;
+        highs[edges++] = b;
+      } else if (yb < ya) {
+        lows[edges] = b;
+        highs[edges++] = a;
+      }
     }
   }
-  const order = Int32Array.from(points.keys()).sort((p, q) => rest[points[p]! * 3 + 1]! - rest[points[q]! * 3 + 1]!);
-  const rank = new Int32Array(points.length);
+  for (let e = 0; e < edges; e++) upStart[lows[e]! + 1]!++;
+  for (let p = 0; p < found; p++) upStart[p + 1] = upStart[p + 1]! + upStart[p]!;
+  const upFill = upStart.slice(0, found);
+  const upTo = new Int32Array(edges);
+  for (let e = 0; e < edges; e++) upTo[upFill[lows[e]!]!++] = highs[e]!;
+  const order = Int32Array.from(points.subarray(0, found).keys()).sort((p, q) => rest[points[p]! * 3 + 1]! - rest[points[q]! * 3 + 1]!);
+  const rank = new Int32Array(found);
   for (let k = 0; k < order.length; k++) rank[order[k]!] = k;
   for (let v = 0; v < count; v++) weld[v] = rank[weld[v]!]!;
-  const start = new Int32Array(points.length + 1);
-  for (let k = 0; k < order.length; k++) start[k + 1] = start[k]! + up[order[k]!]!.length;
-  const to = new Int32Array(start[points.length]!);
+  const start = new Int32Array(found + 1);
+  for (let k = 0; k < order.length; k++) start[k + 1] = start[k]! + upStart[order[k]! + 1]! - upStart[order[k]!]!;
+  const to = new Int32Array(start[found]!);
   const drop = new Float32Array(to.length);
   for (let k = 0; k < order.length; k++) {
     const p = order[k]!;
     const from = points[p]! * 3;
-    for (let e = 0; e < up[p]!.length; e++) {
-      const q = up[p]![e]!;
+    for (let e = upStart[p]!; e < upStart[p + 1]!; e++) {
+      const q = upTo[e]!;
       const at = points[q]! * 3;
-      to[start[k]! + e] = rank[q]!;
+      const slot = start[k]! + e - upStart[p]!;
+      to[slot] = rank[q]!;
       const rise = rest[at + 1]! - rest[from + 1]!;
-      drop[start[k]! + e] = Math.max((1 - ROW_KEEP) * rise, SPREAD * hypot3(rest[at]! - rest[from]!, rise, rest[at + 2]! - rest[from + 2]!));
+      drop[slot] = Math.max((1 - ROW_KEEP) * rise, SPREAD * hypot3(rest[at]! - rest[from]!, rise, rest[at + 2]! - rest[from + 2]!));
     }
   }
   return { weld, start, to, drop };
