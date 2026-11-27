@@ -3,10 +3,11 @@ import { computeNormalsNear } from "../deform/fast-normals.ts";
 import { skinKernel, type SkinKernel } from "../deform/skin-kernel.ts";
 import type { SagSkin } from "../deform/tyre-sag-kernel.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
+import { restEdges, type RestEdges } from "./car-tyre-skin-edges.ts";
 import type { CarFrame } from "./car-rig.ts";
 import type { PartSeat } from "./part-geometry.ts";
 import { INNER_PANEL, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
-import { admitCarried, capAtRest, carryLift, clearOver, DIRTY_WORD, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, poseWithin, REACH, ROW_KEEP, type Carried } from "./tyre-carried.ts";
+import { admitCarried, capAtRest, carryLift, clearOver, DIRTY_WORD, findCaps, FALL, HELD_ELEMENTS, newCarried, onGrid, poseWithin, REACH, type Carried } from "./tyre-carried.ts";
 
 /** How far (m) a held skin point stands over the tyre: the triangles between held points sag under their chords (edges up to 25 cm over a tyre). */
 const TYRE_GAP = 0.05;
@@ -222,93 +223,6 @@ function sagFloor(pos: Float32Array, a: number, b: number, c: number, ya: number
   const toB = gx * (pos[b]! - cx) + gy * (yb - cy) + gz * (pos[b + 2]! - cz);
   const toC = gx * (pos[c]! - cx) + gy * (yc - cy) + gz * (pos[c + 2]! - cz);
   return clear + Math.min(toA, toB, toC);
-}
-
-/** How fast (m per m of rest distance) a carried lift falls off along the skin at least: past the rows above a held point it spreads a hand's width, where a near-flat deck would carry it whole. */
-const SPREAD = 0.5;
-
-/** A mesh's edges between distinct rest points (a crease's copies welded into one), each from its lower end to its higher one. The points are numbered lowest first, so an edge always leads to a higher number. */
-type RestEdges = { weld: Int32Array; start: Int32Array; to: Int32Array; drop: Float32Array };
-
-/** The upward edges of the mesh over `rest` (`index` its triangles); `drop`: how much of a lift the higher end may stand short of it (`ROW_KEEP`, `SPREAD`). */
-function restEdges(rest: Float32Array, index: THREE.BufferAttribute | null): RestEdges {
-  const count = rest.length / 3;
-  const weld = new Int32Array(count);
-  // A point is its first vertex's position, welded by exact value (-0 with 0): an open-addressed table of point numbers, probed in a power of two at least twice the vertices.
-  const bits = new Uint32Array(rest.buffer, rest.byteOffset, rest.length);
-  const mask = (1 << (32 - Math.clz32(Math.max(8, 2 * count) - 1))) - 1;
-  const table = new Int32Array(mask + 1).fill(-1);
-  const points = new Int32Array(count);
-  let found = 0;
-  for (let v = 0; v < count; v++) {
-    const o = v * 3;
-    const x = rest[o]!;
-    const y = rest[o + 1]!;
-    const z = rest[o + 2]!;
-    let slot = (Math.imul(Math.imul(Math.imul(x === 0 ? 0 : bits[o]!, 0x9e3779b1) ^ (y === 0 ? 0 : bits[o + 1]!), 0x85ebca6b) ^ (z === 0 ? 0 : bits[o + 2]!), 0xc2b2ae35) >>> 7) & mask;
-    for (;;) {
-      const p = table[slot]!;
-      if (p < 0) {
-        table[slot] = found;
-        weld[v] = found;
-        points[found++] = v;
-        break;
-      }
-      const at = points[p]! * 3;
-      if (rest[at] === x && rest[at + 1] === y && rest[at + 2] === z) {
-        weld[v] = p;
-        break;
-      }
-      slot = (slot + 1) & mask;
-    }
-  }
-  // The upward edges (lower point, higher point), in triangle order, then grouped by lower point (CSR) in that order.
-  const corners = index ? index.count : count;
-  const lows = new Int32Array(corners);
-  const highs = new Int32Array(corners);
-  const upStart = new Int32Array(found + 1);
-  let edges = 0;
-  for (let t = 0; t + 2 < corners; t += 3) {
-    for (let k = 0; k < 3; k++) {
-      const a = weld[index ? index.getX(t + k) : t + k]!;
-      const b = weld[index ? index.getX(t + ((k + 1) % 3)) : t + ((k + 1) % 3)]!;
-      const ya = rest[points[a]! * 3 + 1]!;
-      const yb = rest[points[b]! * 3 + 1]!;
-      if (ya < yb) {
-        lows[edges] = a;
-        highs[edges++] = b;
-      } else if (yb < ya) {
-        lows[edges] = b;
-        highs[edges++] = a;
-      }
-    }
-  }
-  for (let e = 0; e < edges; e++) upStart[lows[e]! + 1]!++;
-  for (let p = 0; p < found; p++) upStart[p + 1] = upStart[p + 1]! + upStart[p]!;
-  const upFill = upStart.slice(0, found);
-  const upTo = new Int32Array(edges);
-  for (let e = 0; e < edges; e++) upTo[upFill[lows[e]!]!++] = highs[e]!;
-  const order = Int32Array.from(points.subarray(0, found).keys()).sort((p, q) => rest[points[p]! * 3 + 1]! - rest[points[q]! * 3 + 1]!);
-  const rank = new Int32Array(found);
-  for (let k = 0; k < order.length; k++) rank[order[k]!] = k;
-  for (let v = 0; v < count; v++) weld[v] = rank[weld[v]!]!;
-  const start = new Int32Array(found + 1);
-  for (let k = 0; k < order.length; k++) start[k + 1] = start[k]! + upStart[order[k]! + 1]! - upStart[order[k]!]!;
-  const to = new Int32Array(start[found]!);
-  const drop = new Float32Array(to.length);
-  for (let k = 0; k < order.length; k++) {
-    const p = order[k]!;
-    const from = points[p]! * 3;
-    for (let e = upStart[p]!; e < upStart[p + 1]!; e++) {
-      const q = upTo[e]!;
-      const at = points[q]! * 3;
-      const slot = start[k]! + e - upStart[p]!;
-      to[slot] = rank[q]!;
-      const rise = rest[at + 1]! - rest[from + 1]!;
-      drop[slot] = Math.max((1 - ROW_KEEP) * rise, SPREAD * hypot3(rest[at]! - rest[from]!, rise, rest[at + 2]! - rest[from + 2]!));
-    }
-  }
-  return { weld, start, to, drop };
 }
 
 /** Each welded point's neighbours over every edge of the mesh (CSR, `start`/`to`), and `rep`, a vertex standing for each point. */
