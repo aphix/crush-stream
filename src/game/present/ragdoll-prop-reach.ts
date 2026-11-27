@@ -1,4 +1,7 @@
 import type { RigidBody, World } from "@dimforge/rapier3d-simd";
+
+/** What `PropReach` asks of the props: prop `i` in the world or out of it. */
+type PropOwner = { inWorld(i: number, on: boolean): void };
 import { readTranslation } from "../kernel/rapier.ts";
 
 /**
@@ -48,30 +51,27 @@ export class PropReach {
     this.on = new Uint8Array(count).fill(1);
   }
 
-  /** Every standing body back in the world as at the build, and no sweep watched: a new run, or the gate turned off. */
-  restore(bodies: readonly (RigidBody | null)[]): void {
-    for (let i = 0; i < bodies.length; i++) if (this.on[i] === 0) bodies[i]?.setEnabled(true);
+  /** Every standing prop back in the world as at the build, and no sweep watched: a new run, or the gate turned off. */
+  restore(owner: PropOwner): void {
+    for (let i = 0; i < this.on.length; i++) if (this.on[i] === 0) owner.inWorld(i, true);
     this.on.fill(1);
     this.watching = false;
   }
 
-  /** Prop `i`'s `body` is in the world: it is about to fly. */
-  wake(i: number, body: RigidBody): void {
-    if (this.on[i] === 1) return;
-    body.setEnabled(true);
+  /** Prop `i` is in the world: it is about to fly. */
+  wake(i: number): void {
     this.on[i] = 1;
   }
 
   /** Before a frame's steps: every prop whose `state` is `standing` in the world or out of it by the nearest moving body, `placed` giving where it stands. */
-  tend(world: World, bodies: readonly (RigidBody | null)[], state: Uint8Array, standing: number, placed: readonly { x: number; z: number }[]): void {
+  tend(world: World, owner: PropOwner, knockable: Uint8Array, state: Uint8Array, standing: number, placed: readonly { x: number; z: number }[]): void {
     this.movers = 0;
     // Rapier's `RigidBodySet.forEach`, not an array's: the one walk of the set that makes nothing.
     // oxlint-disable-next-line unicorn/no-array-for-each
     world.bodies.forEach(this.visit);
     const all = this.movers > MAX_MOVERS;
-    for (let i = 0; i < bodies.length; i++) {
-      const body = bodies[i];
-      if (!body || state[i] !== standing) continue;
+    for (let i = 0; i < placed.length; i++) {
+      if (knockable[i] !== 1 || state[i] !== standing) continue;
       let near = all;
       if (!near) {
         const reach = this.on[i] === 1 ? REACH_OFF : REACH_ON;
@@ -96,7 +96,7 @@ export class PropReach {
       }
       const want = near ? 1 : 0;
       if (want === this.on[i]) continue;
-      body.setEnabled(near);
+      owner.inWorld(i, near);
       this.on[i] = want;
     }
   }
