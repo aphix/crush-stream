@@ -1384,6 +1384,7 @@ export class CrashEngine extends EngineGarage {
       this.seated.mesh.timeScale = rate;
       // A clip's own hits ride its record (`ClipPartHit`): its replayed dummies' world strikes nothing.
       lapPart(PART.rest);
+      this.ragdolls.gateProps(this.deviceClass !== "desktop" && this.showOpenWorld);
       this.ragdolls.update(simDt, cars, !this.net.client && reelDt === null, sandbox, this.barrierUp ? this.barrier.group : null);
       lapPart(PART.ragdoll);
       for (let i = 0; i < cars.length; i++) {

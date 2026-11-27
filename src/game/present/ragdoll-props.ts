@@ -245,6 +245,8 @@ export class PropBodies {
    * each frame and cleared by `advance`); sim s since its knock, half its height (m).
    */
   private state = new Uint8Array(0);
+  /** Per placement: 1 for a knockable prop, whose standing body `inWorld` makes and takes. */
+  private knockable = new Uint8Array(0);
   private kick = new Float32Array(0);
   private by = new Int16Array(0);
   private held = new Uint8Array(0);
@@ -276,6 +278,7 @@ export class PropBodies {
   private patchOf = new Int16Array(0);
   /** Which standing bodies are in the world (`PropReach`). */
   private readonly gated = new PropReach();
+  private gatingOn = false;
   private readonly groups: (car: number) => number;
   private readonly footGroups: number;
   private readonly grace: number;
@@ -316,6 +319,7 @@ export class PropBodies {
     this.feet = Array.from({ length: n }, () => []);
     this.own = Array.from({ length: n }, () => []);
     this.state = new Uint8Array(n);
+    this.knockable = Uint8Array.from(placed, (p) => (PREFABS[p.prefab].body === "knock" ? 1 : 0));
     this.kick = new Float32Array(n * 3);
     this.by = new Int16Array(n);
     this.held = new Uint8Array(n);
@@ -354,6 +358,7 @@ export class PropBodies {
     for (let k = 0; k < this.count; k++) this.stand(this.out[k]!);
     this.count = 0;
     this.state.fill(STAND);
+    if (this.built) this.gated.restore(this);
     this.freePatches();
     this.draw?.reset();
   }
@@ -394,8 +399,10 @@ export class PropBodies {
    * lay. False while its bodies are not built (no Rapier yet, or its scene's ground is not the active one).
    */
   throwFrom(i: number, at: THREE.Vector3, vx: number, vy: number, vz: number): boolean {
-    const body = this.bodies[i];
-    if (!this.built || !body) return false;
+    if (!this.built || this.knockable[i] !== 1) return false;
+    this.inWorld(i, true);
+    this.gated.wake(i);
+    const body = this.bodies[i]!;
     body.setTranslation(at, false);
     if (this.state[i] === OUT) {
       const o = i * 7;
@@ -572,14 +579,21 @@ export class PropBodies {
     this.regroup(i, car);
   }
 
+  /** Whether the standing bodies are kept in the world only near a moving body (`PropReach`); off, every one is in. A phone in the open world turns it on. */
+  gating(on: boolean): void {
+    if (on === this.gatingOn) return;
+    this.gatingOn = on;
+    if (!on && this.built) this.gated.restore(this);
+  }
+
   /** Before a frame's steps: the standing bodies in the world are the ones a moving body is near. */
   gate(): void {
-    if (this.built) this.gated.tend(this.world!, this.bodies, this.state, STAND, this.placed);
+    if (this.built && this.gatingOn) this.gated.tend(this.world!, this, this.knockable, this.state, STAND, this.placed);
   }
 
   /** The camera's sweep from (`ax`, `az`) to (`bx`, `bz`) this frame: the standing props near it are in the world from the next frame's steps, before its next sweep is cast. */
   watch(ax: number, az: number, bx: number, bz: number): void {
-    this.gated.watch(ax, az, bx, bz);
+    if (this.gatingOn) this.gated.watch(ax, az, bx, bz);
   }
 
   /** Is every knocked prop asleep? */
@@ -734,20 +748,37 @@ export class PropBodies {
 
   /** The standing bodies: each knockable placement fixed on its spot in its footprint, its own shape there but meeting nothing. */
   private build(): void {
+    this.gated.reset(this.placed.length);
+    for (let i = 0; i < this.placed.length; i++) if (this.knockable[i] === 1) this.make(i);
+    this.built = true;
+  }
+
+  /** Standing prop `i`'s fixed body, its footprint and its own shape, made and on its spot. */
+  private make(i: number): void {
     const R = this.R!;
     const world = this.world!;
-    for (const [i, p] of this.placed.entries()) {
-      if (PREFABS[p.prefab].body !== "knock") continue;
-      const pieces = propColliders([p]);
-      const body = world.createRigidBody(R.RigidBodyDesc.fixed().setLinearDamping(AIR_LINEAR).setAngularDamping(AIR_ANGULAR).setSoftCcdPrediction(SOFT_CCD).setCcdEnabled(true));
-      this.bodies[i] = body;
-      this.feet[i] = pieces.map((c) => world.createCollider(footprint(R, c, p, this.half[i]!).setCollisionGroups(this.footGroups), body));
-      const { descs, volume } = shapes(R, p);
-      this.own[i] = descs.map((d) => world.createCollider(d.setDensity(pieces[0]!.mass / volume).setFriction(FRICTION).setRestitution(0).setCollisionGroups(NONE), body));
-      this.stand(i);
+    const p = this.placed[i]!;
+    const pieces = propColliders([p]);
+    const body = world.createRigidBody(R.RigidBodyDesc.fixed().setLinearDamping(AIR_LINEAR).setAngularDamping(AIR_ANGULAR).setSoftCcdPrediction(SOFT_CCD).setCcdEnabled(true));
+    this.bodies[i] = body;
+    this.feet[i] = pieces.map((c) => world.createCollider(footprint(R, c, p, this.half[i]!).setCollisionGroups(this.footGroups), body));
+    const { descs, volume } = shapes(R, p);
+    this.own[i] = descs.map((d) => world.createCollider(d.setDensity(pieces[0]!.mass / volume).setFriction(FRICTION).setRestitution(0).setCollisionGroups(NONE), body));
+    this.stand(i);
+  }
+
+  /** Standing prop `i` in the world (made) or out of it (taken): Rapier panics in a step after a body is disabled, so a far prop is taken out and made again. */
+  inWorld(i: number, on: boolean): void {
+    if (on) {
+      if (this.bodies[i] === null) this.make(i);
+      return;
     }
-    this.gated.reset(this.placed.length);
-    this.built = true;
+    const body = this.bodies[i];
+    if (!body) return;
+    this.world!.removeRigidBody(body);
+    this.bodies[i] = null;
+    this.feet[i] = [];
+    this.own[i] = [];
   }
 
   private unbuild(): void {
@@ -785,9 +816,10 @@ export class PropBodies {
 
   /** Prop `i` flies from where it is at its knock's velocity (as a car's bumper drives it, `spin`), clear of the car that knocked it for `grace`. */
   private fly(i: number): void {
-    const body = this.bodies[i];
-    if (!body) return;
-    this.gated.wake(i, body);
+    if (this.knockable[i] !== 1) return;
+    this.inWorld(i, true);
+    this.gated.wake(i);
+    const body = this.bodies[i]!;
     let vx = this.kick[i * 3]!;
     const vy = this.kick[i * 3 + 1]!;
     let vz = this.kick[i * 3 + 2]!;
