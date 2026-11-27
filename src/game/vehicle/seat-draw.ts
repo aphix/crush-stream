@@ -39,6 +39,8 @@ export class SeatDraw {
   private builtCount = 0;
   private readonly attributes: readonly string[];
   private room = { vertices: 0, indices: 0 };
+  /** Per buffer (`attributes`, the seat rows, the index), where the writes three has not uploaded yet begin (an item, Infinity: none): a rebuild marks only the seats it moved, and a buffer resets when three's upload of it calls back. */
+  private readonly pending: Float64Array;
   /** `seated` materials by their base. */
   private readonly flat = new Map<THREE.Material, THREE.Material>();
 
@@ -52,6 +54,7 @@ export class SeatDraw {
     this.packed = new Int32Array(capacity);
     this.built = new Int32Array(capacity);
     this.attributes = ["position", "normal", "uv", "color", ...(look === "tint" ? [PAINTED_ATTRIBUTE] : [])];
+    this.pending = new Float64Array(this.attributes.length + 2).fill(Infinity);
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), seatMaterial(material, this.texture, look));
     // Seats span the pad and move every frame; a stale bound would cull live ones.
     this.mesh.frustumCulled = false;
@@ -145,6 +148,7 @@ export class SeatDraw {
     return m;
   }
 
+  /** Rewrites the geometry for the packed seats from the first seat that differs from the built ones: the seats before it keep their bytes, offsets and seat rows. */
   private rebuild(n: number): void {
     let vertices = 0;
     let indices = 0;
@@ -153,13 +157,22 @@ export class SeatDraw {
       vertices += g.getAttribute("position")?.count ?? 0;
       indices += g.index?.count ?? 0;
     }
+    let first = 0;
     if (vertices > this.room.vertices || indices > this.room.indices) this.grow(vertices, indices);
+    else for (const shared = Math.min(n, this.builtCount); first < shared && this.packed[first] === this.built[first]; ) first++;
     const geo = this.mesh.geometry;
     const seat = geo.getAttribute(SEAT_ATTRIBUTE).array as Float32Array;
     const index = geo.index!.array as Uint32Array;
     let v = 0;
     let k = 0;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < first; i++) {
+      const g = this.variants[this.packed[i]!]!;
+      v += g.getAttribute("position")?.count ?? 0;
+      k += g.index?.count ?? 0;
+    }
+    const v0 = v;
+    const k0 = k;
+    for (let i = first; i < n; i++) {
       this.built[i] = this.packed[i]!;
       const g = this.variants[this.packed[i]!]!;
       const count = g.getAttribute("position")?.count ?? 0;
@@ -175,9 +188,17 @@ export class SeatDraw {
       k += src.length;
     }
     this.builtCount = n;
-    for (const name of [...this.attributes, SEAT_ATTRIBUTE]) upload(geo.getAttribute(name) as THREE.BufferAttribute, v);
-    upload(geo.index!, k);
+    const names = [...this.attributes, SEAT_ATTRIBUTE];
+    for (let b = 0; b < names.length; b++) this.mark(b, geo.getAttribute(names[b]!) as THREE.BufferAttribute, v0, v);
+    this.mark(names.length, geo.index!, k0, k);
     geo.setDrawRange(0, k);
+  }
+
+  /** Items `from` to `to` of buffer `b` (`pending`) were written: it uploads from the earliest write three has not taken yet. */
+  private mark(b: number, attr: THREE.BufferAttribute, from: number, to: number): void {
+    if (to <= from) return;
+    this.pending[b] = Math.min(this.pending[b]!, from);
+    upload(attr, this.pending[b]!, to);
   }
 
   /** A fresh geometry with room for `vertices` and `indices` and then some (a GL buffer never grows in place). Its buffers keep three's
@@ -186,9 +207,17 @@ export class SeatDraw {
     this.room = { vertices: Math.ceil(vertices * SEAT_GROW), indices: Math.ceil(indices * SEAT_GROW) };
     const geo = new THREE.BufferGeometry();
     const sizes = { position: 3, normal: 3, uv: 2, color: 3, [PAINTED_ATTRIBUTE]: 1 } as Record<string, number>;
-    for (const name of this.attributes) geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(this.room.vertices * sizes[name]!), sizes[name]!));
-    geo.setAttribute(SEAT_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(this.room.vertices), 1));
-    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(this.room.indices), 1));
+    const names = [...this.attributes, SEAT_ATTRIBUTE];
+    for (let b = 0; b < names.length; b++) {
+      const size = sizes[names[b]!] ?? 1;
+      geo.setAttribute(names[b]!, new THREE.BufferAttribute(new Float32Array(this.room.vertices * size), size).onUpload(() => {
+          this.pending[b] = Infinity;
+        }));
+    }
+    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(this.room.indices), 1).onUpload(() => {
+        this.pending[names.length] = Infinity;
+      }));
+    this.pending.fill(Infinity);
     geo.setDrawRange(0, 0);
     this.mesh.geometry.dispose();
     this.mesh.geometry = geo;
@@ -203,10 +232,10 @@ export class SeatDraw {
   }
 }
 
-/** Mark the first `items` items of `attr` for upload. */
-function upload(attr: THREE.BufferAttribute, items: number): void {
+/** Mark items `from` to `to` of `attr` for upload. */
+function upload(attr: THREE.BufferAttribute, from: number, to: number): void {
   attr.clearUpdateRanges();
-  attr.addUpdateRange(0, items * attr.itemSize);
+  attr.addUpdateRange(from * attr.itemSize, (to - from) * attr.itemSize);
   attr.needsUpdate = true;
 }
 

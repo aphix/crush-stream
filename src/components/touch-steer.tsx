@@ -213,12 +213,23 @@ function Slider({ engine, onArm }: SteerProps) {
  */
 function TiltBar({ engine, tilt, onArm, steerLive }: SteerProps & { tilt: TiltSettings; steerLive: () => boolean }) {
   const marker = useRef<HTMLDivElement>(null);
+  /** The bar's width, kept by a resize observer: reading `offsetWidth` in each orientation event forced a layout after the previous event's transform write. */
+  const barWidth = useRef(0);
   const { available, recentre } = useTilt(true, tilt, (steer) => {
     const t = engine.current?.touch;
     if (t) t.x = steerLive() ? steer : 0;
-    const bar = marker.current?.parentElement;
-    if (marker.current && bar) marker.current.style.transform = `translateX(${steer * markerTravel(bar.offsetWidth)}px)`;
+    if (marker.current) marker.current.style.transform = `translateX(${steer * markerTravel(barWidth.current)}px)`;
   });
+  useEffect(() => {
+    const bar = marker.current?.parentElement;
+    if (!bar) return;
+    barWidth.current = bar.offsetWidth;
+    const watch = new ResizeObserver(() => {
+      barWidth.current = bar.offsetWidth;
+    });
+    watch.observe(bar);
+    return () => watch.disconnect();
+  }, [available]);
   if (!available) {
     return (
       <div data-touch-control="steer" data-keep-idle className={cn(BAR, "pointer-events-none flex items-center justify-center")} style={TILT_BAR_SIZE}>
