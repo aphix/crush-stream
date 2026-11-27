@@ -49,7 +49,6 @@ export abstract class DeformHit extends DeformRig {
    */
   beginSlice(dt: number, share = 1): void {
     this.sliceDt = dt;
-    this.push.share = share;
     this.sliceTouch = 0;
     this.solidHold[2] = this.solidHold[0]!;
     this.solidHold[3] = this.solidHold[1]!;
@@ -60,6 +59,7 @@ export abstract class DeformHit extends DeformRig {
       this.sliceAt = -1.5;
       this.push.reset();
     }
+    this.push.share = share;
   }
 
   endSlice(): void {

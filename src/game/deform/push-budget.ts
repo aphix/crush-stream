@@ -40,6 +40,7 @@ export class PushBudget {
     this.x = 0;
     this.z = 0;
     this.at = -1;
+    this.share = 1;
   }
 
   private open(elapsed: number): void {
