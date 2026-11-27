@@ -1702,7 +1702,8 @@ const SIM_DIGEST_BY_STYLE = [
   // crush, its push off the slab cut to what the nose carries; now the nose holds and its masses after the hit differ (d43fea4a... -> 350367f4...); the other six unchanged.
   // Again when a cluster's turn is clamped about the cloud's own turn, not the world's axes (REPLAY 218): the monster's masses after the wall hit moved; the other six unchanged (71f30dab... -> 9727579f...).
   // Again for the same REPLAY 223 rules (a settled wreck held whole, a capped mass stopped): the monster's masses after the wall hit moved (9727579f... -> c8deb0c9...).
-  { id: "monster", digest: "c8deb0c9b60ec580b03be3c67f049febc435ed2c8925613b9a26c61cb8a6dfb2" },
+  // Again for the drift ceiling shared by a step's slices (`PushBudget.share`, REPLAY 256): the monster's masses after the wall hit moved (c8deb0c9... -> 028b9e45...); the other six unchanged.
+  { id: "monster", digest: "028b9e454f2afa75448975e0983f10459d044e1ca9a4561111373eb760ac2594" },
   // Every style re-pinned with its bumpers in the cage (`CageSource.apart`), each a window of its own (`CageFields.part`): the cage's nose and tail meet the drawn bumper faces.
   // Again for each bumper's bottom corner held in its decimation (`bumperCorner`) and `frame.hullUnder`'s bumper rows standing on it: sedan 32ce12d9 -> 18748cc4, hatchback 05034364 -> 3a8ae274, wagon 14004d19 -> 8c803d8e, coupe a8bbcc35 -> 2f4d595f, pickup 87ed8880 -> 6506a0dd, police 30a73a14 -> b9cb6cec, monster 1417aa98 -> 0227b53d.
   // The coupe and the pickup again for the hood's fold (`HingeSpec.fold`: a crushed hood buckles into a ridge, no rigid turn of the whole lid): their noses' wall hit; the other five styles are byte-identical.
