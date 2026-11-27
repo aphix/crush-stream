@@ -140,7 +140,7 @@ describe("given wheels over a patchwork of steps and edges", () => {
   });
 
   // mutation: sed -i 's/^const TREAD_MISS = 1e-3;/const TREAD_MISS = 1e-4;/' src/game/world/surfaces.ts
-  it("when a wheel stands on ground whose slope turns by 0.04 m/m (a tread's tenth to a millimetre of arc over its ring bottom), then only its five ring bottoms and its hub ask the ground", () => {
+  it("when a wheel stands on ground whose slope turns by 0.04 m/m along each axis (a tread's tenth to a millimetre of arc over its ring bottom), then only its five ring bottoms and its hub ask the ground", () => {
     const g = new Ground();
     const N = 40;
     // A checkerboard of 0.02 m over 1 m nodes: slopes of +-0.02 side by side, a spread of 0.04 either way.
