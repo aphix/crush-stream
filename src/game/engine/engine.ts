@@ -5,6 +5,7 @@ import { COUNT, countPart, lapPart, PART } from "../kernel/frame-parts.ts";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { hidingSight, sightLine, type Occluder } from "../present/spectate-cam.ts";
+import { holdWaits } from "./skin-hold.ts";
 import { EYE_HEIGHT } from "../ai/openworld-crime/crime-constants.ts";
 import { PISTON_ORBIT_RATE, PistonBank } from "../present/engine-pistons.ts";
 import { DoorRam } from "../present/engine-doors.ts";
@@ -1507,8 +1508,9 @@ export class CrashEngine extends EngineGarage {
       const stride = car === followed ? 1 : this.skinStride(car);
       this.lodStride[i] = stride;
       car.setNearView(stride === 1);
-      car.setHoldDeferred(car !== followed && this.holdHidden(car, stride, i));
-      car.deform.skinDeferred = stride === 0 || (this.lodFrame + i) % stride !== 0;
+      const skinDeferred = stride === 0 || (this.lodFrame + i) % stride !== 0;
+      car.setHoldDeferred(car !== followed && holdWaits(this.cover, this.race, car, stride, i, skinDeferred, LOD_RADIUS));
+      car.deform.skinDeferred = skinDeferred;
     }
   }
 
@@ -1527,7 +1529,7 @@ export class CrashEngine extends EngineGarage {
       if (!owed && !car.holdOwed) continue;
       if (followed === undefined) followed = this.followedCar();
       const stride = car === followed ? 1 : this.skinStride(car);
-      car.setHoldDeferred(car !== followed && this.holdHidden(car, stride, i));
+      car.setHoldDeferred(car !== followed && holdWaits(this.cover, this.race, car, stride, i, car.deform.skinDeferred, LOD_RADIUS));
       if (owed) {
         car.setNearView(stride === 1);
         if (stride === 1 || (stride > 1 && this.lodStride[i] === 0)) car.flushDeferredSkin();
@@ -1541,15 +1543,6 @@ export class CrashEngine extends EngineGarage {
   private aimCover(newFrame: boolean): void {
     const e = this.camera.matrixWorld.elements;
     this.cover.aim(e[12]!, e[13]!, e[14]!, -e[8]!, -e[9]!, -e[10]!, newFrame);
-  }
-
-  /** Whether no camera sees `car` (list index `i`) this frame, so its tyre hold may wait: off every camera, or a wreck wholly behind a solid (`CarCover`). Needs `witness.aim` and `aimCover` this frame. */
-  private holdHidden(car: DeformableCar, stride: number, i: number): boolean {
-    if (stride === 0) return true;
-    const sight = car.panelsFollow && this.race.active ? this.race.courseSight() : null;
-    if (sight === null) return false;
-    _lodCenter.set(car.group.position.x, car.group.position.y + 0.6, car.group.position.z);
-    return this.cover.hidden(i, hidingSight(sight), _lodCenter.x, _lodCenter.y, _lodCenter.z, LOD_RADIUS);
   }
 
   /** 0 off-screen, else skin every Nth frame by projected size. Needs `witness.aim` this frame. */
