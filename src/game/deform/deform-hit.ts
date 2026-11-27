@@ -44,10 +44,12 @@ export abstract class DeformHit extends DeformRig {
   /**
    * A world slice of `dt` seconds begins. Its pair pushes, sphere shifts, structure step, re-fits and wall translations
    * share one `PushBudget` window: `stepStructure` advances the sim clock the window was keyed by, and everything after
-   * the pushes (the structure step, the re-fits, the bowl clip) was debited to the NEXT slice's, on top of a full cap.
+   * the pushes (the structure step, the re-fits, the bowl clip) was debited to the NEXT slice's, on top of a full cap. `share` is
+   * the slice's part of its step: the drift ceiling is the step's, so a step's slices together stay under the zip bound.
    */
-  beginSlice(dt: number): void {
+  beginSlice(dt: number, share = 1): void {
     this.sliceDt = dt;
+    this.push.share = share;
     this.sliceTouch = 0;
     this.solidHold[2] = this.solidHold[0]!;
     this.solidHold[3] = this.solidHold[1]!;

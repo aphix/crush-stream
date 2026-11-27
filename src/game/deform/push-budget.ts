@@ -33,6 +33,8 @@ export class PushBudget {
   x = 0;
   z = 0;
   at = -1;
+  /** The part of its step the slice in progress is (`beginSlice`): `settle`'s ceiling is `STEP_CEIL` of the whole step, not of each slice. */
+  share = 1;
 
   reset(): void {
     this.x = 0;
@@ -75,10 +77,11 @@ export class PushBudget {
 
   /**
    * The part of a drift `amount` (m) of the centroid along the unit (nx, nz) the slice still allows: a move no solver
-   * chose (the structure step's, a re-fit's: `settleDrift`). Like `take` against the larger of the cap and `STEP_CEIL`.
+   * chose (the structure step's, a re-fit's: `settleDrift`). Like `take` against the larger of the cap and this slice's `share` of `STEP_CEIL`
+   * (a step cut into slices moved a wreck `STEP_CEIL` in each: 6.6 cm in a derby step of two, against the zip bound's 3·v·h + 0.05 m).
    */
   settle(elapsed: number, nx: number, nz: number, amount: number, dt: number, touchSpeed: number): number {
-    return this.grant(elapsed, nx, nz, amount, Math.max(STEP_CEIL, PushBudget.reach(dt, touchSpeed)));
+    return this.grant(elapsed, nx, nz, amount, Math.max(STEP_CEIL * this.share, PushBudget.reach(dt, touchSpeed)));
   }
 
   /**
