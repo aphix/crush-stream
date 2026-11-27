@@ -1754,16 +1754,6 @@ export function topsTopNear(skip: number, xMin: number, xMax: number, zMin: numb
   return PLAN_BOX[BOX_TOP]!;
 }
 
-/** Whether `topsTopNear` of the box is under `limit`; no double crosses the call or comes back from it. */
-export function topsTopNearUnder(skip: number, xMin: number, xMax: number, zMin: number, zMax: number, limit: number): boolean {
-  PLAN_BOX[BOX_X0] = xMin;
-  PLAN_BOX[BOX_X1] = xMax;
-  PLAN_BOX[BOX_Z0] = zMin;
-  PLAN_BOX[BOX_Z1] = zMax;
-  topsTopNearBox(skip);
-  return PLAN_BOX[BOX_TOP]! < limit;
-}
-
 function topsTopNearBox(skip: number): void {
   const xMin = PLAN_BOX[BOX_X0]!;
   const xMax = PLAN_BOX[BOX_X1]!;
@@ -2561,7 +2551,7 @@ function buildRaster(s: Surface): void {
   s.rasterNz = nz;
 }
 
-/** What the `*Box` reads take and give through `PLAN_BOX`, so no boxed double crosses their calls: the plan box, then the answer. */
+/** What the `*Box` reads take and give through `PLAN_BOX`: the plan box, then the answer. Called with the box as arguments, the small wrappers over them inline into a hot caller, where nothing is boxed; the bodies never box. */
 const BOX_X0 = 0;
 const BOX_X1 = 1;
 const BOX_Z0 = 2;
@@ -2581,16 +2571,6 @@ export function staticTop(s: Surface, xMin: number, xMax: number, zMin: number, 
   PLAN_BOX[BOX_Z1] = zMax;
   staticTopBox(s, cellsOnly);
   return PLAN_BOX[BOX_TOP]!;
-}
-
-/** Whether `staticTop` of the box is under `limit`; no double crosses the call or comes back from it. */
-export function staticTopUnder(s: Surface, xMin: number, xMax: number, zMin: number, zMax: number, limit: number): boolean {
-  PLAN_BOX[BOX_X0] = xMin;
-  PLAN_BOX[BOX_X1] = xMax;
-  PLAN_BOX[BOX_Z0] = zMin;
-  PLAN_BOX[BOX_Z1] = zMax;
-  staticTopBox(s, false);
-  return PLAN_BOX[BOX_TOP]! < limit;
 }
 
 function staticTopBox(s: Surface, cellsOnly: boolean): void {

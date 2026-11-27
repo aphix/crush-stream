@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { answerPlanVelocity, BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_SURF, C_TOUCH, HIT_SIZE, holdNearTops, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, pointContactSolids, PQ_BODY, PQ_FLANK, PQ_MOUNT, PQ_SIZE, PQ_TOP_CAP, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, staticTopUnder, SURFACE_CUT, topsTop, topsTopLive, topsTopNear, topsTopNearUnder, treadMount, wheelContact, type Surface } from "../world/surfaces.ts";
+import { answerPlanVelocity, BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_SURF, C_TOUCH, HIT_SIZE, holdNearTops, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, pointContactSolids, PQ_BODY, PQ_FLANK, PQ_MOUNT, PQ_SIZE, PQ_TOP_CAP, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, SURFACE_CUT, topsTop, topsTopLive, topsTopNear, treadMount, wheelContact, type Surface } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, GQ } from "../world/ground-clock.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
@@ -194,7 +194,7 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
       holdNearTops(skip, pos.x, pos.z, REACH + travel);
       held = true;
     }
-    let clear = gate && (bound < low || staticTopUnder(statics, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel, low));
+    let clear = gate && (bound < low || staticTop(statics, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low);
     // `--verify`: a cage point only the tighter hill bound cleared (the bound before it, every hill's whole height, was not under `low`) is asked the old way too: what that would do is counted (`GQ.overhead`: nothing may be).
     const byHills = clear && GQ.check && !part && i < bellyFrom && !(bound < low) && !oldHillBound(statics, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel, low);
     // `--verify`: the static bound over a cage point's box is never under the ground's own height at the point (the least of it over the run, and how many points were probed).
@@ -211,7 +211,7 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
       // A wreck takes no contact row from another wreck's top (the answer is dropped below), so with `EPICENTER.wreckTops` only the other tops can keep such a point from being clear.
       if (clear && tops) {
         const reachable = i < bellyFrom;
-        clear = reachable && (wreckTops ? topsTopLive(skip, body.surf.cars, own, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low : own ? topsTopNearUnder(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel, low) : topsTop(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low);
+        clear = reachable && (wreckTops ? topsTopLive(skip, body.surf.cars, own, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low : own ? topsTopNear(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low : topsTop(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low);
         // `--verify`: a point only `wreckTops` cleared is asked the old way too, and what that would have done is counted (nothing may be: no row, no `nearing`).
         if (clear && wreckTops && GQ.check && !((own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low)) checkSkipped(GQ.wreckTops, own, px, py, pz, r);
       } else if (clear && checkTops && i < bellyFrom && !((own ? topsTopNear : topsTop)(skip, px - planTravel, px + planTravel, pz - planTravel, pz + planTravel) < low)) checkSkipped(GQ.wreckTops, own, px, py, pz, r);

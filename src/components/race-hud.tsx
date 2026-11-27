@@ -47,6 +47,7 @@ type Send = (cmd: RaceCommand) => void;
 /** A click handler that watches car `id` through the latest `send`, the same function every render: React re-assigns `onclick` (a new listener object, garbage by the thousand) whenever the prop's identity changes. */
 function useWatch(send: Send, id: number): () => void {
   const latest = useRef(send);
+  // Written in render, not in an effect: an effect per row per HUD publish costs more than the ref it saves.
   latest.current = send;
   return useCallback(() => latest.current({ type: "watch", id }), [id]);
 }
