@@ -27,13 +27,16 @@ function casts(phone: boolean, kinds: readonly string[]): { furniture: string[];
   return { furniture: [...furniture].sort(), trees };
 }
 
-const FURNITURE = [PREFAB.hydrant, PREFAB.bollard, PREFAB.litterBin, PREFAB.bench, PREFAB.bikeRack, PREFAB.newsBox, PREFAB.parkingMeter, PREFAB.cafeSet, PREFAB.dumpster, PREFAB.cellarDoor];
+const FURNITURE = [PREFAB.hydrant, PREFAB.bollard, PREFAB.litterBin, PREFAB.bench, PREFAB.bikeRack, PREFAB.newsBox, PREFAB.parkingMeter, PREFAB.cellarDoor];
+/** Large enough for its shade to show: it still casts on a phone. */
+const SHADE = [PREFAB.cafeSet, PREFAB.dumpster];
 
 describe("given the open world's course drawn for a phone and for a desktop", () => {
   // mutation: sed -i 's/ \&\& !(this.phone \&\& PHONE_NO_SHADOW.has(id)));/);/' src/game/present/track-art.ts
   it("when the art is built, then the desktop's street furniture casts shadows and the phone's casts none, while the trees cast on both", () => {
     const desktop = casts(false, FURNITURE);
     const phone = casts(true, FURNITURE);
+    expect(casts(true, SHADE).furniture.join(","), "the cafe set and the dumpster still cast on a phone").toBe("cafe-set,dumpster");
     expect(desktop.furniture.length, "control: the desktop's furniture casts").toBeGreaterThan(5);
     expect(phone.furniture, "the phone's furniture").toEqual([]);
     expect(desktop.trees && phone.trees, "trees cast on both").toBe(true);

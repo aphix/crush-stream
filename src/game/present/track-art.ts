@@ -51,10 +51,10 @@ import { StreetNameBlades } from "./street-name-blades.ts";
  */
 
 type RaceMeshKind = "road" | "runoff" | "terrain" | "wall" | "marking" | "kerb" | "deck" | "pillar" | "tunnel" | "prop";
-/** Junked shells' faded paint and rust (rust, oxide red, faded blue, cream, olive): the wreck's per-instance tint over its light grey. */
-/** Street furniture whose sun shadow a phone does not draw: on its 512 map a hydrant, bench or bin shadow moves no pixel by more than 4/255 (measured at eight views, hours 13 and 17), and each kind is one shadow draw. */
-const PHONE_NO_SHADOW: ReadonlySet<PrefabId> = new Set<PrefabId>([PREFAB.hydrant, PREFAB.bollard, PREFAB.litterBin, PREFAB.bench, PREFAB.bikeRack, PREFAB.newsBox, PREFAB.parkingMeter, PREFAB.cafeSet, PREFAB.dumpster, PREFAB.cellarDoor]);
+/** Street furniture whose sun shadow a phone does not draw: on its 512 map a hydrant, bench or bin shadow moves no pixel by more than 4/255 (measured at eight views, hours 13 and 17), and each kind is one shadow draw. Not the cafe set and the dumpster: their shade is metres across. */
+const PHONE_NO_SHADOW: ReadonlySet<PrefabId> = new Set<PrefabId>([PREFAB.hydrant, PREFAB.bollard, PREFAB.litterBin, PREFAB.bench, PREFAB.bikeRack, PREFAB.newsBox, PREFAB.parkingMeter, PREFAB.cellarDoor]);
 
+/** Junked shells' faded paint and rust (rust, oxide red, faded blue, cream, olive): the wreck's per-instance tint over its light grey. */
 const WRECK_PAINTS = [0x8a4a2a, 0x8f2f25, 0x46637f, 0xc9b994, 0x4f6141];
 
 type RaceMeshTag = { kind: RaceMeshKind; surface?: SurfaceId; prefab?: PrefabId };
