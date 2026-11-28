@@ -14,8 +14,6 @@ import { assertSameDigest } from "../vehicle/test-support.ts";
  * `activation: epicenter` against `whole` on the crash rows: the same staged hit run twice, once per mode, through the engine's own step. A wreck that
  * has sat quiet past `relockHold` is frozen (its structure step is only a clock), so what the player sees of the crash (crush depth per region,
  * the parts torn off, the engine's travel, the wheels popped) must come out as it does when every wreck runs the whole solve.
- *
- * Mutations seen (the row each one fails): `relockHold` 0.2 fails only the re-hit row (car 2's nose crush 0.022 against 0.043: the window's one-shots a freeze inside it skips show on the next hit, not the first); `thaw` leaving the cached centre and inertia fails the re-hit row (tail crush 0.004 against 0.020); `feedOverlap` without its `thaw` fails the thaw row (`epicenter-thaw.test.ts`).
  */
 
 const KPH = 1 / 3.6;
@@ -107,7 +105,6 @@ describe("given a staged hit run once per activation mode", () => {
   }
 });
 
-// Mutation: `sed -i 's|^ *const epi = stage(kind, true);$|& whole.cars[0]!.deform.masses[0]!.world.x += 1e-9;|' src/game/contact/epicenter-equivalence.test.ts` turns this row red (the keeping row writes into the whole run it hands on).
 describe("given the wall's whole-mode run the first describe kept for the nudge rows", () => {
   it("when it is made again from scratch, then every mass's world position, the body's and the results are the kept run's to the bit", () => {
     const make = () => stage("wall", false);

@@ -456,7 +456,6 @@ describe("given the real engine with its cars on the screen", () => {
     for (const material of [...paints, ...trims]) expect(material.customProgramCacheKey().includes(FINISH_KEY_MARK), `key ${material.customProgramCacheKey()}`).toBe(false);
   });
 
-  // mutation: sed -i '/^      applyCarFinish(car.group, finishForTier(this.cine.tier));/d' src/game/engine/engine.ts
   it("when the traffic stands a car in a resident's colour on the high tier, then its hood, boot and doors are finished as its body is, in that colour, and stay so when it is stood again in another", () => {
     engine.setFxTier("high");
     const car = engine["live"]()[1]!;
@@ -470,7 +469,6 @@ describe("given the real engine with its cars on the screen", () => {
     }
   });
 
-  // mutation: sed -i '/^    for (let at = 0; at < this.lookPaints.length; at++) this.lookPaints\[at\]!.roughness = r;/d' src/game/vehicle/car-core.ts
   it("when a car that wore a colour is scuffed and then reset, then its doors' roughness equals its body's both times", () => {
     const car = engine["live"]()[1]!;
     const door = (): number => (car.lookMeshes().doors[0]!.material as THREE.MeshPhysicalMaterial).roughness;

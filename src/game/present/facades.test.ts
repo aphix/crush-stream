@@ -54,7 +54,6 @@ describe("given the buildings of a course in a biome", () => {
     expect(facadeStyle(PREFAB.tree, 3, 4, "city")).toBeNull();
   });
 
-  // mutation: sed -i 's/span >= SLAB_MIN_SPAN \&\& height >= SLAB_MIN_HEIGHT/span >= 0 \&\& height >= 0/' src/game/present/facades.ts
   it("when a marble block is asked, then a wide tall one is a slab in the DC limestone style and a narrow, a low or an unsized one has no style", () => {
     expect(facadeStyle(PREFAB.marble, 0, 0, "none", 240, 24)).toBe(SLAB_STYLE);
     expect(SLAB_STYLE, "limestone, no corner stones to stretch").toBe("federal");
@@ -97,7 +96,6 @@ describe("given a building built in each facade style", () => {
     materials = makePrefabMaterials(raceTextures());
   });
 
-  // mutation: sed -i 's/  const corniceFoot = block(lines\[storeys\]!);/  const corniceFoot = block(lines[storeys]!) - 0.5;/' src/game/world/openworld/facade-windows.ts
   for (const style of STYLES) {
     it(`when a ${style} building is built, then each face reads its regions: the street face its ground layer, the cornice at the roofline, the stones where the style has them, a roof top`, () => {
       const [part] = prefabParts(PREFAB.building, materials, style);
@@ -138,7 +136,6 @@ describe("given a building built in each facade style", () => {
     });
   }
 
-  // mutation: sed -i 's/\[LAYER.floor, 1, 0\]\], \[top/[LAYER.floor, 1, 1]], [top/' src/game/present/facade-mesh.ts
   it("when a marble slab is built, then every wall and the roof top are laid in the instance's metres but the parapet's bare patch is not, on the marble body's footprint, and a plain marble block stays plain", () => {
     const [slab] = prefabParts(PREFAB.marble, materials, SLAB_STYLE);
     const [block] = prefabParts(PREFAB.building, materials, SLAB_STYLE);
@@ -234,7 +231,6 @@ describe("given the National Mall's art", () => {
     }
   });
 
-  // mutation: sed -i 's/SLAB_MIN_SPAN = 25/SLAB_MIN_SPAN = 1e9/' src/game/present/facades.ts
   it("when its marble blocks are drawn, then every museum slab stands in one federal mesh per draw cell", () => {
     stubBrowser();
     const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
@@ -357,7 +353,6 @@ const RELIEF_UNIFORMS = ["facadeHeightMap", "facadeReliefDepth", "facadeRoughnes
 const RELIEF_MARKS = ["facadeParallax", "facadeShift", "facadeDx"];
 
 describe("given a style whose layer data names no relief strips", () => {
-  // mutation: sed -i 's/${extras.open ? "|open" : ""}//' src/game/present/facades.ts (an open style keeps the base key, so it shares a program that has no discard)
   it("when a style with doorways cut in its ground band is compiled, then its program is the base facade program plus the discard, under its own cache key (the open variant is the last the key names)", () => {
     const made = makeFacadeMaterials();
     const open = STYLES.filter((style) => FACADE_LAYERS[style].open === true);
@@ -369,7 +364,6 @@ describe("given a style whose layer data names no relief strips", () => {
     }
   });
 
-  // mutation: sed -i 's/roomsAbove: spec.roomsAbove === true/roomsAbove: true/' src/game/present/facades.ts (a shop's upper floors open too, to rooms nobody sees)
   it("when a shop's facade and a house's are compiled, then a shop opens its ground band's windows alone and a house opens every storey's", () => {
     const made = makeFacadeMaterials();
     for (const style of STYLES.filter((name) => FACADE_LAYERS[name].open === true)) {
@@ -379,7 +373,6 @@ describe("given a style whose layer data names no relief strips", () => {
     }
   });
 
-  // mutation: sed -i 's/ || spec.dark === true//' src/game/present/facades.ts (a supermarket's windows light however shut it is)
   it("when a shop style with no interior is compiled, then its program is the base facade program plus the list of shut shops, under its own cache key", () => {
     const made = makeFacadeMaterials();
     for (const style of ["supermarket", "shops"] as const) {
@@ -389,7 +382,6 @@ describe("given a style whose layer data names no relief strips", () => {
     }
   });
 
-  // mutation: sed -i 's/  if (extras.open) shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;//' src/game/present/facades.ts
   it("when a style with windows cut in it is compiled, then its vertex shader tells each instance whether its room is built against the shared list, its fragment shader cuts its windows on that, and a style without them knows nothing of it", () => {
     const made = makeFacadeMaterials();
     for (const style of STYLES) {
@@ -403,7 +395,6 @@ describe("given a style whose layer data names no relief strips", () => {
     }
   });
 
-  // mutation: sed -i 's/  return noise < amount \* mix(\${OPEN_WINDOW_CUT.toFixed(2)}, 1.0, facadeGlow);/  return noise < amount * \${OPEN_WINDOW_CUT.toFixed(2)};/' src/game/present/facades.ts
   it("when the cut of a window's painted glass is read at full opening, then by day half of it is kept over the room and at night none is, and at half opening by night half is cut", () => {
     const [, share] = /return noise < amount \* mix\(([\d.]+), 1\.0, facadeGlow\);/.exec(FACADE_CUT_GLSL) ?? [];
     expect(share, "the cut reads its share through the night's mix").toBeDefined();
@@ -415,7 +406,6 @@ describe("given a style whose layer data names no relief strips", () => {
     expect(cut(0, 1), "shut by night: none cut").toBe(0);
   });
 
-  // mutation: sed -i 's/  return noise < amount \* mix(\${OPEN_WINDOW_CUT.toFixed(2)}, 1.0, facadeGlow);/  return noise < amount * \${OPEN_WINDOW_CUT.toFixed(2)};/' src/game/present/facades.ts
   it("when an open style is compiled, then its fragment declares the glow uniform before the cut that reads it, and the cut is whole at night", () => {
     const made = makeFacadeMaterials();
     for (const style of STYLES.filter((name) => FACADE_LAYERS[name].open === true)) {
@@ -426,7 +416,6 @@ describe("given a style whose layer data names no relief strips", () => {
     }
   });
 
-  // mutation: sed -i 's/    slots\[FACADE_OPEN_SLOT_FLOATS \* slot\] = slot < used ? at\[FACADE_OPEN_SLOT_FLOATS \* slot\]! : OPEN_AT_NOWHERE;/    slots[FACADE_OPEN_SLOT_FLOATS * slot] = at[FACADE_OPEN_SLOT_FLOATS * slot]!;/' src/game/present/facades.ts
   it("when the built buildings are listed, then the list holds them with how far open each is, at most its capacity of them, and the slots left over are far away and shut", () => {
     const stride = FACADE_OPEN_SLOT_FLOATS;
     const slots = FACADE_OPEN_AT.value;
@@ -445,7 +434,6 @@ describe("given a style whose layer data names no relief strips", () => {
     expect(slots[2], "emptied: shut").toBe(0);
   });
 
-  // mutation: sed -i 's/  if (extras.open) shader.uniforms.facadeDarkAt = FACADE_DARK_AT;//' src/game/present/facades.ts; sed -i 's/ \* (1.0 - vFacadeDark \* step(/ * (1.0 - 0.0 * vFacadeDark * step(/' src/game/present/facades.ts
   it("when a style with windows cut in it is compiled, then its windows light unless its building is on the list of shut shops, in the ground band alone, and a style without them knows nothing of the list", () => {
     const made = makeFacadeMaterials();
     for (const style of STYLES) {
@@ -457,7 +445,6 @@ describe("given a style whose layer data names no relief strips", () => {
     }
   });
 
-  // mutation: sed -i 's/float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow \* ${extras.dark ? "facadeShare" : LIT_SHARE_GLSL})/float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${LIT_SHARE_GLSL})/' src/game/present/facades.ts
   it("when a style that may hold a household is compiled, then its windows light by the building's own share read from the homes' texels, none at all where the share is none, and a style without them keeps the fixed share", () => {
     const made = makeFacadeMaterials();
     for (const style of STYLES) {
@@ -472,7 +459,6 @@ describe("given a style whose layer data names no relief strips", () => {
     }
   });
 
-  // mutation: sed -i 's/    slots\[DARK_SLOT_FLOATS \* slot + 1\] = slot < used ? at\[DARK_SLOT_FLOATS \* slot + 1\]! : OPEN_AT_NOWHERE;/    slots[DARK_SLOT_FLOATS * slot + 1] = at[DARK_SLOT_FLOATS * slot + 1]!;/' src/game/present/facades.ts
   it("when the shut shops are listed, then the list holds them, at most its capacity of them, and the slots left over are far away", () => {
     const slots = FACADE_DARK_AT.value;
     const positions = Float32Array.from({ length: 2 * (FACADE_DARK_MAX + 2) }, (_, at) => at + 1);
@@ -485,7 +471,6 @@ describe("given a style whose layer data names no relief strips", () => {
     expect(Math.abs(slots[0]!), "emptied").toBeGreaterThan(1e5);
   });
 
-  // mutation: sed -i 's/ \* facadeOpenAt\[i\].z);/);/' src/game/present/facades.ts (a listed building is wholly open the moment it is listed)
   it("when a building's openness is asked of the list, then the loop answers with it: a half open building is half open", () => {
     const loop = facadeOpenLoop("amount", "where");
     expect(loop, "the loop weighs the match by the openness").toContain("* facadeOpenAt[i].z");
@@ -567,7 +552,6 @@ describe("given a style with relief strips and the relief tier switched", () => 
     setReliefTier(false);
   });
 
-  // mutation: in facades.ts makeFacadeMaterial, replace `if (extras.height) {\n    stops.push(` so the height strip is followed whatever the style names (e.g. `if (true) {`), and the style without strips fetches it
   it("when the tier is off, then no height or roughness strip is fetched and the strips' depth and share stay 0; when it comes on, then both are fetched once, at full strength, and off again they return to 0 without a new fetch", async () => {
     stubBrowser();
     stubStrips();
@@ -616,7 +600,6 @@ describe("given a placement that names a facade style", () => {
     expect(placedFacadeStyle(PREFAB.tree, "adobe", 3, 4, "city"), "a tree has no facade").toBeNull();
   });
 
-  // mutation: in facades.ts placedFacadeStyle, `return picked !== null && isFacadeStyle(named) ? named : picked;` -> `return picked;`
   it("when a course places buildings with a named style, then they draw with that style's material, and the one with an unknown name draws as the hash picks", () => {
     stubBrowser();
     const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.city)!);
@@ -652,7 +635,6 @@ const SHIPPED_ENTRY_DIGESTS: Record<string, string> = {
 };
 
 describe("given the facade layer data of the styles that were shipped first", () => {
-  // mutation: in facade-layers.json change a value of an old style, e.g. prague's "floor": 3.79 to 3.8
   it("when each old style's entry is digested, then it is as shipped", () => {
     for (const [style, digest] of Object.entries(SHIPPED_ENTRY_DIGESTS)) {
       const entry = FACADE_LAYERS[style as FacadeStyle];
@@ -666,7 +648,6 @@ describe("given the open world's facade styles at night", () => {
   /** The shop glass's gain over a window's light, as the shader writes it (`SHOP_WINDOW_GAIN` - 1). */
   const SHOP_GAIN_GLSL = "facadeShop * 0.60";
 
-  // mutation: sed -i 's/  const shopfront = (spec.open === true \&\& !roomsAbove) || (spec.dark === true \&\& spec.open !== true);/  const shopfront = false;/' src/game/present/facades.ts
   it("when a business's facade is compiled, then its ground band's shop glass lights every pane and brighter, and a rowhome's windows keep their share", () => {
     const made = makeFacadeMaterials();
     const businesses: FacadeStyle[] = ["bar", "cornerstore", "coffee", "office", "shops", "supermarket"];

@@ -32,7 +32,6 @@ const RACING_S = 1;
 const LEAD_IN_FRAMES = 10 * 60;
 
 describe("given a player on the default race options, running the bench's own race", () => {
-  // mutation: sed -i 's/ && this.rules === this.options) this.options.trackId = tr.id;/) this.options.trackId = tr.id;/' src/game/engine/engine-race-field.ts  (a program's course is written over the player's own pick when the race loads: red at "while the bench race runs", trackId)
   it("when the bench sets its race up and then runs it, then it races its own course, laps and field while the player's options and the setup card hold no bench value", () => {
     inRaceMode((w) => {
       w.race.command(BENCH_RACE);

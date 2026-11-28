@@ -45,7 +45,6 @@ function probeCrash(): number[] {
 }
 
 describe("given the crash path's boot warm-up", () => {
-  // mutation: sed -i 's/^const PILE_SECONDS = 0.6;/const PILE_SECONDS = 0.1;/' src/game/engine/crash-warm.ts
   it("when a three-car crash (a head-on and a t-bone) is run before the warm-up and again after it, then the warm-up crashed every car of its pile and nothing of the crash, skin or body differs", () => {
     const before = probeCrash();
     expect(before.length, "the probe has cars and masses to compare").toBeGreaterThan(100);
@@ -55,7 +54,6 @@ describe("given the crash path's boot warm-up", () => {
 });
 
 describe("given the Vitest app project", () => {
-  // mutation: sed -i 's/process.env.CRASH_WARM !== "off"/true/' src/game/engine/crash-warm.ts
   it("when a boot asks whether to run the crash warm-up, then it is told no here (each file boots one engine) and yes once the switch is not set", () => {
     expect(crashWarmWanted(), "the app project sets CRASH_WARM=off").toBe(false);
     const set = process.env.CRASH_WARM;

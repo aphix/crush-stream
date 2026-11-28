@@ -81,7 +81,6 @@ describe("given a driver whose car stands in a space", () => {
     expect(calls).toHaveLength(0);
   });
 
-  // mutation: sed -i 's/^      if (traffic.setCarDoor(car, want)) this.radians\[car\] = want;/      this.radians[car] = want;/' src/game/engine/engine-openworld-cars.ts
   it("when the traffic refuses a car's door (no car stands at her space), then the host asks again the next step (guard)", () => {
     const calls: Call[] = [];
     const doors = new OpenWorldCarDoors(RESIDENTS, brain(), () => traffic(calls));

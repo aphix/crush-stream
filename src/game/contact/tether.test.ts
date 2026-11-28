@@ -111,7 +111,6 @@ describe("given a car running away from a world anchor 10 m behind it at 12 m/s"
     expect(stretchOf(false).reach > 25, "the untethered car stayed near the anchor").toBeTruthy();
   });
 
-  // mutation: sed -i 's/^export const MAX_TETHERS = 6;/export const MAX_TETHERS = 99;/' src/game/kernel/constants.ts
   it("when a seventh cable is opened, then the oldest is gone and six remain", () => {
     const set = new TetherSet();
     for (let cable = 0; cable < 7; cable++) {

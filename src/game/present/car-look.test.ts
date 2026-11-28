@@ -172,7 +172,6 @@ describe("given the spray depth map each car style's covers make", () => {
   // Made by the code before its rasterise and outline passes were hoisted, early-skipped and made separable: the maps are bit for bit what they were.
   const DIGESTS = { sedan: 1230918604, hatchback: 69049883, wagon: 2131159430, coupe: 2949857609, pickup: 1490530516, police: 1230918604, monster: 1810257249 } as const;
 
-  // mutation: sed -i 's/^  const topKey = topCode \* (SPRAY_FINE_STEPS + 1) + SPRAY_FINE_STEPS;/  const topKey = topCode * (SPRAY_FINE_STEPS + 1);/' src/game/present/spray-depth.ts
   it("when each style's map is made, then its bytes are the ones the unhoisted code made", () => {
     for (const [style, digest] of Object.entries(DIGESTS)) {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, style as keyof typeof DIGESTS);

@@ -49,13 +49,13 @@ const REPEATS = 3;
 type Throws = { best: number; mid: number };
 const SHIPPED_THROWS: Throws = { best: REPEATS, mid: 1 };
 const PERFECT_BAIL_THROWS: Throws = { best: REPEATS, mid: REPEATS };
-/** A mutation's bar reads only the best runs' first throw. */
+/** An over-strong throw's bar reads only the best runs' first throw. */
 const BEST_ONCE: Throws = { best: 1, mid: 0 };
 /** His torso has touched down when it is this near (m) the ground under it, after its apex. */
 const TOUCHDOWN_HEIGHT = 1;
-/** The mutations: forward times this must carry the best runs past the high jump's box piles (and Ring Fling's mid cups), upward times this must lift the monster over the apex band. */
-const FORWARD_MUTATION_FACTOR = 1.5;
-const UPWARD_MUTATION_FACTOR = 1.1;
+/** The over-strong throws: forward times this must carry the best runs past the high jump's box piles (and Ring Fling's mid cups), upward times this must lift the monster over the apex band. */
+const FORWARD_OVER_FACTOR = 1.5;
+const UPWARD_OVER_FACTOR = 1.1;
 /** A recomputed `HIGH_JUMP_MEASURED` number is within this share of the pinned one. */
 const MEASURED_TOLERANCE = 0.02;
 
@@ -75,7 +75,7 @@ const SLOW_RUN_SHARE = 0.8;
 const SLOW_RUN_HEIGHT_MINIMUM = 50;
 /** With the posts and slats in the world a catch may cost the best class some height, never below the owner's accepted 150 m. */
 const FRAMED_BEST_HEIGHT_MINIMUM = 150;
-/** The mutation that shrinks the slow runs: upward times this must put an 80% run under the bar. 0.7: with the lip's push the least 80% run scores 96.5 m (the SUV's), and 0.8 left an 80% run over the bar of 50. */
+/** The cut that shrinks the slow runs: upward times this must put an 80% run under the bar. 0.7: with the lip's push the least 80% run scores 96.5 m (the SUV's), and 0.8 left an 80% run over the bar of 50. */
 const UPWARD_CUT_FACTOR = 0.7;
 
 /** The five classes whose full-throttle speed at Ring Fling's lip is within 1% of one another (32.2 to 32.5 m/s); the muscle (35.6) and the monster (38.2) are the higher lines. */
@@ -96,7 +96,7 @@ const LONG_JUMP_NO_BAIL_BAND = { minimum: 42, maximum: 58 } as const;
 const LONG_JUMP_FADE_STEP = 8;
 const LONG_JUMP_FADE_SLACK = 1;
 const LONG_JUMP_EARLY_LATE_GAP = 4;
-/** The long jump's mutations: the perfect elevation cut to this (deg) must leave the best run short of the far end; forward times this must carry it past the band. */
+/** The long jump's cuts: the perfect elevation cut to this (deg) must leave the best run short of the far end; forward times this must carry it past the band. */
 const LONG_JUMP_ELEVATION_CUT_DEGREES = 25;
 const LONG_JUMP_FORWARD_BOOST = 1.3;
 
@@ -468,13 +468,13 @@ describe("given the high jump with its chosen throw boost on the free pad (no fr
     expect(violations.some((violation) => violation.includes("past the box piles")), violations.join("; ")).toBeTruthy();
   });
 
-  it(`when forward is ${FORWARD_MUTATION_FACTOR} times the chosen, then the best runs land past the box piles' end (the window holds only at the chosen forward)`, async () => {
-    const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { forward: FORWARD_MUTATION_FACTOR }), BEST_ONCE));
+  it(`when forward is ${FORWARD_OVER_FACTOR} times the chosen, then the best runs land past the box piles' end (the window holds only at the chosen forward)`, async () => {
+    const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { forward: FORWARD_OVER_FACTOR }), BEST_ONCE));
     expect(violations.some((violation) => violation.includes("past the box piles")), violations.join("; ")).toBeTruthy();
   });
 
-  it(`when upward is ${UPWARD_MUTATION_FACTOR} times the chosen, then the best class scores over the band`, async () => {
-    const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { upward: UPWARD_MUTATION_FACTOR }), BEST_ONCE));
+  it(`when upward is ${UPWARD_OVER_FACTOR} times the chosen, then the best class scores over the band`, async () => {
+    const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { upward: UPWARD_OVER_FACTOR }), BEST_ONCE));
     expect(violations.some((violation) => violation.includes("best score") && violation.includes("over")), violations.join("; ")).toBeTruthy();
   });
 
@@ -540,8 +540,8 @@ describe("given Ring Fling with its chosen throw boost on the real ground, car a
     expect(violations.some((violation) => violation.includes("outside the mid cups")), violations.join("; ")).toBeTruthy();
   });
 
-  it(`when forward is ${FORWARD_MUTATION_FACTOR} times the chosen, then the standard classes' full-throttle runs overshoot the mid cups`, async () => {
-    const violations = ringFlingViolations(await measure("ringFling", scaled(THROW_BOOST.ringFling, { forward: FORWARD_MUTATION_FACTOR }), BEST_ONCE));
+  it(`when forward is ${FORWARD_OVER_FACTOR} times the chosen, then the standard classes' full-throttle runs overshoot the mid cups`, async () => {
+    const violations = ringFlingViolations(await measure("ringFling", scaled(THROW_BOOST.ringFling, { forward: FORWARD_OVER_FACTOR }), BEST_ONCE));
     expect(violations.some((violation) => violation.includes("outside the mid cups")), violations.join("; ")).toBeTruthy();
   });
 

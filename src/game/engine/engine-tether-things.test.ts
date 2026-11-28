@@ -144,7 +144,6 @@ describe("given the free camera over a dummy standing out, with a wall behind hi
     expect(director["holds"][0]!.car, "what the first fire holds: the wall, not the dummy").toBe(WORLD);
   });
 
-  // mutation: sed -i 's/object.name !== RAGDOLLS_MESH_NAME || //' src/game/engine/tether-sight.ts
   it("when the man is drawn on another dummy mesh (the crowd's) whose instance is a slot out in the pool, then the ray passes through him and the cable's first end is the wall, not that slot's dummy", () => {
     const scene = new THREE.Scene();
     const torso = dummy(scene, "crowd");
@@ -159,8 +158,6 @@ describe("given the free camera over a dummy standing out, with a wall behind hi
 });
 
 describe("given the free camera over a dummy standing out, held by a first fire", () => {
-  // mutation: sed -i 's/      if (this.host.ropes.torso(thingIndex(hold.thing), hold.world, null)) return hold.world.add(hold.offset);/      if (this.host.ropes.dollOut(thingIndex(hold.thing))) return hold.world.copy(hold.at);/' src/game/engine/engine-tether.ts
-  // mutation: sed -i '/^        this.host.holdDoll(thingIndex(aim.thing));/d' src/game/engine/engine-tether.ts
   it("when he walks 2 m to the side, then the held marker moves 2 m with him, and the second fire ties him where he is now", () => {
     const scene = new THREE.Scene();
     const torso = dummy(scene);
@@ -181,7 +178,6 @@ describe("given the free camera over a dummy standing out, held by a first fire"
 });
 
 describe("given the free camera over a drawn civilian with no body, with a wall behind her", () => {
-  // mutation: sed -i '/^      into.person = person.index;/d' src/game/engine/engine-tether.ts
   it("when it fires at her and then at the wall, then a body is stood for her and the cable's first end is that body's dummy at her chest", () => {
     const scene = new THREE.Scene();
     wall(scene);
@@ -197,7 +193,6 @@ describe("given the free camera over a drawn civilian with no body, with a wall 
 });
 
 describe("given the free camera over a civilian drawn far off as one of the crowd's cheap figures, with a wall behind her", () => {
-  // mutation: sed -i '/^    if (object.name === CIVILIAN_FIGURES_NAME) return undefined;/d' src/game/engine/engine-tether.ts
   it("when it fires at her and then at the wall, then the sight line passes her figure's front, a body is stood for her and the cable's first end is that body", () => {
     const scene = new THREE.Scene();
     wall(scene);

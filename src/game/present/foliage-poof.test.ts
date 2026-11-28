@@ -146,7 +146,6 @@ describe("given a flower bed", () => {
 
 describe("given a plant asset (a sprite whose body is a poof)", () => {
   it("when a car drives through it, then it is hidden and its leaves fly in the colour of its atlas cell", () => {
-    // mutation: sed -i 's/row.body === "poof"/row.body === "none"/' src/game/present/foliage-poof.ts
     const asset = SCENERY_ASSETS.findIndex((row) => row.body === "poof");
     const plantRow = SCENERY_ASSETS[asset];
     must(plantRow, "the registry holds a plant asset");

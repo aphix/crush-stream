@@ -892,7 +892,6 @@ describe("given the orbit turned by the right stick", () => {
     return Math.abs(view.orbitAngle - before);
   };
 
-  // mutation: sed -i 's/gain: 1.6 }/gain: 1 }/' src/game/present/engine-camera.ts
   it("when the stick is held full for 1 s, then the view turns more than 3 rad (a flat 2.2 rad/s turns 2.2)", () => {
     const { view, pad } = held();
     let turned = 0;
@@ -902,7 +901,6 @@ describe("given the orbit turned by the right stick", () => {
     expect(turned, "and not past the ramp's top rate").toBeLessThan(3.52);
   });
 
-  // mutation: sed -i 's/this.padHold + wallDt) : 0;/this.padHold + wallDt) : this.padHold;/' src/game/present/engine-camera.ts
   it("when the stick is released and pushed fresh, then the first frame turns at 2.2 rad/s", () => {
     const { view, pad } = held();
     for (let f = 0; f < Math.round(1 / DT); f++) frame(view, pad, 1);
@@ -912,7 +910,6 @@ describe("given the orbit turned by the right stick", () => {
 });
 
 describe("given the orbit at 10 m behind a followed car", () => {
-  // mutation: sed -i 's/  return e.deltaY \* (e.deltaMode === 1 ? WHEEL_LINE_PX : e.deltaMode === 2 ? WHEEL_PAGE_PX : 1);/  return e.deltaY;/' src/game/present/engine-camera.ts
   it("when the wheel turns one notch in as pixels, as lines and as a page, then each zooms in by the same step", () => {
     const notches = [
       { deltaMode: 0, deltaY: -100 },

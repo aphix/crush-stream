@@ -71,7 +71,6 @@ describe("given a crowd with a civilian walking on the street", () => {
   });
 
   it("when the one looked at is doing something the line does not say, then the panel says it first, above the life log", () => {
-    // mutation: sed -i 's/lines: doing === null ? history : \[doing, ...history\] };/lines: history };/' src/game/ai/civilians/civilian-look.ts
     const was = crowd.poses.activity[resident]!;
     crowd.poses.activity[resident] = ACTIVITY.phoneCall;
     const text = lookAtOf(crowd.state, crowd.poses, tick, behind(crowd, resident));
@@ -109,7 +108,6 @@ describe("given one civilian out on open ground, far from every building", () =>
     expect(titleAt(LOOK_REACH + 1), "beyond the reach").toBeUndefined();
   });
 
-  // mutation: sed -i 's/const toY = poses.feetY\[resident\]! + CHEST_HEIGHT - ray.eyeY;/const toY = CHEST_HEIGHT - ray.eyeY;/' src/game/ai/civilians/civilian-look.ts
   it("when one stands on a stoop's step behind another on the street and the eye is on the one on the step's chest, then the panel names the one on the step", () => {
     const STEP_UP = 0.9;
     const onStep = 1;
@@ -155,7 +153,6 @@ describe("given the eye aimed at the door of a home, asked as a bullet asks", ()
   /** The sampling profiler's own cost is 4-5 KB of a read. */
   const BOUND_BYTES = 8192;
 
-  // mutation: sed -i 's/^  const origin = _origin;/  const origin = [0, 0, 0];/' src/game/ai/civilians/civilian-look.ts
   it("when the building the ray meets is asked for 2000 times, then each answer names the home and all of them together allocate under 8 KB", () => {
     const crowd = newCrowd(map);
     const home = crowd.state.ints[RESIDENT_INT.home]!;
@@ -177,7 +174,6 @@ describe("given the city's own map, its 310 buildings inside the walls", () => {
   const CALLS = 2000;
   const BOUND_BYTES = 8192;
 
-  // mutation: sed -i 's/^    const cos = trig\[place \* 2\]!;/    const cos = detCos(map.places[place]!.yaw);/' src/game/ai/civilians/civilian-look.ts
   it("when the eye 3 m before a building asks 2000 times which building it meets, then each answer names that building and all of them together allocate under 8 KB", () => {
     const house = city.places.find((place) => place.doorNode >= 0)!;
     const ray = aimedAt(eyeAt(house.x - house.depth / 2 - 3, house.z), house.x, EYE_HEIGHT, house.z);
@@ -190,7 +186,6 @@ describe("given the city's own map, its 310 buildings inside the walls", () => {
     expect(bytes, "bytes allocated by 2000 asks").toBeLessThanOrEqual(BOUND_BYTES);
   });
 
-  // mutation: sed -i 's/^  const place = placeMet(state.map, ray, LOOK_REACH, _placeMeeting);/  const place = placeMet(state.map, ray, LOOK_REACH, { index: -1, along: Infinity });/' src/game/ai/civilians/civilian-look.ts
   it("when the panel is asked 2000 times what the eye rests on and it rests on nothing, then the panel is empty and all of the asks together allocate under 8 KB", () => {
     const crowd = newCrowd(map);
     const ray = aimedAt(eyeAt(OPEN_GROUND, 0), OPEN_GROUND, EYE_HEIGHT + ROOF_RISE, ROOF_RUN);

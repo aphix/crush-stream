@@ -810,7 +810,6 @@ describe("given two dummy meshes", () => {
 });
 
 describe("given the people's shader and its shadow depth shader", () => {
-  // mutation: sed -i 's/^const HIDDEN_SLOT_EXIT = .*$/const HIDDEN_SLOT_EXIT = "";/' src/game/present/dummy-shader.ts
   it("when both are compiled, then a hidden slot (zero first two instance-matrix columns) is clipped before the body is skinned", () => {
     const mesh = new DummyMesh(1);
     const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;

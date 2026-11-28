@@ -398,7 +398,7 @@ function landingLimit(mode: LipMode, flight: Flight): number {
   return (LIP_CAR_CLEAR_FRACTION * Math.hypot(launched.x, launched.z) * launched.y) / GRAVITY;
 }
 
-/** The keeps the table tries (0.2 to 0.6 in steps of 0.05), and 1 (no cut), the mutation the bars must fail. */
+/** The keeps the table tries (0.2 to 0.6 in steps of 0.05), and 1 (no cut), the value the bars must fail. */
 const CANDIDATE_KEEPS = Array.from({ length: 9 }, (_, step) => Math.round((0.2 + 0.05 * step) * 100) / 100);
 const NO_CUT_KEEP = 1;
 
@@ -417,7 +417,6 @@ const keepsClearing = new Map<LipMode, Set<number>>();
 
 describe("given each car type driven up each station's ramp under the real lip throw", () => {
   for (const mode of LIP_MODES) {
-    // mutation: sed -i 's|^const THROW_UP = 3.5;|const THROW_UP = 3.0;|' src/game/vehicle/ejection.ts  (the driver's own upward pop is then off the pinned 3.5: this row goes red)
     it(`when each reaches the ${mode} lip at its best and at the slow speed, then one ejection is one windshield throw at the plane, at the car's velocity plus his seat's turn and the usual pop (out along its nose, then up), and the slow run is within tolerance of ${SLOW_LIP_SPEED} m/s`, () => {
       for (const type of DRIVER_CARS) {
         for (const speedCap of [Infinity, slowCap(type, mode)]) {
@@ -435,7 +434,6 @@ describe("given each car type driven up each station's ramp under the real lip t
       }
     });
 
-    // mutation: sed -i 's|^export const LIP_CAR_SPEED_KEEP = 0.3;|export const LIP_CAR_SPEED_KEEP = 1;|' src/game/scenes/minigame-constants.ts  (no cut: the bars fail and the chosen keep is not the largest that clears: this row goes red)
     it(`when each lands driverless on the ${mode}, then the table of kept speed shares shows the chosen share is the largest candidate that clears the bars for every type at both speeds, and no cut fails them`, (t) => {
       const cases = measures(mode);
       const lines = [`${mode}: the driverless car's landing x (m from the lip) by keep ${[...CANDIDATE_KEEPS, NO_CUT_KEEP].join(" ")} (the last: no cut), then the bar and the lip speed`];
@@ -469,7 +467,6 @@ describe("given each car type driven up each station's ramp under the real lip t
 });
 
 describe("given a lip drive made once and kept for every row that reads it", () => {
-  // mutation: sed -i 's|^\(  const key = .*\)${run.keep}:|\1|' src/game/scenes/minigame-lip.test.ts  (every keep then reads the first keep's drive: this row goes red, and so do the keep table's bars)
   it("when the same drive is made again from fresh, then it is the kept one's every number", () => {
     const run: FlightRun = { speedCap: Infinity, keep: NO_CUT_KEEP, until: "landing" };
     const kept = flyFromLip(sedan, "ringFling", run);

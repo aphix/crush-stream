@@ -98,6 +98,5 @@ describe("given the far figure", () => {
     expect(turned, "head and hair vertices moved").toBe(2 * VERTICES_PER_PART);
     expect(front.x / front.count, "the face turned toward her +x").toBeGreaterThan(0.05);
     expect(front.y / front.count, "the face nodded down").toBeLessThan(front.yBefore / front.count);
-    // mutation: sed -i 's/  const turning = { swing: 0, pivotY: NECK_Y };/  const turning = still;/' src/game/present/civilian-figure.ts
   });
 });

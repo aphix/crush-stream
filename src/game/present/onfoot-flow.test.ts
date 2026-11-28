@@ -38,7 +38,6 @@ const pressCases: readonly {
   { it: "when pressed on foot beside a car moving above the enter speed, then he stays out and is told it is too fast", start: "onFoot", car: 1, speed: 6, doorBlocked: false, expectedStep: "refused", expectedPhase: "onFoot", expectedRefusal: "tooFast", expectedCar: 0 },
   { it: "when pressed while getting out, then nothing changes and he is told he is busy", start: "exiting", car: 0, speed: 0, doorBlocked: false, expectedStep: "refused", expectedPhase: "exiting", expectedRefusal: "busy", expectedCar: 0 },
   { it: "when pressed while getting in, then nothing changes and he is told he is busy", start: "entering", car: 0, speed: 0, doorBlocked: false, expectedStep: "refused", expectedPhase: "entering", expectedRefusal: "busy", expectedCar: 0 },
-  // mutation: sed -i 's/ || this.phase === "arrested") return this.refuse("busy");/) return this.refuse("busy");/' src/game/present/onfoot-flow.ts
   { it: "when pressed while the law has him, then nothing changes and he is told he is busy", start: "arrested", car: 0, speed: 0, doorBlocked: false, expectedStep: "refused", expectedPhase: "arrested", expectedRefusal: "busy", expectedCar: 0 },
 ];
 
@@ -93,7 +92,6 @@ describe("given a player who got out and wants to drive on", () => {
 });
 
 describe("given a player the law has had on foot", () => {
-  // mutation: sed -i '/^  arrest(): void {$/,/^  }$/s/"arrested"/"onFoot"/' src/game/present/onfoot-flow.ts
   it("when it arrests him, then he is in custody and still has the car he left", () => {
     const flow = flowAt("onFoot");
     flow.arrest();
@@ -102,7 +100,6 @@ describe("given a player the law has had on foot", () => {
     expect(flow.car, "the car he left").toBe(0);
   });
 
-  // mutation: sed -i '/^  released(): void {$/,/^  }$/s/"onFoot"/"inCar"/' src/game/present/onfoot-flow.ts
   it("when it sets him down, then he is on foot and the control gets him into his car again", () => {
     const flow = flowAt("arrested");
     flow.released();

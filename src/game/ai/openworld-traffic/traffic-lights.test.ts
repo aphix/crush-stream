@@ -7,7 +7,6 @@ const SAMPLE_STEP = 0.25;
 const PHASES = [SIGNAL_PHASE.northSouthThrough, SIGNAL_PHASE.northSouthLeft, SIGNAL_PHASE.eastWestThrough, SIGNAL_PHASE.eastWestLeft];
 
 describe("given the signals of the open world's junctions", () => {
-  // mutation: sed -i 's/(seconds + junction \* LIGHT_STAGGER_SECONDS) % CYCLE_SECONDS/(seconds + junction * LIGHT_STAGGER_SECONDS) % (CYCLE_SECONDS + 0.5)/' src/game/ai/openworld-traffic/traffic-lights.ts
   it("when the crowd clock runs a whole cycle on, then every junction shows the phase it showed (a pure function of the clock)", () => {
     const cycle = CYCLE_SECONDS;
     for (let junction = 0; junction < JUNCTIONS; junction++) {
@@ -17,7 +16,6 @@ describe("given the signals of the open world's junctions", () => {
     }
   });
 
-  // mutation: sed -i 's/if (Math.floor(packed \/ STAGE_COUNT) !== phase) return LIGHT.red;/if (Math.floor(packed \/ STAGE_COUNT) % 2 !== phase % 2) return LIGHT.red;/' src/game/ai/openworld-traffic/traffic-lights.ts
   it("when any instant is read, then at most one of a junction's four phases is green and every phase is green for a while", () => {
     const cycle = CYCLE_SECONDS;
     for (let junction = 0; junction < JUNCTIONS; junction++) {
@@ -31,7 +29,6 @@ describe("given the signals of the open world's junctions", () => {
     }
   });
 
-  // mutation: sed -i 's/LIGHT_STAGGER_SECONDS = 19/LIGHT_STAGGER_SECONDS = 0/' src/game/ai/openworld-traffic/traffic-constants.ts
   it("when two neighbouring junctions are read together, then they are not on the same phase all the time (the stagger)", () => {
     const cycle = CYCLE_SECONDS;
     let apart = 0;

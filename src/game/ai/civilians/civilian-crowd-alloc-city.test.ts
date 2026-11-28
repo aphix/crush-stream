@@ -19,7 +19,7 @@ const BOUND_KB = 8;
 const CITY_EVENING_HOUR = 23;
 const CITY_WARM_SECONDS = 200;
 const WARM_STEP = 1 / 16;
-// Its own file: the crowd's per-frame code compiles as it does in a game, not after other rows' crowds and readers taught V8 other call sites (beside them, the cached heading's mutation still read clean).
+// Its own file: the crowd's per-frame code compiles as it does in a game, not after other rows' crowds and readers taught V8 other call sites.
 
 describe("given 300 civilians on the city's own map late in the evening, many walking its streets", () => {
   const noCars: DeformableCar[] = [];
@@ -36,7 +36,6 @@ describe("given 300 civilians on the city's own map late in the evening, many wa
     at = Math.floor(at * 2) / 2;
   });
 
-  // mutation: sed -i 's/^    out.yaw = state.legYaw\[resident\]!;/    out.yaw = out.speed < 0 ? detAtan2(-out.dirX, -out.dirZ) : detAtan2(out.dirX, out.dirZ);/' src/game/ai/civilians/civilian-leg.ts
   it("when the whole crowd is stepped every frame for 300 frames within a tick, then the steps allocate nothing (the profiler's own cost is under the bound)", () => {
     const kb = untilQuiet(() => {
       at += 0.5;

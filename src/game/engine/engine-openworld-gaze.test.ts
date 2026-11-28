@@ -27,7 +27,6 @@ function crashes(gaze: OpenWorldGaze): number {
 }
 
 describe("given the open world's gaze and a car that meets a wall", () => {
-  // mutation: sed -i 's/^const CRASH_LOOK_SPEED = 6;/const CRASH_LOOK_SPEED = 0;/' src/game/engine/engine-openworld-gaze.ts
   it("when it closes at 5 m/s, then nobody is called to look; at 7 m/s a crash pulses there; a second hit at once pulses nothing, one after half a second does", () => {
     const { poses, gaze } = gazeOn();
     gaze.noteWallHit(5, STREET_X, 0);
@@ -43,7 +42,6 @@ describe("given the open world's gaze and a car that meets a wall", () => {
 });
 
 describe("given a civilian standing 6 m up a street from the look panel's eye", () => {
-  // mutation: sed -i 's/    return { title: text.title, lines: \[...text.lines, this.gaze.describe(resident.index)\] };/    return text;/' src/game/engine/engine-openworld-gaze.ts
   it("when the panel's ray meets her, then her panel ends with what she looks at; with nobody on the ray the panel is as it was", () => {
     const { poses, map, gaze } = gazeOn();
     poses.x[0] = STREET_X;
@@ -68,7 +66,6 @@ describe("given a civilian standing 6 m up a street from the look panel's eye", 
 });
 
 describe("given two civilians by the look panel's ray: one 4 m up it and 0.6 m to its side, one 8 m up it on its line", () => {
-  // mutation: sed -i -e 's/import { placeMet, residentMet,/import { chestMet, placeMet, residentMet,/' -e 's/    const resident = residentMet(poses, ray);/    const resident = chestMet(poses, poses.count, null, ray, 1, LOOK_REACH, { index: -1, along: 0 });/' src/game/engine/engine-openworld-gaze.ts
   it("when the panel is about the one on its line (its title is hers, the ray passing closest to her chest), then its look line is hers, not the nearer one's", () => {
     const { poses, map, gaze } = gazeOn();
     for (const [civilian, x, z] of [[0, STREET_X + 0.6, 4], [1, STREET_X, 8]] as const) {
@@ -119,14 +116,12 @@ describe("given the foot cops drawn by an art of their own beside the crowd's", 
     return { gaze, art, cops, run };
   }
 
-  // mutation: sed -i '/^    this.gaze.update(poses, wallDt, this.senses);/d' src/game/engine/engine-openworld-gaze.ts
   it("when the player stands on foot 2 m in front of the nearest of them, then within a second that cop's art turns his head to the player", () => {
     const { art, run } = copsOn(2);
     run(1);
     expect(art.gaze?.lookKind[0], "what the nearest cop looks at").toBe(STIMULUS.player);
   });
 
-  // mutation: sed -i '/^    for (let at = 0; at < this.followers.length; at++) this.followers\[at\]!.pulse(kind, x, y, z, radius, salience);/d' src/game/engine/engine-openworld-gaze.ts
   it("when a car crashes 10 m to their side, then some of the cops turn to the crash", () => {
     const { gaze, art, run } = copsOn(30);
     run(0.5);

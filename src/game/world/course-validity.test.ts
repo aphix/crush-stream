@@ -54,7 +54,6 @@ function stillBreaks(id: string, pins: Record<string, unknown>, map: string, bre
 for (const json of TRACKS) {
   const t = new Track(json);
   describe(`given the ${t.id} course`, () => {
-    // Mutation: sed -i '31s/"node": 3/"node": 1/' src/game/world/tracks/oval.json
     it(`when its gates are measured round the loop, then each is ${GATE_GAP_MIN}-${GATE_GAP_MAX} m from the next, on a straight, ${MOUTH_CLEAR_MIN} m clear of every shortcut end, and the loop's seam bends under ${SEAM_DEG_MAX} degrees`, () => {
       const gap = gateSpacing(t);
       expect(gap.min, "closest gates (m)").toBeGreaterThanOrEqual(SHORT_GATE_GAP[t.id] ?? GATE_GAP_MIN);
@@ -70,7 +69,6 @@ for (const json of TRACKS) {
       stillBreaks(t.id, MOUTH_CLEARANCE, "MOUTH_CLEARANCE", mouth.min < MOUTH_CLEAR_MIN);
     });
 
-    // Mutation: sed -i '49,51d' src/game/world/tracks/oval.json
     it(`when its shortcuts are measured, then their gates are at most ${SHORTCUT_GATE_GAP_MAX} m apart and an unordered cut is shorter than the loop it skips`, () => {
       const gap = shortcutGateGap(t);
       expect(gap.max, `widest gap on ${gap.id} (m)`).toBeLessThanOrEqual(SPARSE_SHORTCUT_GATES[t.id] ?? SHORTCUT_GATE_GAP_MAX);
@@ -78,7 +76,6 @@ for (const json of TRACKS) {
       stillBreaks(t.id, SPARSE_SHORTCUT_GATES, "SPARSE_SHORTCUT_GATES", gap.max > SHORTCUT_GATE_GAP_MAX);
     });
 
-    // Mutation: sed -i '6s/"width": 18/"width": 30/' src/game/world/tracks/oval.json
     it("when every turn of the loop is measured against the road's width, then its radius is at least 1.5 x the width and 20 m", () => {
       const turns = narrowTurns(t);
       const pin = SLOW_CORNER_RADIUS[t.id];
@@ -87,7 +84,6 @@ for (const json of TRACKS) {
       stillBreaks(t.id, SLOW_CORNER_RADIUS, "SLOW_CORNER_RADIUS", turns.count > 0);
     });
 
-    // Mutation: sed -i '6s/"wall": \[true, true\]/"wall": [false, false]/' src/game/world/tracks/oval.json
     it(`when each open outside corner of the loop is walked outward, then it meets a solid or another road within ${OPEN_RUN_MAX} m`, () => {
       const run = outsideExposure(t);
       const lim = KNOWN_OPEN[t.id] ?? { run: OPEN_RUN_MAX, unbounded: 0, corners: Infinity };
@@ -97,7 +93,6 @@ for (const json of TRACKS) {
       stillBreaks(t.id, KNOWN_OPEN, "KNOWN_OPEN", run.worst > OPEN_RUN_MAX);
     });
 
-    // Mutation: sed -i -e '9s/ }/, "wall": [false, true] }/' -e '10s/ }/, "wall": [true, true] }/' src/game/world/tracks/oval.json
     it("when its wall lines are read, then every opening is a shortcut's mouth or exit, bar the crossings a course declares", () => {
       const gaps = undeclaredWallGaps(t);
       const allowed = WALL_GAPS[t.id] ?? { count: 0, longest: 0 };

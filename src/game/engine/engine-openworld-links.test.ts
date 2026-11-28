@@ -42,7 +42,6 @@ describe("given the open world warmed on a renderer that links what it draws", (
     setGround(null);
   });
 
-  // mutation: sed -i 's/^    this.stamp = (this.stamp + 1) | 0;$/    this.stamp = (this.stamp + 1) | 0; if (this.stamp === 120) this.group.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshPhysicalMaterial({ sheen: 1, iridescence: 1 })));/' src/game/present/civilian-art.ts
   it("when the eye turns a full circle over the city, then no program links during play", async () => {
     expect(engine["sceneId"], "the control: the open world").toBe("openworld");
     const before = programs();

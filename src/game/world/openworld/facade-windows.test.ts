@@ -38,7 +38,6 @@ const covers = (opening: Opening, from: number, to: number, y0: number, y1: numb
   opening.centre - opening.width / 2 <= from + TOLERANCE && opening.centre + opening.width / 2 >= to - TOLERANCE && floor + opening.sill <= y0 + TOLERANCE && floor + opening.top >= y1 - TOLERANCE;
 
 describe("given every place that has an interior", () => {
-  // mutation: sed -i 's/this.crossWall(level, streetAt, -this.half, this.half, \[...doors, ...this.glazed(level, FACADE_FACE.street, streetAt), ...this.bayOpening(level)\], ground, SHELL_WALL);/this.crossWall(level, streetAt, -this.half, this.half, [...doors, ...this.bayOpening(level)], ground, SHELL_WALL);/' src/game/world/openworld/interior-draft.ts
   it("when each window its facade shows to a room is looked for in the room's wall, then an opening stands on the same face and storey, as wide and as tall within a few centimetres, with a pane of glass over it", () => {
     const missing: string[] = [];
     for (const place of furnished) {
@@ -57,7 +56,6 @@ describe("given every place that has an interior", () => {
     expect(missing.slice(0, 3).join("; "), "facade windows without an opening and glass").toBe("");
   });
 
-  // mutation: sed -i 's/const BAY_SILL_ABOVE_FLOOR = 0.75;/const BAY_SILL_ABOVE_FLOOR = 0.1;/' src/game/world/openworld/interior-kinds.ts
   it("when every window of every room is measured against its storey's floor, then its sill stands at least a set height above it, and under its ceiling", () => {
     const low: string[] = [];
     for (const place of furnished) {
@@ -76,7 +74,6 @@ describe("given a rowhome's bay stack", () => {
   const home = furnished.find((place) => place.interior === "rowhome")!;
   const plan = planInterior(home);
 
-  // mutation: sed -i 's/    if (this.kind !== "rowhome") return \[\];/    return [];/' src/game/world/openworld/interior-draft.ts
   it("when the street wall of each storey is read, then the room opens onto the bay's mouth from the floor up to the glass's head, with an alcove and three panes of glass round the bay's outline", () => {
     for (const [level, bay] of bayStackOf(home.storeys).floors.entries()) {
       const mouth = wallOn(plan, level, FACADE_FACE.street).openings.find((opening) => opening.kind === OPENING.bay);
@@ -111,7 +108,6 @@ describe("given the places at the ends of a block's faces", () => {
     return Math.abs(place.x + place.width / 2 - lane.lot.x0) < 1e-6 || Math.abs(place.x - place.width / 2 - lane.lot.x1) < 1e-6;
   };
 
-  // mutation: sed -i 's/return ((north ? east : west) ? OPEN_SIDE.plusAcross : 0) | ((north ? west : east) ? OPEN_SIDE.minusAcross : 0);/return ((north ? west : east) ? OPEN_SIDE.plusAcross : 0) | ((north ? east : west) ? OPEN_SIDE.minusAcross : 0);/' src/game/world/openworld/openworld-lots.ts
   it("when each place's open sides are read, then exactly the places at a block's end or beside its lane have one, and it stands on the block's end or the lane's edge", () => {
     let corners = 0;
     let lanesides = 0;
@@ -131,7 +127,6 @@ describe("given the places at the ends of a block's faces", () => {
     expect(lanesides, "places beside a lane").toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's/      this.spineWall(level, sideAt, STREET_SKIN, this.depth - STREET_SKIN, this.glazed(level, face, sideAt), ground, PARTY_WALL);/      this.spineWall(level, sideAt, STREET_SKIN, this.depth - STREET_SKIN, [], ground, PARTY_WALL);/' src/game/world/openworld/interior-draft.ts
   it("when the side walls of an end-of-terrace house and a mid-terrace one are read, then the open side has windows on every storey and a side with a neighbour has none", () => {
     const corner = furnished.find((place) => place.interior === "rowhome" && atEnd(place) && place.openSides === OPEN_SIDE.minusAcross)!;
     const middle = furnished.find((place) => place.interior === "rowhome" && place.openSides === undefined)!;
@@ -165,7 +160,6 @@ describe("given the window table's bands and the drawn building", () => {
     return out;
   }
 
-  // mutation: sed -i 's/const sideBays = Math.max(1, Math.round((LAYOUT.houseDepth \* bays) \/ (STYLE_LOTS\[style\] \* LAYOUT.lotFrontage)));/const sideBays = bays;/' src/game/world/openworld/facade-windows.ts
   it("when each style's faces are drawn for every storey count, then every band the table lists is a band of the drawn face, a side face holds more bays than the street, and the roofline closes it", () => {
     for (const style of styles) {
       expect(isOpenStyle(style), `${style} is an open style`).toBe(true);
@@ -183,7 +177,6 @@ describe("given the window table's bands and the drawn building", () => {
     }
   });
 
-  // mutation: sed -i 's/  const repeat = (corniceFoot - ground) \/ (storeys - 1);/  const repeat = STOREY;/' src/game/world/openworld/interior-kinds.ts (the storeys no longer fill the height between the ground band and the cornice)
   it("when a street face is read at every storey count in the building's own metres, then its ground band is the ground storey, its storeys are about three metres each and its cornice is the cornice's depth", () => {
     for (const style of styles) {
       const shop = style === "coffee" || style === "bar" || style === "office" || style === "cornerstore";
@@ -198,7 +191,6 @@ describe("given the window table's bands and the drawn building", () => {
     }
   });
 
-  // mutation: sed -i 's/  const plinth = block(levelsOf(STYLE_INTERIOR\[style\], storeys).floors\[0\]!);/  const plinth = block(0.5);/' src/game/world/openworld/facade-windows.ts
   it("when a side face's plinth is read in the building's own metres, then it stands on the interior's raised ground floor, so its windows sit over the floor", () => {
     for (const place of furnished) {
       if (!isOpenStyle(place.style)) continue;

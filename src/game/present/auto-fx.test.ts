@@ -267,7 +267,6 @@ describe("given the tier judged by the render alone (a phone's sim fills its fra
     expectMoves(runSpells(new AutoFx(true, true, false), [phone(4), phone(20, 14)]), [[2.6, "high"], [7.2, "low"], [11.8, "minimal"]], "phone with a 14 ms render");
   });
 
-  // mutation: sed -i 's/Math.max(this.overhead, w.busy \/ this.climbBusy)/this.overhead/' src/game/present/auto-fx.ts
   it("when a phone's high tier costs 1.3 times low in calm but 2.8 times in a crash that comes every 50 s, then it falls once and does not climb again for the next 200 s of calms", () => {
     const fx = new AutoFx(true, true, false);
     const moves: [number, FxTier][] = [];
@@ -288,7 +287,6 @@ describe("given the tier judged by the render alone (a phone's sim fills its fra
     expect(moves.map((m) => m[1]).join(" "), "the tiers it moved through").toBe("high low");
   });
 
-  // mutation: sed -i '/^      this.liftedAt = -1000;/d' src/game/present/auto-fx.ts
   it("when it falls twice within the learning span of one lift, then only the first fall teaches the tier's cost", () => {
     const fx = new AutoFx(true, true, false);
     /** Frames of `seconds` at a draw submit of `render` ms, `tier` ms of it tier-gated; the tier it fell to, if it did. */

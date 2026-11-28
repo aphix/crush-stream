@@ -56,7 +56,6 @@ function contentTexels(layout, id) {
 }
 
 describe("given a 96 px picture of a saturated red disc on a white background, packed as a card", () => {
-  // mutation: sed -i 's/const BACKGROUND_SLACK = 22;/const BACKGROUND_SLACK = -400;/' scripts/sprite-pack-pixels.mjs
   it("when the albedo atlas is decoded, then the corners of the cell's content are clear and its centre is opaque", async () => {
     const packed = await pack("test", [row("test-disc", "card", [1, 1], discPicture())]);
     const atlas = await decodeWebp(packed.albedo);
@@ -76,7 +75,6 @@ describe("given a 96 px picture of a saturated red disc on a white background, p
     expect(centre[1], "green at the content's centre").toBeLessThan(60);
   });
 
-  // mutation: sed -i 's/const BLEED_PASSES = 8;/const BLEED_PASSES = 0;/' scripts/sprite-pack-pixels.mjs
   it("when the albedo atlas is decoded with its colour kept, then a clear texel near the disc's edge carries the disc's red, not grey or black", async () => {
     const packed = await pack("test", [row("test-disc", "card", [1, 1], discPicture())]);
     const rgba = decodeStraight(packed.albedo);
@@ -95,7 +93,6 @@ describe("given a 96 px picture of a saturated red disc on a white background, p
 describe("given a card and a tile packed together", () => {
   const rows = () => [row("test-disc", "card", [1, 1], discPicture()), row("test-floor", "tile", [2, 1], plainPicture("#2060c0", 192, 128))];
 
-  // mutation: sed -i 's/"-q:v", String(quality),/"-q:v", String(quality - Math.floor(Math.random() * 20)),/' scripts/sprite-pack-pixels.mjs
   it("when they are packed twice, then every output is byte for byte the same", async () => {
     const first = await pack("test", rows());
     const second = await pack("test", rows());
@@ -109,9 +106,6 @@ describe("given a card and a tile packed together", () => {
 });
 
 describe("given two cards of different sizes packed into one family", () => {
-  // mutation: sed -i 's/const PAD = 8;/const PAD = 0;/' scripts/sprite-pack.mjs
-  // mutation: sed -i 's/taken\[row \* columns + column\] === 1) return false;/taken[row * columns + column] === 2) return false;/' scripts/sprite-pack.mjs
-  // mutation: sed -i 's/x += block.width) {/x += block.width \/ 2) {/' scripts/sprite-pack.mjs
   it("when the cells are listed, then each content keeps its pad clear inside its own block, no two blocks overlap, and each block sits aligned to its own size", async () => {
     const packed = await pack("test", [row("test-small", "card", [1, 1], discPicture()), row("test-wide", "card", [2, 0.5], discPicture())]);
     const { blocks } = packed.layout;
@@ -139,7 +133,6 @@ describe("given a card, a box with a depth and a tile, listed in that order", ()
     row("test-floor", "tile", [2, 1], plainPicture("#2060c0", 192, 128)),
   ];
 
-  // mutation: sed -i 's/return typeof row.depth === "number" ? { ...asset, depth: row.depth } : asset;/return asset;/' scripts/sprite-pack.mjs
   it("when they are packed, then the world rows follow the manifest order with their collider share, the box's depth and no family", async () => {
     const { worldJson } = await pack("test", rows());
     expect(worldJson, "world rows").toHaveLength(3);
@@ -153,7 +146,6 @@ describe("given a card, a box with a depth and a tile, listed in that order", ()
     expect(floor.core, "the tile row's collider share").toBe(1);
   });
 
-  // mutation: sed -i 's/const cells = layout.cells.map(({ rect, tint, layer }) => (layer === undefined ? { rect, tint } : { rect, tint, layer }));/const cells = layout.cells;/' scripts/sprite-pack.mjs
   it("when they are packed, then the atlas cells run parallel to the world rows with no id and the tile's layer", async () => {
     const { atlasJson, worldJson } = await pack("test", rows());
     expect(atlasJson.cells, "atlas cells beside the world rows").toHaveLength(worldJson.length);
@@ -167,8 +159,6 @@ describe("given a card, a box with a depth and a tile, listed in that order", ()
 describe("given two tile rows, one red and one blue", () => {
   const rows = () => [row("test-red", "tile", [2, 1], plainPicture("#c82828", 192, 128)), row("test-blue", "tile", [2, 1], plainPicture("#2828c8", 192, 128))];
 
-  // mutation: sed -i 's/encodeWebp(strip, TILE_SIZE, stripHeight, WEBP_QUALITY_ALBEDO)/encodeWebp(strip, TILE_SIZE, stripHeight + 1, WEBP_QUALITY_ALBEDO)/' scripts/sprite-pack.mjs
-  // mutation: sed -i 's/strip.set(entry.layerBytes, layer \* TILE_SIZE/strip.set(entry.layerBytes, 0 * TILE_SIZE/' scripts/sprite-pack.mjs
   it("when they are packed, then the tile strip is one layer wide and two layers tall with each layer in its own rows", async () => {
     const packed = await pack("test", rows());
     const strip = await decodeWebp(packed.tilesAlbedo);

@@ -121,7 +121,6 @@ describe("given a resident with company on their mind whose home is by the court
 });
 
 describe("given a resident at the bodega who sets out home", () => {
-  // mutation: sed -i 's/ || isOutdoorPurpose(state.ints\[base + RESIDENT_INT.legPurpose\]!))) state.ints\[base + RESIDENT_INT.flags\] |= FLAG.fromOutside;/)) state.ints[base + RESIDENT_INT.flags] |= FLAG.fromOutside;/' src/game/ai/civilians/civilian-plan.ts
   it("when she had been loitering out at its door, then she is not drawn coming out of it; when she had been in shopping, she is", () => {
     const bodega = placeNamed(map, PLACE_NAMES.bodega);
     const codeLeaving = (purpose: number): number => {
@@ -172,7 +171,6 @@ describe("given a shop and a workplace that are shut, with nobody afraid of them
     expect(intAt(state, resident, RESIDENT_INT.place), "place they are at after deciding").not.toBe(work);
   });
 
-  // mutation: sed -i 's/  const stay = customer ? ticksOpen(state, destination, resident, tick + legTicks, Math.max(1, dwellTicks)) : Math.max(1, dwellTicks);/  const stay = Math.max(1, dwellTicks);/' src/game/ai/civilians/civilian-plan.ts
   it("when the only open shop is open as she decides but her walk there ends after it shuts, then she sets out and finds it shut: no stay there, she decides again at its door; at noon she stays", () => {
     const bodega = placeNamed(map, PLACE_NAMES.bodega);
     const errandAt = (tickOf: (state: CityState) => number) => {
@@ -197,7 +195,6 @@ describe("given a shop and a workplace that are shut, with nobody afraid of them
     expect(late.stay, "ticks she stays in the shut bodega").toBe(0);
   });
 
-  // mutation: sed -i 's/ \&\& (intAt(state, resident, RESIDENT_INT.flags) \& FLAG.fromOutside) === 0 \&\& hasDoor/ \&\& hasDoor/' src/game/ai/civilians/society-activity.ts
   it("when she found the bodega shut and sets out again from its door, then she is not drawn coming out of it; one who stayed in at noon is", () => {
     const bodega = placeNamed(map, PLACE_NAMES.bodega);
     const codeLeaving = (hour: number, walkBack: (walk: number) => number): number => {
@@ -226,7 +223,6 @@ describe("given a shop and a workplace that are shut, with nobody afraid of them
     expect(codeLeaving(22, (walk) => Math.floor(walk / 2)), "from the shut door, half a second out").not.toBe(ACTIVITY.door);
   });
 
-  // mutation: sed -i 's/  const shutIn = guest \&\& home !== NO_PLACE \&\& !withinHours(state, current, tick) \&\&/  const shutIn = false \&\&/' src/game/ai/civilians/civilian-plan.ts
   it("when a customer is at the shop after it has shut and wants nothing pressing, then she walks home rather than staying inside", () => {
     const state = createCityState(5, map, 60);
     const bodega = placeNamed(map, PLACE_NAMES.bodega);

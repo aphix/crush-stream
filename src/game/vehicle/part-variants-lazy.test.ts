@@ -7,7 +7,6 @@ import { drawnLamp, lampBatchGeometries } from "./part-variants.ts";
 const OWN_HEAD_STYLES = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].lamps.shapes?.head !== undefined);
 
 describe("given a process that has built no lamp variant yet", () => {
-  // mutation: sed -i 's|^    table.set(name, entry);|    for (let v = 0; v < entry.builds.length; v++) variantGeometry(entry, v);\n    table.set(name, entry);|' src/game/vehicle/part-variants.ts  (every variant is built at the first ask: the one ask casts as many rays as the whole table)
   it("when one style's head lamp is asked for, then only that style's variant is built, and the batch's call builds the others", () => {
     expect(OWN_HEAD_STYLES.length, "styles that draw their own head lamp").toBeGreaterThanOrEqual(3);
     const casts = vi.spyOn(THREE.Raycaster.prototype, "intersectObjects");

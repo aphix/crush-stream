@@ -174,9 +174,6 @@ describe("given a loop whose state is in the address of its bench page", () => {
     expect([...loops].join(","), "both cycles ran").toBe("1,2");
   });
 
-  // mutation: sed -i 's/sceneryValue === "0" ? SCENERY_ARM.off/sceneryValue === "0" ? SCENERY_ARM.on/' src/game/engine/engine-bench-plan.ts  (reds the off step reads)
-  // mutation: sed -i 's/sceneryValue === SCENERY_ARM.draw0 ? SCENERY_ARM.draw0/sceneryValue === SCENERY_ARM.draw0 ? SCENERY_ARM.on/' src/game/engine/engine-bench-plan.ts  (reds the draw0 step reads)
-  // mutation: sed -i 's/const drawnKept = arm === SCENERY_ARM.on ? drawn : \[\];/const drawnKept = drawn;/' src/game/world/placements.ts  (reds draw0's drawn count)
   it("when a loop starts from ?bench=city&scenery=0 or &scenery=draw0, then every step's address keeps the arm, a bare address reads the service on, draw0 places the default's props with no drawn scenery and 0 places the authored props alone", () => {
     for (const [value, arm] of [["0", SCENERY_ARM.off], ["draw0", SCENERY_ARM.draw0]] as const) {
       const search = `?bench=city&scenery=${value}&extended=1`;
@@ -567,9 +564,6 @@ describe("given the chooser before a new loop (Extended, Loop, Epicenter, Ultra)
 const idsOfMaps = (maps: readonly { id: string }[]): string => maps.map((m) => m.id).join(" ");
 
 describe("given the maps the chooser lists", () => {
-  // mutation: sed -i '/id: TRACK_ID.figure8, query/d' src/game/engine/bench-loop.ts  (reds the list row and every default-cycle row)
-  // mutation: sed -i 's/label: "Figure Eight", byDefault: true/label: "Figure Eight", byDefault: false/' src/game/engine/bench-loop.ts  (reds the defaults)
-  // mutation: sed -i 's/{ id: BENCH_KIND.strip, query: benchQuery(BENCH_KIND.strip), label: "Strip", byDefault: true },/{ id: TRACK_ID.figure8, query: courseQuery(TRACK_ID.figure8), label: "Figure Eight", byDefault: true },\n&/' src/game/engine/bench-loop.ts  (reds the order: figure-8 first)
   it("when the list is read, then the old four maps come first in their old order, the figure-8 after the Mall, the other race courses after it, and only the first five are on by default", () => {
     expect(idsOfMaps(MAP_CHOICES)).toBe("strip city dam-spine national-mall figure-8 oval rally stunt four-count razor-shelf breaker-yard");
     expect(DEFAULT_MAPS.join(" ")).toBe("strip city dam-spine national-mall figure-8");
@@ -580,7 +574,6 @@ describe("given the maps the chooser lists", () => {
     expect(cycleOf(false).slice(0, 8).map((s) => s.id).join(" ")).toBe(cycleOf(false, 1, FOUR_MAPS).map((s) => s.id).join(" "));
   });
 
-  // mutation: sed -i '/^  TRACK_ID.figure8,$/d' src/game/world/tracks/index.ts  (reds the figure-8's plan: a course outside the campaign benches the city)
   it("when each map is read as a bench, then it runs the course its id names, and every course on the race menu has its toggle", () => {
     for (const m of MAP_CHOICES.filter((c) => c.id !== "strip")) expect(benchPlan(`?${m.query}`)?.id, m.id).toBe(m.id);
     const menu = TRACKS.map((raw) => parseTrack(raw).id).sort();
@@ -589,7 +582,6 @@ describe("given the maps the chooser lists", () => {
 });
 
 describe("given the figure-8 bench", () => {
-  // mutation: sed -i 's/{ \[TRACK_ID.figure8\]: 16 }/{}/' src/game/engine/engine-bench-plan.ts  (reds the laps row: nine laps of 403 m end before the extended bench)
   it("when its page is read, then it is the city bench's field (16 racers, 15 rivals, the 20 s warm-up) on the figure-8, whose laps cover more road than the city's nine", () => {
     const plan = benchPlan("?bench=city&course=figure-8")!;
     must(plan.race?.type === "program", "a race program");
@@ -606,8 +598,6 @@ describe("given the figure-8 bench", () => {
 });
 
 describe("given a loop address that names its maps", () => {
-  // mutation: sed -i 's/ && all.indexOf(id) === i//' src/game/engine/bench-loop.ts  (reds the repeat in the maps)
-  // mutation: sed -i 's/MAP_CHOICES.some((m) => m.id === id) && //' src/game/engine/bench-loop.ts  (an unknown id stays: the cycle's steps fail on it)
   it("when the address names maps, then the cycle is exactly those steps in that order; an unknown id and a repeat are dropped", () => {
     const run = parseRun("?bench=city&loop=k3x9q2&extended=1&maps=figure-8,nowhere,city,../x,figure-8")!;
     expect(run.maps.join(" ")).toBe("figure-8 city");
@@ -615,13 +605,10 @@ describe("given a loop address that names its maps", () => {
     expect(loopProgress(run)).toBe("loop 1, step 1/4");
   });
 
-  // mutation: sed -i 's/return ids.length > 0 ? ids : DEFAULT_MAPS;/return ids;/' src/game/engine/bench-loop.ts  (an address naming no known map has no steps)
   it("when the address names no maps, or none the game knows, then the loop runs the default maps, so an older link keeps working", () => {
     for (const search of ["?bench=city&loop=k3x9q2", "?bench=city&loop=k3x9q2&maps=", "?bench=city&loop=k3x9q2&maps=nowhere,../x"]) expect(parseRun(search)!.maps.join(" "), search).toBe(DEFAULT_MAPS.join(" "));
   });
 
-  // mutation: sed -i 's/, `${LOOP_QUERY.maps}=${run.maps.join(",")}`\]/]/' src/game/engine/bench-loop.ts  (the address drops the maps: the reload resumes on the default cycle)
-  // mutation: sed -i 's/epi: on(LOOP_QUERY.epi), maps: parseMaps(q.get(LOOP_QUERY.maps)) }/epi: on(LOOP_QUERY.epi), maps: DEFAULT_MAPS }/' src/game/engine/bench-loop.ts  (reading drops them)
   it("when a step's address is built and read back mid-cycle, then a reload resumes the same cycle at the same step", () => {
     const run: BenchRun = { ...startRun("k3x9q2", true), maps: ["figure-8", "oval", "city"], step: 3 };
     const back = parseRun(loopSearch(run))!;
@@ -636,7 +623,6 @@ describe("given a loop address that names its maps", () => {
     expect(stepOf(parseRun(`${old}7`)!).id).toBe("national-mall:epi");
   });
 
-  // mutation: sed -i 's/return q.has(LOOP_QUERY.maps) ? { ...run, step: 0 } : null;/return null;/' src/game/engine/bench-loop.ts  (the entry's strip is no map: the loop never starts)
   it("when the chooser's maps leave out the entry's strip, or an address names maps without its own bench, then the loop starts at the first map; with no maps a bench the cycle does not run is no loop", () => {
     const chosen = withOptions("?bench=strip&choose=1", { keep: true, epi: true, ultra: false, extended: false, maps: ["city", "figure-8"] });
     const run = runFromPage(chosen, "k3x9q2")!;

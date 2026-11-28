@@ -12,7 +12,6 @@ const SIZES: readonly (readonly [number, number, number, number, number, number]
 ];
 
 describe("given a brick and a BoxGeometry of the same size and place", () => {
-  // mutation: sed -i 's/TEMPLATE_POSITION\[at + 2\]! \* d + z/TEMPLATE_POSITION[at + 2]! * d + y/' src/game/present/interiors/interior-brick.ts
   it("when their corners, normals and triangles are read, then they are the same box", () => {
     for (const [w, h, d, x, y, z] of SIZES) {
       const expected = new THREE.BoxGeometry(w, h, d).translate(x, y, z);
@@ -23,7 +22,6 @@ describe("given a brick and a BoxGeometry of the same size and place", () => {
     }
   });
 
-  // mutation: sed -i 's/TEMPLATE_NORMAL.slice()/TEMPLATE_NORMAL/' src/game/present/interiors/interior-brick.ts
   it("when a brick is turned in place, then no other brick's normals turn with it", () => {
     const first = brick(1, 1, 1, 0, 0, 0);
     const second = brick(1, 1, 1, 0, 0, 0);

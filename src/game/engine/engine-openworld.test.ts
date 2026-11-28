@@ -189,8 +189,6 @@ describe("given the open world's course up and a map given", () => {
     expect(harness.listener, "wall hits heard").not.toBeNull();
   });
 
-  // mutation: sed -i -e '/^    if (!this.mindsAuto \&\& this.mindsSetting === null) this.mindsAuto = /d' -e 's/^    this.mindsAuto = false;/    this.mindsAuto = this.ports.mindsAuto?.() === true;/' src/game/engine/engine-openworld.ts
-  // mutation: sed -i 's/^    if (!this.mindsAuto \&\& this.mindsSetting === null) this.mindsAuto = /    if (this.mindsSetting === null) this.mindsAuto = /' src/game/engine/engine-openworld.ts
   it("when the Minds are on Auto and Auto says no for 30 frames (FX booting low), then yes, then no again, then the Minds go on at the first yes and stay on", () => {
     const harness = hostWithMap();
     let frames = 0;
@@ -330,7 +328,6 @@ describe("given the player on foot in the open world", () => {
     expect(firstMismatch([walkers.count, walkers.x[0], walkers.velocityX[0]], [1, 5, 2]), "walkers, and his spot and velocity").toBeUndefined();
   });
 
-  // mutation: sed -i 's/^    if (this.walkerBlows >= 3) {/    if (this.walkerBlows >= 1) {/' src/game/engine/engine-openworld.ts
   it("when a civilian who turned on him lands two swings inside four seconds, then he is staggered and on his feet; the third puts him down", () => {
     const harness = hostWithMap();
     const arrive = turnedOnHim(harness);
@@ -342,7 +339,6 @@ describe("given the player on foot in the open world", () => {
     expect(harness.strikes.length, "knockdowns after the third").toBe(1);
   });
 
-  // mutation: sed -i 's/^export const PLAYER_KO_BLOWS = 3;/export const PLAYER_KO_BLOWS = 99;/' src/game/ai/civilians/civilian-constants.ts
   it("when he punches a drawn civilian a metre ahead, then a push is logged and she plays the hit clip; the third punch inside ten seconds knocks her out: hidden, thrown, the log ending with a knock", () => {
     const harness = hostWithMap();
     const c = shownOnTheHost(harness);
@@ -364,7 +360,6 @@ describe("given the player on foot in the open world", () => {
     expect(lastKnock, "the log's last knock").toBe(c);
   });
 
-  // mutation: sed -i 's/^const SHOT_BODY_RADIUS = 0.35;/const SHOT_BODY_RADIUS = 0;/' src/game/engine/engine-openworld.ts
   it("when a rifle's ray passes a drawn civilian's chest 30 m off, then she is hidden and thrown and the log ends with a knock", () => {
     const harness = hostWithMap();
     shownOnTheHost(harness);
@@ -383,7 +378,6 @@ describe("given the player on foot in the open world", () => {
     expect(lastKnock, "the log's last knock").toBe(c);
   });
 
-  // mutation: sed -i 's/^    let reach = Math.min(gun.range, placeMet(this.map, ray, gun.range, this.wallMet).along);/    let reach = gun.range;/' src/game/engine/engine-openworld.ts
   it("when a building stands between the ray's eye and a civilian, then the shot stops at the wall and she walks on", () => {
     const harness = hostWithMap();
     const c = shownOnTheHost(harness);
@@ -453,7 +447,6 @@ describe("given the hook aimed at the drawn people of the open world", () => {
     return cops;
   }
 
-  // mutation: sed -i '/^    if (this.law !== null \&\& this.law.copMet(/,/^    }/d' src/game/engine/engine-openworld.ts
   it("when the sight line passes a foot cop's chest far from any civilian, then the reticle names him, and the fire downs him where he stands, thrown and logged", () => {
     const harness = hostWithBodies();
     eyeNear(harness, 5000, 5000, 0);
@@ -475,7 +468,6 @@ describe("given the hook aimed at the drawn people of the open world", () => {
     expect(copKnocks(harness), "the knock peers hear").toContain(2);
   });
 
-  // mutation: sed -i 's/^    if (index >= people) return this.law?.hookCop(index - people, this.seconds) ?? -1;/    if (index >= people) return -1;/' src/game/engine/engine-openworld.ts
   it("when a cop is hooked, then no body of the civilians' pool is stood for him", () => {
     const harness = hostWithBodies();
     eyeNear(harness, 5000, 5000, 0);
@@ -488,7 +480,6 @@ describe("given the hook aimed at the drawn people of the open world", () => {
     expect(harness.director["bodies"]!.count(), "bodies stood for civilians").toBe(0);
   });
 
-  // mutation: sed -i '/^    if (this.medics !== null \&\& chestMet(/,/^    }/d' src/game/engine/engine-openworld.ts
   it("when the sight line passes a kneeling medic's chest, then the reticle names him, and the fire throws him where he knelt and he is drawn no more at that scene", () => {
     const harness = hostWithBodies();
     const { poses } = harness.director["medics"]!;
@@ -505,7 +496,6 @@ describe("given the hook aimed at the drawn people of the open world", () => {
     expect(harness.director["medics"]!["taken"][1], "taken off his knees").toBe(1);
   });
 
-  // mutation: sed -i '/^    if (slot >= 0) this.law?.releaseSuspect(index);/d' src/game/engine/engine-openworld.ts
   it("when the fire takes a civilian, then a body is stood for her and the law is told to let her out of any arrest", () => {
     const harness = hostWithBodies();
     const c = shownOnTheHost(harness);
@@ -744,7 +734,6 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     expect(knocked, "the knock of the civilian run down is in the log (the crowd may log pushes before it)").toBe(true);
   });
 
-  // mutation: sed -i 's/      if (this.bodies?.knock(strike) === true) {/      if (false) {/' src/game/engine/engine-openworld.ts
   it("when the car runs down a civilian who has a body near the eye, then her live body is knocked, nothing is thrown as a separate figure, and the art is told she is held", () => {
     const host = new FakeBodyHost();
     const harness = hostWithMap(host);
@@ -774,7 +763,6 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     expect(crowd.poses.shown[resident], "the crowd has her down").toBe(0);
   });
 
-  // mutation: sed -i 's/    this.ports.removeFigure(slot, this.crowd.crowdSeconds - this.figureAt\[victim\]!);/    void slot;/' src/game/engine/engine-openworld.ts
   it("when the ambulance has loaded a civilian a car ran down far from the eye, then the figure thrown for her is the one taken away, from its slot", () => {
     const harness = hostWithMap();
     carAtSomeone(harness);
@@ -797,7 +785,6 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     expect(harness.removed.length, "taken away once").toBe(1);
   });
 
-  // mutation: sed -i 's/    if (this.bodies?.remove(victim) === true) return;/    void victim;/' src/game/engine/engine-openworld.ts
   it("when the ambulance has loaded a civilian whose live body lay, then that body goes and no figure is asked for", () => {
     const host = new FakeBodyHost();
     const harness = hostWithMap(host);
@@ -1089,7 +1076,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
   const QUIET_HOUR = 13;
   const EVENING_HOUR = 20;
 
-  // mutation: sed -i 's/    if (minute === this.dayMinute) return;//' src/game/engine/engine-openworld.ts
   it("when frames pass, then the stage is told the hour once a game minute, not once a frame, and the hour is the crowd's start hour and the minutes since over sixty", () => {
     const harness = hostWithMap();
     const frames = framesFor(5);
@@ -1101,7 +1087,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     for (const [minute, hour] of harness.dayHours.entries()) expect(hour, `hour at minute ${minute}`).toBeCloseTo((start + minute / MINUTES_PER_HOUR) % 24, 9);
   });
 
-  // mutation: sed -i '/^      this.dropDay();$/d' src/game/engine/engine-openworld.ts
   it("when the open world is left, then the stage gets one null and no more, and comes back to the hour when it is entered again", () => {
     const harness = hostWithMap();
     for (let at = 0; at < framesFor(2); at++) harness.frame();
@@ -1121,9 +1106,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
   const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
   const modDay = (minutes: number): number => ((minutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
 
-  // mutation: sed -i 's/(direction > 0 ? hour + 1 : now % MINUTES_PER_GAME_HOUR === 0 ? hour - 1 : hour)/(direction > 0 ? hour : now % MINUTES_PER_GAME_HOUR === 0 ? hour - 1 : hour)/' src/game/engine/engine-openworld.ts
-  // mutation: sed -i 's/^    this.seconds = skipTo;$//' src/game/engine/engine-openworld.ts
-  // mutation: sed -i 's/secondsOfGameMinutes((target - now + MINUTES_PER_GAME_DAY) % MINUTES_PER_GAME_DAY)/secondsOfGameMinutes(target - now)/' src/game/engine/engine-openworld.ts
   it("when solo skips forward and back, then the crowd's clock lands at once on the next or the previous whole game hour (minus a day on: the society cannot run backwards), its society's tick with it, and the light one stage call each", () => {
     const harness = hostWithMap();
     for (let at = 0; at < framesFor(7.4); at++) harness.frame();
@@ -1150,7 +1132,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     expect(harness.crowd(), "the same crowd").toBe(crowd);
   });
 
-  // mutation: sed -i 's/^    this.dayMinute = gameMinuteAt(skipTo);$//' src/game/engine/engine-openworld.ts
   it("when a day's skips are made one after another, then twenty-four forward are a whole day on: the same hour, the clock a day later, and the minutes after a skip go on from the new hour", () => {
     const harness = hostWithMap();
     for (let at = 0; at < framesFor(2.2); at++) harness.frame();
@@ -1167,8 +1148,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     expect(modDay(lastMinutes(harness) - landed), "the light moved on by the game minute, from the skipped hour").toBeLessThanOrEqual(2);
   });
 
-  // mutation: sed -i 's/^    this.seconds = 0;$/    this.seconds = this.seconds;/' src/game/engine/engine-openworld.ts
-  // mutation: sed -i 's/^    if (!this.authority) return false;$/    if (false) return false;/' src/game/ai/civilians/civilian-crowd.ts
   it("when a skip is asked with no crowd, or before the crowd has stepped, then nothing is skipped; and after the open world is left and entered again, the new crowd's clock and light are its own", () => {
     const harness = hostWithMap();
     expect(harness.director.skipDay(1), "no crowd yet").toBe(false);
@@ -1190,7 +1169,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     expect(harness.director.crowdTime(), "the new crowd's clock began at its first step").toBeCloseTo(FRAME, 9);
   });
 
-  // mutation: sed -i 's/ || this.ports.inRoom()//' src/game/engine/engine-openworld.ts
   it("when this machine is in a room, host or client, then neither key skips anything: no stage call, and the crowd's clock and tick stand", () => {
     const host = hostWithMap();
     for (let at = 0; at < framesFor(2.2); at++) host.frame();
@@ -1212,8 +1190,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     }
   });
 
-  // mutation: sed -i 's/Math.round(hour \* MINUTES_PER_GAME_HOUR) % MINUTES_PER_GAME_DAY/Math.round(hour * MINUTES_PER_GAME_HOUR + 60) % MINUTES_PER_GAME_DAY/' src/game/engine/engine-openworld.ts
-  // mutation: sed -i 's/^    this.seconds = skipTo;$//' src/game/engine/engine-openworld.ts
   it("when the hour is set, then the light reads that hour, the crowd's clock is the matching minutes on, and setting it again moves nothing", () => {
     const harness = hostWithMap();
     for (let at = 0; at < framesFor(7.4); at++) harness.frame();
@@ -1231,7 +1207,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     expect(harness.dayHours.length - calls, "one stage call at most").toBeLessThanOrEqual(1);
   });
 
-  // mutation: sed -i '/setHour(hour: number)/,/^  }/s/ || this.ports.inRoom()//' src/game/engine/engine-openworld.ts
   it("when the hour is set in a room, or before the first crowd frame, then it is refused and nothing moves", () => {
     const early = hostWithMap();
     expect(early.director.setHour(18.5), "no crowd yet").toBe(false);
@@ -1248,7 +1223,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     expect(room.director.crowdTime(), "the clock").toBe(seconds);
   });
 
-  // mutation: sed -i 's/    this.homeLights.step(this.awake, settles);//' src/game/engine/engine-openworld.ts
   it("when the first game minute is lit, then each home's texel holds the share of the people awake in it, taken from the crowd's own state at that tick, and the shaders' grid is the map's", () => {
     const harness = hostWithMap();
     harness.frame();
@@ -1271,7 +1245,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     expect(homes, "homes in the fixture map").toBeGreaterThan(1);
   });
 
-  // mutation: sed -i 's/    this.homeLights?.dispose();//' src/game/engine/engine-openworld.ts
   it("when the open world is left, then the shaders' homes grid is empty again and every style reads its fixed share", () => {
     const harness = hostWithMap();
     harness.frame();
@@ -1316,7 +1289,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     };
   }
 
-  // mutation: sed -i 's/      const target = HOME_SHARE_BY_AWAKE\[people\]!;/      const target = HOME_SHARE_BY_AWAKE[1]!;/' src/game/present/facade-homes.ts
   it("when the only person in the city is awake in one home, then that home's windows light over a few game minutes and every other home stays dark, and when they go out it goes dark again", () => {
     const city = loneResident();
     city.stay(city.lone);
@@ -1328,7 +1300,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     expect(city.shareOf(city.lone), "the person has gone out").toBe(0);
   });
 
-  // mutation: sed -i 's/    this.lightHomes(crowd, true);//' src/game/engine/engine-openworld.ts
   it("when solo skips the clock to another hour, then each home's windows are at the share of the people awake there at the new hour at once, not eased over minutes from the old hour's", () => {
     const city = loneResident();
     city.stay(city.lone);
@@ -1337,8 +1308,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
     for (const other of city.homes.slice(1)) expect(city.shareOf(other), `home ${other} with nobody, at once`).toBe(0);
   });
 
-  // mutation: sed -i 's/    this.households.fill(tick, this.awake);//' src/game/engine/engine-openworld.ts
-  // mutation: sed -i 's/this.size\[place\] = 1 + /this.size[place] = state.occupants[place] > 0 ? 0 : 1 + /' src/game/ai/civilians/society-households.ts
   it("when it is eight in the evening and every resident is out, then every home, the homes some resident lives in too, is lit by its household at once, and at midday every one is dark", () => {
     const city = loneResident();
     const { state } = city.harness.crowd();
@@ -1356,14 +1325,12 @@ describe("given the open world's stage light following the crowd's clock", () =>
 });
 
 describe("given the open world's scenery share", () => {
-  // mutation: sed -i 's/(desktop ? 1 : 0.6)/(desktop ? 1 : 1)/' src/game/engine/scenery-share.ts
   it("when the course is the open world, then the share is 1 on a desktop and 0.6 on a phone whatever the tier; a race keeps its tier's", () => {
     expect(`${sceneryShare(OPENWORLD_ID, "minimal", true)} ${sceneryShare(OPENWORLD_ID, "minimal", false)} ${sceneryShare("other", "minimal", false)}`).toBe("1 0.6 0.3");
   });
 });
 
 describe("given the open world's director, a free person walking, and a car that meets a wall 4 m to her front right", () => {
-  // mutation: sed -i '/^    if (this.art !== null) this.art.gaze = this.gaze.gaze;/d' src/game/engine/engine-openworld.ts
   it("when the hooked wall hit comes, then the gaze the crowd's art draws looks at the crash and her head turns toward it", () => {
     const harness = hostWithMap();
     const resident = shownOnTheHost(harness);

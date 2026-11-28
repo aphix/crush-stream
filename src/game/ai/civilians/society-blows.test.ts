@@ -19,7 +19,6 @@ function fight() {
 }
 
 describe("given two civilians in a fight", () => {
-  // mutation: sed -i 's/partner < 0 || partner <= resident || ints/partner < 0 || ints/' src/game/ai/civilians/society-activity.ts
   it("when its 8 s are searched for blows, then they land only on the one who did not start it, the first 0.3 s after they square up and the next 1.2 s later", () => {
     const { state, starter, victim, arrive } = fight();
     const out = new CivilianBlow();
@@ -35,7 +34,6 @@ describe("given two civilians in a fight", () => {
     expect(search(arrive + 1.4, arrive + 1.6, 0), "the second blow").toBe(starter);
   });
 
-  // mutation: sed -i 's/^export const KNOCKOUT_SHARE = 0.6;/export const KNOCKOUT_SHARE = 0;/' src/game/ai/civilians/civilian-constants.ts
   it("when the knock-out blow is drawn for a thousand victims, then between 55 and 65 in a hundred have one, each from 2 to 5, and a victim's is the same every time it is asked", () => {
     let some = 0;
     for (let victim = 0; victim < 1000; victim++) {

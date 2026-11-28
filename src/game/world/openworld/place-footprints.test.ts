@@ -41,7 +41,6 @@ function seeded(seed: number): () => number {
 }
 
 describe("given the city's map", () => {
-  // mutation: sed -i 's/const r1 = cellOf(z + reach\[at\]!, minZ);/const r1 = cellOf(z, minZ);/' src/game/world/openworld/place-footprints.ts
   it("when 40,000 seeded points across it and past its edges are asked whether they stand inside a building, then the grid answers as a scan of every place does, inside and out", () => {
     const grid = new PlaceFootprints(map.places, MARGIN);
     const next = seeded(20261122);
@@ -59,7 +58,6 @@ describe("given the city's map", () => {
     expect(outside, "control: points on the street").toBeGreaterThan(POINTS / 10);
   });
 
-  // mutation: sed -i 's/^    const frame = this.frame;/    const frame = this.frame.subarray(0);/' src/game/world/openworld/place-footprints.ts
   it("when the grid is asked 20,000 times, then all of the asks together allocate under 8 KB", () => {
     const grid = new PlaceFootprints(map.places, MARGIN);
     const house = map.places.find((place) => place.doorNode >= 0)!;
@@ -76,7 +74,6 @@ describe("given the city's map", () => {
     expect(bytes, "bytes allocated by 20,000 asks").toBeLessThanOrEqual(BOUND_BYTES);
   });
 
-  // mutation: sed -i 's/^  const places: Place\[\] = lots.places.map((place, index) => placeRecord(place, doorNodes\[index\]!));/  const places: Place[] = lots.places.map((place, index) => ({ ...place, doorNode: doorNodes[index]! }));/' src/game/world/openworld/openworld-map.ts
   it("when its places are read, then every one has the same fields in the same order (one shape, so a scan's number reads are not boxed), and each reads as the lots laid it at its door", () => {
     const lots = layOutLots();
     const built = buildOpenWorldMap(lots);

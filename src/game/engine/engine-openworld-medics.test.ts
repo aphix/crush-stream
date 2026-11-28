@@ -10,7 +10,6 @@ const DOWN = { x: 12.5, z: -40.25 };
 
 describe("given someone run down and an ambulance called for them", () => {
   it("when the ambulance is loading at the scene, then both medics kneel either side of where it was called to, facing them", () => {
-    // mutation: sed -i 's/const atScene = ambulanceState === AMBULANCE.loading;/const atScene = false;/' src/game/engine/engine-openworld-medics.ts
     const poses = createCrowdPoses(MEDICS.count);
     placeMedics(poses, DOWN.x, DOWN.z, AMBULANCE.loading, FRAME_DT);
     for (let medic = 0; medic < MEDICS.count; medic++) {
@@ -33,7 +32,6 @@ describe("given someone run down and an ambulance called for them", () => {
   });
 
   it("when someone else is run down while the ambulance is loading and no second one is sent, then the medics stay at the first scene", () => {
-    // mutation: sed -i 's/    if (sent) this.setScene(x, z);/    this.setScene(x, z);/' src/game/engine/engine-openworld-medics.ts
     const medics = new OpenWorldMedics({ update() {}, dispose() {} });
     const sight = {} as Parameters<OpenWorldMedics["frame"]>[3];
     medics.call(DOWN.x, DOWN.z, true);
@@ -44,7 +42,6 @@ describe("given someone run down and an ambulance called for them", () => {
   });
 
   it("when the traffic gives them the scene the ambulance is out on, then the medics kneel at it", () => {
-    // mutation: sed -i 's/    this.sceneX = x;/    this.sceneX = 0;/' src/game/engine/engine-openworld-medics.ts
     const medics = new OpenWorldMedics({ update() {}, dispose() {} });
     const sight = {} as Parameters<OpenWorldMedics["frame"]>[3];
     medics.setScene(DOWN.x, DOWN.z);
@@ -57,7 +54,6 @@ describe("given someone run down and an ambulance called for them", () => {
 describe("given the hook has taken one of the two medics kneeling at a scene", () => {
   const sight = {} as Parameters<OpenWorldMedics["frame"]>[3];
 
-  // mutation: sed -i 's/      else if (this.taken\[medic\] === 1) this.poses.shown\[medic\] = 0;/      else if (this.taken[medic] === 1) this.poses.shown[medic] = 1;/' src/game/engine/engine-openworld-medics.ts
   it("when the ambulance goes on loading, then he is not drawn and his partner still is", () => {
     const medics = new OpenWorldMedics({ update() {}, dispose() {} });
     medics.setScene(DOWN.x, DOWN.z);
@@ -67,7 +63,6 @@ describe("given the hook has taken one of the two medics kneeling at a scene", (
     expect(Array.from(medics.poses.shown), "medics drawn").toEqual([1, 0]);
   });
 
-  // mutation: sed -i 's/^      if (ambulanceState !== AMBULANCE.loading) this.taken\[medic\] = 0;/      if (false) this.taken[medic] = 0;/' src/game/engine/engine-openworld-medics.ts
   it("when the ambulance has left and comes to another scene, then both medics kneel there again", () => {
     const medics = new OpenWorldMedics({ update() {}, dispose() {} });
     medics.setScene(DOWN.x, DOWN.z);

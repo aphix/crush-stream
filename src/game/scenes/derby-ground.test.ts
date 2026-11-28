@@ -111,7 +111,6 @@ function cornerLabel(count: number, slotIndex: number, x: number, z: number): st
 }
 
 describe("given the arena's ground and the full field's spawn ring", () => {
-  // mutation: sed -i 's/const r = Math.max(5.5, radius - DERBY_ARENA.spawnInset);/const r = Math.max(5.5, radius - 2);/' src/game/scenes/fleet.ts  (hull corners past the wall and onto props)
   it("when fields of every size are laid out, then every hull corner is inside the wall, on level floor at height 0 and clear of every prop", () => {
     const misses = new Misses();
     let corners = 0;
@@ -131,8 +130,6 @@ describe("given the arena's ground and the full field's spawn ring", () => {
     expect(misses.count, misses.report("every hull corner is inside the wall, on level floor and clear of every prop")).toBe(0);
   });
 
-  // mutation: sed -i 's/const PROP_CLEAR = FLEET_HALF.z + 0.5;/const PROP_CLEAR = 0;/' src/game/scenes/fleet.ts  (a car's line to the centre within a half length of a free prop)
-  // mutation: sed -i 's/const step = Math.min(open \/ n, DERBY_ARENA.packPitch \/ r);/const step = Math.min(open \/ n, 3 \/ r);/' src/game/scenes/fleet.ts  (32 cars stand within 4 m)
   it("when fields of every size are laid out at every start bearing, then no car's line to the centre comes within its half length of a free-standing prop, and 32 cars stand over 4 m apart", () => {
     const lines = new Misses();
     const spacing = new Misses();
@@ -168,7 +165,6 @@ describe("given the arena's ground and the full field's spawn ring", () => {
     expect(spacing.count, spacing.report("32 cars stand over 4 m apart")).toBe(0);
   });
 
-  // mutation: sed -i 's/const r = Math.max(5.5, radius - DERBY_ARENA.spawnInset);/const r = Math.max(5.5, radius - 14);/' src/game/scenes/fleet.ts  (hull corners on a ramp)
   it("when fields of every size are laid out at every start bearing, then no hull corner of any slot stands on a ramp", () => {
     const misses = new Misses();
     let corners = 0;

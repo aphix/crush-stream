@@ -506,7 +506,6 @@ describe("given a course's solids gathered near a box (the chase eye does it eve
 
 describe("given the props placed once for the file (`propsOf`) and read by the rows above", () => {
   for (const track of [OVAL, CITY]) {
-    // mutation: sed -i 's|^ *const sight = raceSight(track, propsOf(track));|&  propsOf(track)[0]!.x += 1e-9;|' src/game/present/spectate-cam.test.ts  (a row writes into the shared placed list)
     it(`when ${track.id}'s props are read again after the rows used them, then they are what a fresh placement gives, bit for bit`, () => {
       assertSameDigest(propsOf(track), placeProps(track), `${track.id}'s shared props against a fresh placement`);
     });

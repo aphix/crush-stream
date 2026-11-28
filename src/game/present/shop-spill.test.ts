@@ -23,14 +23,12 @@ const OUT = 1.2;
 describe("given the open world's shops and eateries", () => {
   const spill = new ShopSpill(map.places, lampPool);
 
-  // mutation: sed -i 's/place.kind !== PLACE_KIND.shop \&\& place.kind !== PLACE_KIND.food/place.kind !== PLACE_KIND.shop/' src/game/present/shop-spill.ts
   it("when the spill is built, then every shop and eatery has one quad, on the lamp pool's material", () => {
     expect(sellers.length, "the programme has shops").toBeGreaterThan(0);
     expect(spill.group.children.length).toBe(sellers.length);
     for (const child of spill.group.children) expect((child as THREE.Mesh).material, "the lamp pool").toBe(lampPool);
   });
 
-  // mutation: sed -i 's/closed === null || closed\[quad.place\] !== 1/closed === null/' src/game/present/shop-spill.ts
   it("when a place is shut, then its quad is hidden and the others stay shown; open again, it shows", () => {
     const closed = new Uint8Array(map.places.length);
     closed[sellers[0]!.index] = 1;
@@ -43,7 +41,6 @@ describe("given the open world's shops and eateries", () => {
     expect(spill.group.children.every((child) => child.visible), "all open").toBe(true);
   });
 
-  // mutation: sed -i 's/const SPILL_OUT = 1.2/const SPILL_OUT = 2.2/' src/game/present/shop-spill.ts
   it("when a quad is read, then it lies flat just over the ground, centred 1.2 m in front of its place's face", () => {
     for (const [at, { place }] of sellers.entries()) {
       const mesh = spill.group.children[at] as THREE.Mesh;
@@ -57,7 +54,6 @@ describe("given the open world's shops and eateries", () => {
     }
   });
 
-  // mutation: sed -i 's/^const SPILL_Y = .*/const SPILL_Y = 0.02;/' src/game/present/shop-spill.ts
   it("when a quad stands where a sidewalk slab is laid, then it lies above the slab's top, not under it", () => {
     const track = new Track(parseTrack(openWorldCourse(lots)));
     const slabs = placeScenery(track, placeProps(track)).drawn.filter((placed) => placed.prefab === PREFAB.sidewalk);

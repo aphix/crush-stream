@@ -32,7 +32,6 @@ const pathRect = (path: PathPlan, half: number): Rect[] =>
   });
 
 describe("given the grid's dimensions", () => {
-  // mutation: sed -i 's/  lotsPerFace: 20,/  lotsPerFace: 24,/' src/game/world/openworld/openworld-constants.ts
   it("when the blocks are measured, then a block is 112 by 53 m property line to property line and 119.2 by 60.2 m curb to curb", () => {
     expect(geometry.blockLength, "block length (m)").toBeCloseTo(LONG_SIDE, 6);
     expect(geometry.blockDepth, "block depth (m)").toBeCloseTo(SHORT_SIDE, 6);
@@ -40,7 +39,6 @@ describe("given the grid's dimensions", () => {
     expect(geometry.blockDepth + 2 * SIDEWALK, "block depth curb to curb (m)").toBeCloseTo(60.2, 6);
   });
 
-  // mutation: sed -i 's/  wallReach: (CARRIAGEWAY + 2 \* SIDEWALK) \/ 2,/  wallReach: CARRIAGEWAY \/ 2,/' src/game/world/openworld/openworld-constants.ts
   it("when the play area is measured, then it is 408.8 by 231.8 m, building faces 18.2 m apart across every street, the walls on the outer streets' far property line", () => {
     expect(geometry.faceToFace, "building face to building face (m)").toBeCloseTo(FACE_TO_FACE, 6);
     expect(geometry.pitchX - geometry.blockLength, "gap between blocks along x (m)").toBeCloseTo(FACE_TO_FACE, 6);
@@ -50,19 +48,16 @@ describe("given the grid's dimensions", () => {
     expect(geometry.outerPath, "the outer streets' far sidewalk is inside the walls").toBe(true);
   });
 
-  // mutation: sed -i 's/  parkingLane: 2.4,/  parkingLane: 2.0,/' src/game/world/openworld/openworld-constants.ts
   it("when a street and a sidewalk are added up, then two travel and two parking lanes make the carriageway and the three zones make the sidewalk", () => {
     expect(2 * geometry.travelLane + 2 * geometry.parkingLane, "carriageway from its lanes (m)").toBeCloseTo(geometry.carriageway, 6);
     expect(geometry.sidewalkFrontage + geometry.sidewalkClear + geometry.sidewalkFurniture, "sidewalk from its zones (m)").toBeCloseTo(geometry.sidewalk, 6);
   });
 
-  // mutation: sed -i 's/  travelLane: 3.1,/  travelLane: 2.5,/' src/game/world/openworld/openworld-constants.ts
   it("when a 2 m wide car drives a travel lane or the alley, then it clears each side by 0.55 m", () => {
     expect((geometry.travelLane - CAR_WIDTH) / 2, "clearance each side in a lane (m)").toBeGreaterThanOrEqual(CAR_CLEARANCE);
     expect((geometry.alley - CAR_WIDTH) / 2, "clearance each side in the alley (m)").toBeGreaterThanOrEqual(CAR_CLEARANCE);
   });
 
-  // mutation: sed -i 's/  lotFrontage: 5.6,/  lotFrontage: 9,/' src/game/world/openworld/openworld-constants.ts
   it("when a person walks one long block face and crosses a street at walking pace, then the face takes about 80 seconds and the carriageway about 8", () => {
     const faceSeconds = (geometry.blockLength + 2 * geometry.ringOffset) / WALKING_SPEED;
     expect(faceSeconds, "seconds along a block's sidewalk path").toBeGreaterThan(70);
@@ -81,7 +76,6 @@ describe("given the planned blocks", () => {
     expect(plans.backdrop.length, "backdrop blocks").toBe(16);
   });
 
-  // mutation: sed -i 's/    const x1 = x0 + geometry.lotFrontage;/    const x1 = x0 + geometry.lotFrontage - 0.5;/' src/game/world/openworld/openworld-blocks.ts
   it("when a block's long faces are read, then twenty lots tile each from the block's west edge to its east edge with no gap or overlap", () => {
     expect(rowBlocks.length, "blocks with rowhome faces").toBe(8);
     for (const block of rowBlocks) {
@@ -95,7 +89,6 @@ describe("given the planned blocks", () => {
     }
   });
 
-  // mutation: sed -i 's/      lot: rect(x0, lineZ, x1, lotBackZ),/      lot: rect(x0, lineZ, x1, lotBackZ + 1),/' src/game/world/openworld/openworld-blocks.ts
   it("when a lot is read from the street inward, then a 0.6 m setback, a 15 m house and an 8.4 m rear yard fill its 24 m", () => {
     for (const block of rowBlocks) {
       for (const lot of block.lots) {
@@ -113,7 +106,6 @@ describe("given the planned blocks", () => {
     }
   });
 
-  // mutation: sed -i 's/  const alley = rect(block.centreX - halfLength, block.centreZ - geometry.alley \/ 2,/  const alley = rect(block.centreX - halfLength + 9, block.centreZ - geometry.alley \/ 2,/' src/game/world/openworld/openworld-blocks.ts
   it("when the two rows of a block are read, then their rear yards meet the 5 m alley on each side and the alley opens on both streets at the block's ends", () => {
     for (const block of rowBlocks) {
       const alley = block.alley;
@@ -129,7 +121,6 @@ describe("given the planned blocks", () => {
     }
   });
 
-  // mutation: sed -i 's/{ point: points.length - 1, side: "east" },//' src/game/world/openworld/openworld-blocks.ts
   it("when the alley's path is read, then it joins the sidewalk path at both mouths", () => {
     for (const block of rowBlocks) {
       const sides = block.paths.flatMap((path) => path.joins.map((join) => join.side)).sort();
@@ -138,7 +129,6 @@ describe("given the planned blocks", () => {
     }
   });
 
-  // mutation: sed -i 's/const gateXs = Array.from({ length: geometry.lotsPerFace }/const gateXs = Array.from({ length: 0 }/' src/game/world/openworld/openworld-blocks.ts
   it("when the alley's path is read, then it has a node at the middle of every lot, where a yard's gate would open on it", () => {
     for (const block of rowBlocks) {
       const alleyPath = block.paths[0]!;
@@ -152,7 +142,6 @@ describe("given the planned blocks", () => {
     }
   });
 
-  // mutation: sed -i 's/      yaw: north ? FACING.north : FACING.south,/      yaw: north ? FACING.south : FACING.north,/' src/game/world/openworld/openworld-blocks.ts
   it("when a lot's front door is read, then it looks at its street from 0.6 m inside the property line, 2.1 m from the sidewalk path", () => {
     for (const block of rowBlocks) {
       for (const lot of block.lots) {
@@ -165,7 +154,6 @@ describe("given the planned blocks", () => {
     }
   });
 
-  // mutation: sed -i 's/paths: \[alongStreets, ...northSouth, spur\]/paths: [alongStreets, spur]/' src/game/world/openworld/openworld-blocks.ts
   it("when the park is read, then its lawn runs to all four property lines and paths join every side, three along each long side", () => {
     const park = plans.playable.find((block) => block.park);
     must(park, "a park block");
@@ -179,7 +167,6 @@ describe("given the planned blocks", () => {
     for (const side of ["west", "east"] as const) expect(joined.filter((joinedSide) => joinedSide === side).length, `paths joining the ${side} street`).toBe(1);
   });
 
-  // mutation: sed -i 's/courtLength: 28,/courtLength: 70,/' src/game/world/openworld/openworld-constants.ts
   it("when the court is read, then it is 28 by 15 m, inside the lawn and clear of every path but the spur's end at its door", () => {
     const park = plans.playable.find((block) => block.park);
     must(park, "a park block");
@@ -198,7 +185,6 @@ describe("given the planned blocks", () => {
     expect(door[1], "court door on the court's edge facing the east-west path (m)").toBeCloseTo(court.z0, 6);
   });
 
-  // mutation: sed -i 's/const inside = column >= 0 \&\& column < geometry.columns \&\& row >= 0 \&\& row < geometry.rows;/const inside = true;/' src/game/world/openworld/openworld-blocks.ts
   it("when the backdrop blocks are read, then every one lies beyond the walls and every playable block inside them", () => {
     const within = (block: { centreX: number; centreZ: number }): boolean => Math.abs(block.centreX) + LONG_SIDE / 2 <= geometry.halfX && Math.abs(block.centreZ) + SHORT_SIDE / 2 <= geometry.halfZ;
     expect(plans.playable.every(within), "every playable block inside the walls").toBe(true);

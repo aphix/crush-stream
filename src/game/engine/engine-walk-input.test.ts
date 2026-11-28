@@ -60,7 +60,6 @@ describe("given the controls that drive the car", () => {
     });
   }
 
-  // mutation: sed -i 's/(!armed \&\& p.rt > Math.max(SPRINT_TRIGGER, touch.gas, -touch.y))/(p.rt > Math.max(SPRINT_TRIGGER, touch.gas, -touch.y))/' src/game/engine/engine-walk-input.ts
   it("when he is armed, then the right trigger does not sprint and A does; unarmed, the trigger sprints as before", () => {
     const trigger = { ...blankPad(), connected: true, rt: 1 };
     expect(readWalkIntent(new Set(), trigger, blankTouch(), blankWalkIntent(), true).sprint, "armed, RT").toBe(false);

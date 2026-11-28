@@ -70,14 +70,12 @@ describe("given people on a kerb facing the street", () => {
       expect(times[civilian], `person ${civilian} looked at the fast car`).toBeLessThan(Infinity);
       expect(times[civilian]! - within15, `person ${civilian}'s latency (s)`).toBeLessThan((POLL_MASK + 1) * FRAME + HEAD_LATENCY_S + 2 * FRAME);
     }
-    // mutation: sed -i 's/  const fast = Math.min(1, Math.max(0, (speed - CAR_CALM_SPEED) \/ (CAR_FAST_SPEED - CAR_CALM_SPEED))) \* s\[SCRATCH.near\]!;/  const fast = 0;/' src/game/present/civilian-gaze-poll.ts
   });
 
   it("when a car drives by at town speed across the street, then nobody turns to it", () => {
     const poses = kerb(PEOPLE, SPAN);
     const times = carLookTimes(poses, [car(-80, 12, 10)], 16);
     expect(times.filter((time) => time < Infinity), "people who looked at an ordinary car").toEqual([]);
-    // mutation: sed -i 's/^export const CAR_CALM_SPEED = 9;/export const CAR_CALM_SPEED = 0;/' src/game/present/civilian-gaze-constants.ts
   });
 
   it("when a fast car passes beyond a wall that hides it from half of them, then only those who can see it turn", () => {
@@ -88,7 +86,6 @@ describe("given people on a kerb facing the street", () => {
       if (poses.x[civilian]! > 0) expect(times[civilian], `person ${civilian} in the open`).toBeLessThan(Infinity);
       else expect(times[civilian], `person ${civilian} behind the wall`).toBe(Infinity);
     }
-    // mutation: sed -i 's/    return lineOfSight(s\[SCRATCH.ownX\]!, s\[SCRATCH.ownZ\]!, s\[SCRATCH.x\]!, s\[SCRATCH.z\]!);/    return true;/' src/game/present/civilian-gaze.ts
   });
 });
 
@@ -124,7 +121,6 @@ describe("given a crowd scattered round a spot, facing every way", () => {
     expect(Math.min(...reacted), "the quickest").toBeGreaterThanOrEqual(ALARM_DELAY_MIN_SECONDS - TIGHT);
     expect(Math.max(...reacted) - Math.min(...reacted), "spread of the reactions (s)").toBeGreaterThan(0.5);
     expect(new Set(reacted).size, "distinct moments").toBeGreaterThan(reacted.length / 2);
-    // mutation: sed -i 's/      if (hash16(civilian, this.serial ^ SALT.react) >= share \* HASH16) continue;//' src/game/present/civilian-gaze.ts
   });
 });
 
@@ -155,12 +151,10 @@ describe("given one person and a look that jumps every 0.3 s to a random point a
       expect(Math.abs(now.pitch - last.pitch), "pitch step").toBeLessThanOrEqual(PITCH_RATE * step + TIGHT);
       last = now;
     }
-    // mutation: sed -i 's/      this.angle\[at\] = Math.max(from - rate \* t, Math.min(from + rate \* t, eased));/      this.angle[at] = this.goal[channel]!;/' src/game/present/civilian-gaze.ts
   });
 });
 
 describe("given one person standing and something low on the ground behind her to her left", () => {
-  // mutation: sed -i 's/    this.headPitch\[civilian\] = this.angle\[at + PITCH\]!;/    this.headPitch[civilian] = this.angle[at + PITCH]! * Math.cos(turn);/' src/game/present/civilian-gaze.ts
   it("when she is asked to look at it, then she turns past 90 degrees and nods down at it, not up", () => {
     const poses = emptyPoses(1);
     poses.look[0] = HEAD_MOVER;
@@ -201,12 +195,10 @@ describe("given two people talking, one turned 50 degrees from the other, with t
       if (Math.abs(turnOf(gaze, 0) - bearing) < 0.15) onPartner++;
     });
     expect(onPartner / frames, "share of the minute on her partner").toBeGreaterThan(0.65);
-    // mutation: sed -i 's/    if (partner >= 0 \&\& partner < poses.count \&\& poses.shown\[partner\] === 1) {/    if (false) {/' src/game/present/civilian-gaze.ts
   });
 });
 
 describe("given people on a kerb and the player on foot standing 8 m in front of them", () => {
-  // mutation: sed -i 's/s\[SCRATCH.trial\] = NOTICE_FLOOR + (PLAYER_URGENCY - NOTICE_FLOOR) \* s\[SCRATCH.near\]!;/s[SCRATCH.trial] = PLAYER_URGENCY * s[SCRATCH.near]!;/' src/game/present/civilian-gaze-poll.ts
   it("when 20 s pass, then some of them look at him: 8 m is inside the 10 m at which he is noticed", () => {
     const poses = kerb(12, 20);
     const gaze = new CrowdGaze(poses.count);
@@ -233,7 +225,6 @@ describe("given people standing apart with nothing about them", () => {
     return begun;
   }
 
-  // mutation: sed -i 's/GLANCE_SHARE \* freedom \* FRAME_HZ \* s\[SCRATCH.frameSeconds\]! \* HASH16/GLANCE_SHARE * freedom * HASH16/' src/game/present/civilian-gaze-poll.ts
   it("when a minute is played at 60 and at 240 frames a second, then they glance about as often at both: within 25 %", () => {
     const at60 = glances(FRAME);
     const at240 = glances(FRAME / 4);
@@ -243,7 +234,6 @@ describe("given people standing apart with nothing about them", () => {
 });
 
 describe("given a person standing free on a kerb and a dog trotting back and forth along it in front of her", () => {
-  // mutation: sed -i 's/^      if (poses.shown\[civilian\] === 0) continue;$/      if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person) continue;/' src/game/present/civilian-gaze-poll.ts
   it("when a minute passes, then she glances at the dog, nodding down at it, and the dog looks at nothing", () => {
     const poses = emptyPoses(2);
     poses.look[0] = HEAD_MOVER;
@@ -284,7 +274,6 @@ describe("given one person standing and something at her eye height 40 degrees t
     return { gaze, poses };
   }
 
-  // mutation: sed -i 's/    if (this.pendingLeft\[civilian\]! >= 0 \&\& this.pendingLeft\[civilian\]! <= HEAD_LATENCY_S) {/    if (false) {/' src/game/present/civilian-gaze.ts
   it("when she is asked to look at it, then her eyes turn toward it before her head starts, hold it while the head turns, and end centred in a head that took the whole turn", () => {
     const early = asked(Math.floor(HEAD_LATENCY_S / FRAME));
     expect(Math.abs(turnOf(early.gaze, 0)), "her head before its latency (rad)").toBeLessThan(TIGHT);
@@ -299,7 +288,6 @@ describe("given one person standing and something at her eye height 40 degrees t
     expect(Math.abs(settled.gaze.eyeYaw[0]!), "her eyes at the end (rad)").toBeLessThan(0.01);
   });
 
-  // mutation: sed -i 's/    this.eyeYaw\[civilian\] = Math.max(-EYE_YAW_LIMIT, Math.min(EYE_YAW_LIMIT, this.eyeAngle\[at + YAW\]! - this.headYaw\[civilian\]! - this.torsoTwist\[civilian\]!));/    this.eyeYaw[civilian] = Math.max(-EYE_YAW_LIMIT, Math.min(EYE_YAW_LIMIT, this.eyeAngle[at + YAW]!));/' src/game/present/civilian-gaze.ts
   it("when her head takes only three quarters of a turn, then her eyes take the last quarter and stay there", () => {
     const { gaze } = asked(Math.round(2 / FRAME), 0);
     expect(turnOf(gaze, 0), "her head (rad)").toBeCloseTo(0.75 * BEARING, 2);
@@ -307,7 +295,6 @@ describe("given one person standing and something at her eye height 40 degrees t
     expect(gaze.eyeYaw[0], "within their range").toBeLessThanOrEqual(EYE_YAW_LIMIT);
   });
 
-  // mutation: sed -i 's/    const turn = Math.sign(eye\[YAW\]!) \* Math.max(Math.abs(eye\[YAW\]!) \* this.align\[civilian\]!, Math.abs(eye\[YAW\]!) - EYE_YAW_LIMIT);/    const turn = eye[YAW]! * this.align[civilian]!;/' src/game/present/civilian-gaze.ts
   it("when something 130 degrees round asks more of her eyes than three quarters of the turn leaves them, then her head turns on until her eyes, at their limit, are on it", () => {
     const bearing = (130 * Math.PI) / 180;
     const poses = emptyPoses(1);
@@ -320,7 +307,6 @@ describe("given one person standing and something at her eye height 40 degrees t
     expect(turnOf(gaze, 0) + gaze.eyeYaw[0]!, "head and eyes together on the thing (rad)").toBeCloseTo(bearing, 2);
   });
 
-  // mutation: sed -i '/^  mesh.eyes(slot, gaze === null ? 0 : gaze.eyeYaw\[civilian\]!, gaze === null ? 0 : gaze.eyePitch\[civilian\]!);/d' src/game/present/civilian-pose.ts
   it("when she is drawn as a near dummy before her head starts, then the dummy's face carries her eyes' turn", () => {
     const { gaze, poses } = asked(Math.floor(HEAD_LATENCY_S / FRAME));
     const mesh = new DummyMesh(1);
@@ -333,7 +319,6 @@ describe("given one person standing and something at her eye height 40 degrees t
 });
 
 describe("given one person walking with nothing about her", () => {
-  // mutation: sed -i '/^    this.eyeGoal\[YAW\] = 0;$/d' src/game/present/civilian-gaze.ts
   it("when a look to her side ends and she faces ahead again, then her eyes come back to the middle of her head", () => {
     const poses = emptyPoses(1);
     poses.look[0] = HEAD_MOVER;

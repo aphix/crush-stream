@@ -83,7 +83,6 @@ function run(auto: OpenWorldAuto, camera: THREE.PerspectiveCamera, orbit: AutoOr
 }
 
 describe.each(KINDS)("given the Auto camera following $it", ({ kind, parts }) => {
-  // mutation: sed -i 's/^    orbit.aim(_look);$//' src/game/engine/engine-openworld-auto.ts
   it("when the player does not touch the view, then the orbit is aimed at the subject's chest and the shot is the Auto camera's, not the orbit's", () => {
     const scene = sceneOf(parts);
     const auto = autoOver(scene);
@@ -101,7 +100,6 @@ describe.each(KINDS)("given the Auto camera following $it", ({ kind, parts }) =>
     expect(camera.position.distanceTo(new THREE.Vector3(pose.x, pose.y, pose.z)), "the camera stands a shot away from him (m)").toBeGreaterThan(2);
   });
 
-  // mutation: sed -i 's/^      this.director.hold(MANUAL_HOLD_SECONDS);$//' src/game/engine/engine-openworld-auto.ts
   it("when the player holds the view past the longest hold of a subject, then the orbit has the camera, the Auto camera does not touch it, and the same subject is kept", () => {
     const scene = sceneOf(parts);
     const auto = autoOver(scene);
@@ -117,7 +115,6 @@ describe.each(KINDS)("given the Auto camera following $it", ({ kind, parts }) =>
     expect([camera.position.x, camera.position.y, camera.position.z].join(" "), "the Auto camera left the camera where the orbit put it").toBe("100 5 100");
   });
 
-  // mutation: sed -i 's/^      this.cam.adopt(camera, _look);$/      this.cam.cut(0);/' src/game/engine/engine-openworld-auto.ts
   it(`when he lets go, then the shot eases back from where the camera stands, the subject is kept until ${MANUAL_HOLD_S} s after the last turn, and then the cuts go on`, () => {
     const scene = sceneOf(parts);
     const auto = autoOver(scene);
@@ -162,7 +159,6 @@ function bearing(camera: THREE.Camera, look: THREE.Vector3): number {
 }
 
 describe.each(KINDS)("given the engine's own orbit camera under the Auto camera, following $it", ({ parts }) => {
-  // mutation: sed -i 's/    held: (wallDt) => view.rideHeld(true, wallDt),/    held: () => false,/' src/game/engine/engine-openworld-auto.ts
   it("when the mouse drags, then the camera turns round the subject and goes on following him as he moves, and when the drag has been over for the ride pause the Auto shot is back", () => {
     const scene = sceneOf(parts);
     const auto = autoOver(scene);
@@ -185,7 +181,6 @@ describe.each(KINDS)("given the engine's own orbit camera under the Auto camera,
     expect(view.rideHeld(true, DT), "the player no longer holds the view").toBe(false);
   });
 
-  // mutation: sed -i 's/ || this.rideLooked || padTurn;/ || this.rideLooked;/' src/game/present/engine-camera.ts
   it("when the right stick is held, then the view turns round the subject, and once released for the ride pause the Auto shot is back", () => {
     const scene = sceneOf(parts);
     const auto = autoOver(scene);
@@ -203,7 +198,6 @@ describe.each(KINDS)("given the engine's own orbit camera under the Auto camera,
     expect(view.rideHeld(true, DT), "the player no longer holds the view").toBe(false);
   });
 
-  // mutation: sed -i 's/^    if (this.ride) this.rideLooked = true;$//' src/game/present/engine-camera.ts
   it("when the wheel turns one notch, then the view is held and the distance changes", () => {
     const scene = sceneOf(parts);
     const auto = autoOver(scene);
@@ -248,7 +242,6 @@ describe("given the Auto camera asked for the next and the previous subject on a
     return auto.cycle(dir, 0, 0);
   }
 
-  // mutation: sed -i 's/^      while (into > 0 \&\& .*) {$/      while (false) {/' src/game/engine/engine-openworld-auto.ts
   it("when E is pressed from nowhere, then the camera goes to the nearest and on outward, to a foot cop, a driver, a person, a patrol car and the ambulance, and round to the first again", () => {
     const scene = sceneOf(STREET);
     const auto = new OpenWorldAuto(scene.world, scene.sizes, SEED);
@@ -262,7 +255,6 @@ describe("given the Auto camera asked for the next and the previous subject on a
     expect(visited.join(" "), "who the presses went to").toBe(expected.join(" "));
   });
 
-  // mutation: sed -i 's/this.ringPeer\[into - 1\]! < peer || //' src/game/engine/engine-openworld-auto.ts
   it("when E is pressed with Auto off in a room, then the camera goes first to the other player's car, the farthest, and then from the nearest outward; with Auto on it never goes to him", () => {
     const scene = sceneOf({ ...STREET, cars: [...STREET.cars!, { x: 60, z: 0, speed: 5, peer: "Rook" }] });
     const pinned = new OpenWorldAuto(scene.world, scene.sizes, SEED);
@@ -283,7 +275,6 @@ describe("given the Auto camera asked for the next and the previous subject on a
     expect(visited, "Auto on: the walk without him").not.toContain(`${SUBJECT.driver}:3`);
   });
 
-  // mutation: sed -i 's/if (this.ringAge > RING_STALE_SECONDS ||/if (true ||/' src/game/engine/engine-openworld-auto.ts
   it("when Q undoes E, then the camera comes back through the same subjects to where it began; and Q from nowhere goes to the farthest", () => {
     const scene = sceneOf(STREET);
     const auto = new OpenWorldAuto(scene.world, scene.sizes, SEED);
@@ -302,7 +293,6 @@ describe("given the Auto camera asked for the next and the previous subject on a
     expect(named(fresh), "Q from nowhere").toBe(`${WALK[4]!.kind}:${WALK[4]!.id}`);
   });
 
-  // mutation: sed -i 's/^      if (!this.scan.watchable(kind, id)) continue;$//' src/game/engine/engine-openworld-auto.ts
   it("when a subject on the walk has gone, then the press goes past it", () => {
     const scene = sceneOf(STREET);
     const auto = new OpenWorldAuto(scene.world, scene.sizes, SEED);
@@ -313,7 +303,6 @@ describe("given the Auto camera asked for the next and the previous subject on a
     expect(named(auto), "the press after the resident's car drove out of sight").toBe(`${WALK[2]!.kind}:${WALK[2]!.id}`);
   });
 
-  // mutation: sed -i 's/if (this.manual || this.heldFor < HOLD_MIN_SECONDS/if (this.heldFor < HOLD_MIN_SECONDS/' src/game/ai/openworld-auto/auto-director.ts
   it("when a subject is picked, then Auto does not cut away for the manual hold, and then cuts on", () => {
     const scene = sceneOf(STREET);
     const auto = new OpenWorldAuto(scene.world, scene.sizes, SEED);
@@ -328,7 +317,6 @@ describe("given the Auto camera asked for the next and the previous subject on a
     expect(named(auto), "the subject once the hold is up").not.toBe(picked);
   });
 
-  // mutation: sed -i 's/^    this.manualHold = Infinity;$/    this.manualHold = MANUAL_HOLD_SECONDS;/' src/game/engine/engine-openworld-auto.ts
   it("when a subject is picked with Auto off (the pick held for good), then the camera stays on them past the manual hold and a drag still turns round them", () => {
     const scene = sceneOf(STREET);
     const auto = new OpenWorldAuto(scene.world, scene.sizes, SEED);
@@ -346,7 +334,6 @@ describe("given the Auto camera asked for the next and the previous subject on a
     expect(named(auto), "the pick while the view is turned").toBe(picked);
   });
 
-  // mutation: sed -i 's/tried < count; tried++/tried <= count; tried++/' src/game/engine/engine-openworld-auto.ts
   it("when there is nobody on the street, then nothing is gone to", () => {
     const scene = sceneOf({});
     const auto = new OpenWorldAuto(scene.world, scene.sizes, SEED);

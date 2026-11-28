@@ -102,8 +102,6 @@ function worstDifference(a: Play, b: Play): { worst: number; where: string } {
 }
 
 describe("given a pile-up recorded once and its clip replayed twice on the same cars in one process", () => {
-  // Mutations (each turns this row red): `sed 's|^    this.blend.forget(this.cars);$||'` on engine-replay.ts (the second replay blends the first's last poses into its first frames);
-  // `sed 's|new CarBlend(car, this.steps)|new CarBlend(car, 0)|'` on pose-blend.ts (a car tracked afresh blends its first segment over every step the blend ever counted).
   it(`when the second replay is drawn, then every car, wheel and part is posed exactly as in the first, on every frame of its first ${PLAY_S} s`, () => {
     const rec = recordFlat(PILE, 8, false);
     const first = play(rec);

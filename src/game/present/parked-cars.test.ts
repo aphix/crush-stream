@@ -29,7 +29,6 @@ describe("given the oval's car parks", () => {
   const parked = dress(oval).drawn.filter((p) => PARKED_PREFABS.has(p.prefab));
 
   it("when the oval is dressed, then its bays hold parked-car prefabs, no wreck stand-in, drawn only with no collider", () => {
-    // mutation: sed -i 's/const { prefab } = PARKED_CARS\[Math.floor(unit(mix(bay, 1)) \* PARKED_CARS.length)\]!;/const prefab = PREFAB.wreck;/' src/game/world/scenery.ts
     expect(parked.length, "parked cars on the oval").toBeGreaterThan(40);
     expect(dress(oval).drawn.filter((p) => p.prefab === PREFAB.wreck).length, "wreck stand-ins").toBe(0);
     expect(dress(oval).solid.filter((p) => PARKED_PREFABS.has(p.prefab)).length, "parked cars with a body").toBe(0);
@@ -38,15 +37,12 @@ describe("given the oval's car parks", () => {
   });
 
   it("when the oval is dressed twice, then every bay picks the same style and the lots hold several styles", () => {
-    // mutation: sed -i 's/unit(mix(bay, 1))/Math.random()/' src/game/world/scenery.ts
-    // mutation: sed -i 's/Math.floor(unit(mix(bay, 1)) \* PARKED_CARS.length)/0/' src/game/world/scenery.ts
     const again = placeCourse(new Track(parseTrack(oval))).drawn.filter((p) => PARKED_PREFABS.has(p.prefab));
     expect(again.map((p) => `${p.prefab}@${p.x},${p.z}`).join(), "bays").toBe(parked.map((p) => `${p.prefab}@${p.x},${p.z}`).join());
     expect(new Set(parked.map((p) => p.prefab)).size, "styles parked").toBeGreaterThanOrEqual(4);
   });
 
   it("when the parked cars are drawn, then each style is one instanced draw per draw cell, all in the one scenery material", () => {
-    // mutation: sed -i 's/return one(parkedCar("sedan"), mats.plain);/return [...one(parkedCar("sedan"), mats.plain), ...one(parkedCar("sedan"), mats.plain)];/' src/game/present/prefabs.ts
     const meshes: THREE.InstancedMesh[] = [];
     new PropTumble(parked, mats, (mesh) => meshes.push(mesh));
     const groups = new Set(parked.map((p) => `${p.prefab}@${drawCell(p.x, p.z)}`));
@@ -59,8 +55,6 @@ describe("given the oval's car parks", () => {
 describe("given each parked car", () => {
   for (const car of PARKED_CARS) {
     it(`when the ${car.style} is built, then it is one cheap clustered mesh of its style's size, nose +Z, standing on the ground`, () => {
-      // mutation: sed -i 's/body: { shape: 0.32/body: { shape: 0.02/' src/game/present/prefabs-car.ts
-      // mutation: sed -i 's/wide: 1.64, long: 4.229/wide: 1.64, long: 3.0/' src/game/world/catalog.ts
       const parts = prefabParts(car.prefab, mats);
       expect(parts.length, "parts").toBe(1);
       const geometry = parts[0]!.geometry;
@@ -75,7 +69,6 @@ describe("given each parked car", () => {
     });
 
     it(`when the ${car.style}'s catalog box is read, then it is the style's own width, length and height`, () => {
-      // mutation: sed -i 's/wide: 1.64, long: 4.229/wide: 1.64, long: 3.0/' src/game/world/catalog.ts
       const { dims } = CAR_STYLES[car.style];
       expect([car.wide, car.long, car.tall].join(), "box").toBe([dims.width, dims.overhang.front + dims.wheelbase + dims.overhang.rear, dims.height].map((v) => Math.round(v * 1e3) / 1e3).join());
       expect(PREFABS[car.prefab].size.join(), "catalog size").toBe([car.wide, car.tall, car.long].join());

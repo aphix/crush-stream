@@ -51,7 +51,6 @@ function newTrip(): { route: TripRoute; car: KinematicCar } {
 }
 
 describe("given a car on a trip that crosses a signalled junction", () => {
-  // mutation: sed -i 's/if (!urgent) target = Math.min(target, this.signalLimit/if (urgent) target = Math.min(target, this.signalLimit/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when the light stays red, then the car stops with its nose short of the stop bar and waits there", () => {
     const { route, car } = newTrip();
     drive(route, car, 45, timeShowing(LIGHT.red));
@@ -60,7 +59,6 @@ describe("given a car on a trip that crosses a signalled junction", () => {
     expect(barX - car.group.position.x, "it came up to the bar, not stopped far back").toBeLessThan(NOSE_OVERHANG + 6);
   });
 
-  // mutation: sed -i 's/if (!hold) return Infinity;/if (!hold \&\& false) return Infinity;/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when the light turns green after the car waited at it, then the car goes through the junction", () => {
     const { route, car } = newTrip();
     drive(route, car, 45, timeShowing(LIGHT.red));
@@ -68,7 +66,6 @@ describe("given a car on a trip that crosses a signalled junction", () => {
     expect(car.group.position.x, "the car's x past the junction's box").toBeGreaterThan(network.junctionX[junction]! + network.boxHalf);
   });
 
-  // mutation: sed -i 's/if (!urgent) target = Math.min(target, this.signalLimit/if (true) target = Math.min(target, this.signalLimit/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when the car is urgent and the light stays red, then the signal does not hold it (it goes through)", () => {
     const { route, car } = newTrip();
     const snap = blankAiCar(CAR_ID);
@@ -80,7 +77,6 @@ describe("given a car on a trip that crosses a signalled junction", () => {
     expect(car.group.position.x, "the urgent car's x, past the bar").toBeGreaterThan(barX + 2);
   });
 
-  // mutation: sed -i 's/if (!hold) return Infinity;/if (!hold \&\& false) return Infinity;/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when the light is green all along, then the car passes the bar without stopping for it", () => {
     const { route, car } = newTrip();
     let slowest = Infinity;
@@ -118,7 +114,6 @@ describe("given a car chased by a patrol car behind it", () => {
     return chaser;
   }
 
-  // mutation: sed -i 's/    if (!urgent \&\& chaser === null) target = Math.min(target, this.signalLimit/    if (!urgent) target = Math.min(target, this.signalLimit/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when the light stays red, then the car runs it: it does not stop at the bar", () => {
     const { route, car } = newTrip();
     const snap = blankAiCar(CAR_ID);
@@ -130,7 +125,6 @@ describe("given a car chased by a patrol car behind it", () => {
     expect(car.group.position.x, "the chased car's x, past the bar").toBeGreaterThan(barX + 2);
   });
 
-  // mutation: sed -i 's/let target = chaser !== null ? Math.min(FLEE_SPEED, cls.topSpeed) : urgent/let target = chaser !== null ? Math.min(CRUISE_SPEED, cls.topSpeed) : urgent/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when the road is clear and long, then it drives faster than traffic ever does", () => {
     const route = straightRoute();
     const car = new KinematicCar();
@@ -146,7 +140,6 @@ describe("given a car chased by a patrol car behind it", () => {
     expect(fastest, "the top speed it reached").toBeGreaterThan(CRUISE_SPEED + 3);
   });
 
-  // mutation: sed -i 's/    if (ahead > 0 || ahead < -SWERVE_BEHIND || Math.abs(side) > LINE_W) return 0;/    return 0;/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when the chaser is close behind in its lane, then it swings its line off the chaser's; with the chaser far behind it holds its line", () => {
     const route = straightRoute();
     const steerWith = (chaser: ReturnType<typeof chaserAt>): number => {
@@ -180,7 +173,6 @@ describe("given a person standing on the car's way (a crossing, a lane)", () => 
     }
   }
 
-  // mutation: sed -i 's/      if (this.personNearAhead(sample.x, sample.z)) {/      if (false) {/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when the light is green and she stands in its lane, then the car stops short of her and waits; when she has gone it drives on past where she stood", () => {
     const { route, car } = newTrip();
     const person = personAhead(route);
@@ -196,7 +188,6 @@ describe("given a person standing on the car's way (a crossing, a lane)", () => 
     driver.people = null;
   });
 
-  // mutation: sed -i 's/look + Math.max(PATH_REACH, PERSON_REACH), others)/PERSON_REACH, others)/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when she stands at the far end of the look and another stands a look and more off, then only the near one holds the car, and it is held by a car there too", () => {
     const { route } = newTrip();
     const snap = blankAiCar(CAR_ID);
@@ -222,7 +213,6 @@ describe("given a person standing on the car's way (a crossing, a lane)", () => 
     expect(driver["leadLimit"](snap, route, 0, 0, [snap, other]), "a car there holds it").toBeLessThan(Infinity);
   });
 
-  // mutation: sed -i 's/  private personNearAhead(x: number, z: number): boolean {/  private personNearAhead(x: number, z: number): boolean {\n    return true;/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when she stands on the pavement beside the lane, then the car does not stop for her", () => {
     const { route, car } = newTrip();
     const person = personAhead(route);

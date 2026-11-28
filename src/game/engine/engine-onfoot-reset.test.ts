@@ -89,7 +89,6 @@ describe("given the real engine on the open world, the player's car on the park'
     expect(clear, "clear of every solid").toBe(true);
   }
 
-  // mutation: sed -i 's/if (this.onFoot.resetsToCar) this.onFoot.resetIntoCar();/if (false) this.onFoot.resetIntoCar();/' src/game/engine/engine-scenes.ts
   it("when R is tapped on foot in the park, then he is at the wheel of a repaired car on the nearest road, facing along it, and the walker is gone", () => {
     const stood = outAndWrecked();
     const before = roadDistance(stood.x, stood.z);
@@ -99,7 +98,6 @@ describe("given the real engine on the open world, the player's car on the park'
     expectFreshOnTheRoad(stood, before);
   });
 
-  // mutation: sed -i 's/const placed = out \&\& this.host.runsCars() \&\& this.host.freshCarNear(car, _torso.x, _torso.z, ragdolls.walker.facing);/const placed = false;/' src/game/engine/engine-onfoot.ts
   it("when R is held on foot, then he is put in the same repaired car on the same road", () => {
     const stood = outAndWrecked();
     const before = roadDistance(stood.x, stood.z);
@@ -108,7 +106,6 @@ describe("given the real engine on the open world, the player's car on the park'
     expectFreshOnTheRoad(stood, before);
   });
 
-  // mutation: sed -i 's/if (e.car !== this.onFoot.away \&\& !this.onFoot.takeEjected(e)) this.ragdolls.launch(e, cars, true, release);/if (e.car !== this.onFoot.away) this.ragdolls.launch(e, cars, true, release);/' src/game/engine/engine.ts
   it("when the driver is thrown out of his car in the open world, then the walker is his and the camera is on him, and the empty car is a door he can climb back through", () => {
     rig.engine["seat"].mode = "drive";
     rig.engine["ejection"].throwDriverNow(rig.cars(), 0);

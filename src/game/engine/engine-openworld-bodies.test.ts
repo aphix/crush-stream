@@ -103,8 +103,6 @@ describe("given the real engine in the open world and the player's car running a
     return true;
   }
 
-  // mutation: sed -i 's/    this.host.steer(slot, detAtan2(vx, vz), Math.min(FASTEST, hypot2(vx, vz)));/    this.host.steer(slot, detAtan2(dx, dz), Math.min(FASTEST, pace + CATCH_UP * lag));/' src/game/engine/openworld-bodies.ts
-  // mutation: sed -i 's/CATCH_UP \* (poses.x\[civilian\]! - _path.x)/CATCH_UP * dx/; s/CATCH_UP \* (poses.z\[civilian\]! - _path.z)/CATCH_UP * dz/' src/game/engine/openworld-bodies.ts
   it("when a civilian walks a straight street, then her body faces her way within a few degrees and does not swing left and right with her steps", () => {
     const crowd = world()["crowd"]!;
     const car = rig.cars()[0]!;
@@ -154,7 +152,6 @@ describe("given the real engine in the open world and the player's car running a
     expect((reversals / steady) * FRAME_HZ, "swings left-right reversals a second").toBeLessThan(MOST_REVERSALS_PER_SECOND);
   });
 
-  // mutation: sed -i 's/      if (this.bodies?.knock(strike) === true) {/      if (false) {/' src/game/engine/engine-openworld.ts
   it("when the car hits her, then her own live body is knocked down and lies outside the car, and no second dummy is thrown for her", () => {
     const resident = civilianWithBody();
     const crowd = world()["crowd"]!;

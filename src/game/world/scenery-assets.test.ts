@@ -186,7 +186,6 @@ function cardTurns(): { solid: number[]; free: number[] } {
 describe("given the generated scenery assets on every course", () => {
   // Weights pick among a pair's assets, so a rare asset may miss a small course set: the row holds each asset's rule, kind and a biome
   // to what some course places (circuit: oval, park: rally, city: city, desert: stunt, dirt: dam-spine), not each asset to a hit.
-  // mutation: sed -i 's/const LOT_CHANCE = 0.4;/const LOT_CHANCE = 0;/' src/game/world/scenery.ts
   it("when every course is dressed, then every registered asset's rule, kind and one of its biomes is placed by some course", () => {
     const { ids, pairs } = unreached();
     const unweighted = SCENERY_ASSETS.filter((a) => a.weight <= 0).map((a) => a.id);
@@ -196,30 +195,24 @@ describe("given the generated scenery assets on every course", () => {
     expect(unweighted, `assets with no weight, which no lattice picks: ${unweighted.join(", ")}`).toHaveLength(0);
   });
 
-  // mutation: sed -i 's/return PREFAB.assetTile;/return PREFAB.assetBox;/' src/game/world/scenery-assets/pick.ts
   it("when each placed asset is read back, then its index names a row, it is drawn as its row says and it stands in a biome its row lists", () => {
     const { seen, bad } = misdrawn();
     expect(seen, "assets placed").toBeGreaterThan(0);
     expect(bad, "assets drawn as the wrong prefab or standing in the wrong biome").toHaveLength(0);
   });
 
-  // mutation: sed -i 's/near.openGap < OPEN_REACH) return false;/near.openGap < -OPEN_REACH) return false;/' src/game/world/scenery.ts
   it("when an asset with no body (a card, a cross or a box that is not paint) is placed, then no car can reach it", () => {
     const { seen, bad } = reachable();
     expect(seen, "bodiless assets placed").toBeGreaterThan(0);
     expect(bad, "bodiless assets within a car's reach").toHaveLength(0);
   });
 
-  // mutation: sed -i 's/h \* k, w \* a.core \* k\]/h * k, w * k]/' src/game/world/scenery-assets/pick.ts
-  // mutation: sed -i 's/placeCourse(track, SCENERY_ARM.off)/placeCourse(track)/' src/game/world/scenery.test-util.ts  (the authored list takes the solid scenery too: none is left to measure)
   it("when the solid assets are measured, then each is within a car's reach and a standee's or cross's footprint is its core share of the drawn width", () => {
     const { total, counts, bad } = solids();
     expect(total, "solid assets placed").toBeGreaterThan(0);
     expect(bad, `solid assets per course: ${counts.join(", ")}`).toHaveLength(0);
   });
 
-  // mutation: sed -i 's/? CARD_JITTER : FACE_JITTER/? FACE_JITTER : FACE_JITTER/' src/game/world/scenery.ts
-  // mutation: sed -i 's/ : FACE_JITTER;/ : CARD_JITTER;/' src/game/world/scenery.ts
   it("when the cards on lattices and in loops are turned against the road, then the solid ones stay near square-on and the drawn-only ones are not all squared to it", () => {
     const { solid, free } = cardTurns();
     free.sort((a, b) => a - b);
@@ -229,7 +222,6 @@ describe("given the generated scenery assets on every course", () => {
     expect(free[Math.floor(free.length / 2)]!, "the median turn of a drawn-only card").toBeGreaterThan(FREE_TURN_MEDIAN_MIN);
   });
 
-  // mutation: sed -i 's/const dice = unit(mix(seed, 0));/const dice = Math.random();/' src/game/world/scenery.ts
   it("when every course is dressed twice from separate parses, then the placed assets come out the same, asset index included", () => {
     let seen = 0;
     for (const j of COURSE_JSON) {
@@ -240,7 +232,6 @@ describe("given the generated scenery assets on every course", () => {
     expect(seen, "assets placed").toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's/?? \[{ name: DEFAULT_ROAD_DECAL, only: BIOME.city }\]/?? ROAD_DECAL_NAMES.map((name) => ({ name, only: null }))/' src/game/world/scenery.ts
   it("when every course is dressed with no roadDecals, then only a course with a city (its biome or a zone: the Mall's corner) has paint on its roads, and it is manhole covers", () => {
     for (const d of dressedCourses()) {
       const ids = onRoad(d).map(idOf);
@@ -250,7 +241,6 @@ describe("given the generated scenery assets on every course", () => {
     }
   });
 
-  // mutation: sed -i 's/const asset = SCENERY_ASSETS.findIndex((a) => a.id === ROAD_DECAL_ASSET\[name\]);/const asset = SCENERY_ASSETS.findIndex((a) => a.id === ROAD_DECAL_ASSET.manhole);/' src/game/world/scenery.ts
   it("when a course lists its road paint, then only those kinds lie on its roads, and an empty list lays none", () => {
     expect(onRoad(dress(cityJson(), { roadDecals: [] })).map(idOf), "an empty list").toEqual([]);
     const crosswalks = onRoad(dress(cityJson(), { roadDecals: ["crosswalk"] })).map(idOf);
@@ -258,7 +248,6 @@ describe("given the generated scenery assets on every course", () => {
     expect(crosswalks.filter((id) => id !== ROAD_DECAL_ASSET.crosswalk), "other paint on a road").toEqual([]);
   });
 
-  // mutation: sed -i 's/manhole: 105/manhole: 10/' src/game/world/scenery.ts
   it("when the city's manhole covers are measured, then most have their nearest neighbour a cover's spacing away", () => {
     const covers = coversOf(dress(cityJson()));
     expect(covers.length, "covers").toBeGreaterThan(0);
@@ -268,9 +257,6 @@ describe("given the generated scenery assets on every course", () => {
     expect(median, `the median nearest cover is ${median.toFixed(1)} m away`).toBeGreaterThanOrEqual(MANHOLE_APART);
   });
 
-  // mutation: sed -i 's/return (stationUnit(c, salt, seg, 1, 2) < 0.5 ? 1 : -1) \* (MANHOLE_DASH_OFFSET + wobble);/return 0;/' src/game/world/scenery.ts
-  // mutation: sed -i 's/const gutter = half - MANHOLE_EDGE_CLEAR;/const gutter = half - 0.2;/' src/game/world/scenery.ts
-  // mutation: sed -i 's/      return gap >= JUNCTION_CLEAR;/      return true;/' src/game/world/scenery.ts
   it("when the city's and the Mall's manhole covers are measured against the roads, then none is on the centre dash, near an edge line or at a junction", () => {
     for (const json of [cityJson(), COURSE_JSON.find((j) => parseTrack(j).id === TRACK_ID.nationalMall)]) {
       const d = dress(json);
@@ -283,7 +269,6 @@ describe("given the generated scenery assets on every course", () => {
     }
   });
 
-  // mutation: sed -i 's/      return gap >= CROSSWALK_GAP\[0\] && gap < CROSSWALK_GAP\[1\];/      return true;/' src/game/world/scenery.ts
   it("when the city lists crosswalks, then each lies beside a junction", () => {
     const d = dress(cityJson(), { roadDecals: ["crosswalk"] });
     const crosswalks = onRoad(d).filter((p) => idOf(p) === ROAD_DECAL_ASSET.crosswalk);
@@ -294,7 +279,6 @@ describe("given the generated scenery assets on every course", () => {
   /** Every number of a placement list, in one list. */
   const numbers = (list: readonly Placed[]): number[] => list.flatMap((p) => [p.x, p.y, p.z, p.yaw, p.sx, p.sy, p.sz, p.asset ?? -1]);
 
-  // mutation: sed -i 's/^export function footprintDepth(track: Track, p: Placed): number {$/&\n  p.x += 1e-9;/' src/game/world/scenery.test-util.ts  (a row's read moves the shared placement)
   it("when a course is dressed again with no memo, then it equals the dressing the rows above read, bit for bit: its props, and the ground height and road depth at them", () => {
     for (const id of [TRACK_ID.city, TRACK_ID.oval, TRACK_ID.nationalMall]) {
       const json = COURSE_JSON.find((j) => parseTrack(j).id === id);
@@ -312,7 +296,6 @@ describe("given the generated scenery assets on every course", () => {
 
 describe("given the family rows read from JSON", () => {
   it("when each row is read, then its kind, body, rule, biomes, size, weight and core are in range and its id is unique and family-prefixed", () => {
-    // mutation: sed -i 's/"weight": 0.9/"weight": 9/' src/game/world/scenery-assets/greenery.json
     const KINDS: readonly string[] = ["card", "cross", "decal", "tile", "box"];
     const BODIES: readonly string[] = ["none", "poof", "knock", "solid"];
     const RULES: readonly string[] = ["verge", "islands", "frontage", "paving", "trackside", "carpark", "yard", "ground"];

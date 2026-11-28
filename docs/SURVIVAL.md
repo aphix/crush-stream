@@ -162,8 +162,8 @@ a quarter as mean or ram-seeking; then it eases in, cubically, to today's full a
 (`HunterBrain.update`), that every choice making the pack mean reads; no physics is scaled, only what the AI chooses.
 
 - **Schedule.** a = `RAMP.floor` = 0.25 until `RAMP.hold` = 30 s; then a = 0.25 + 0.75 × u³, u = (t − 30) / `RAMP.full`, reaching 1 at 30 + `RAMP.full` = 90 s and
-  staying there: 0.26 at 45 s, 0.34 at 60 s, 0.51 at 72 s, 0.79 at 84 s, 1 at 90 s. a = 1 is the pack as it was before the ramp (the opening rows' mutation
-  is `RAMP.hold` pushed far into the past: the old pack, measured below).
+  staying there: 0.26 at 45 s, 0.34 at 60 s, 0.51 at 72 s, 0.79 at 84 s, 1 at 90 s. a = 1 is the pack as it was before the ramp (`RAMP.hold` pushed far into the
+  past: the old pack, measured below).
 - **Why `RAMP.full` = 60 s.** The old schedule reaches its cap of 12 cops at 84 s (5 in the formation and one more every 12 s), so full aggression at 90 s arrives with
   the full pack. A cubic is flat at the start: a stays under 0.35 for the first minute, so the pack grows and bites for a minute before its lethal choices open (a ≥ 0.5, at
   72 s). Shorter would make the pack lethal inside the minute the owner wants it forgiving; longer would put the full pack past the 2 minutes a real player rarely outlasts.

@@ -196,7 +196,6 @@ describe("given the post chain on a headless renderer, on a device of pixel rati
 });
 
 describe("given the scene's MSAA samples per device class", () => {
-  // mutation: sed -i 's/  if (phone) return 0;/  if (false) return 0;/' src/game/present/engine-post.ts
   it("when the device is a phone, then every tier and ratio gets 0 samples; a desktop keeps 4 at high", () => {
     const phone = FX_TIERS.flatMap((tier) => [1, 2].map((ratio) => sceneSamples(tier, ratio, true)));
     expect(phone.every((s) => s === 0), `phone samples ${phone.join(",")}`).toBe(true);

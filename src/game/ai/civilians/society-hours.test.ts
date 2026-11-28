@@ -25,8 +25,6 @@ const closedAt = (hour: number): string => {
 };
 
 describe("given a city with an all-day place, an evening place and a wrecked one", () => {
-  // mutation: sed -i 's/state.closedUntilTick\[place\]! > tick || //' src/game/ai/civilians/society-hours.ts (a wreck does not shut a place)
-  // mutation: sed -i 's/ || state.venues.hourWeight\[place \* HOURS_PER_GAME_DAY + hour\]! < 1//' src/game/ai/civilians/society-hours.ts (hours do not shut a place)
   it("when the places are read at noon, before the evening and in it, then each is shut by its hours or its wreck", () => {
     expect(closedAt(12), "noon: the evening place and the wrecked one are shut").toBe("011");
     expect(closedAt(16), "after the wreck, before the evening: the evening place is shut").toBe("010");

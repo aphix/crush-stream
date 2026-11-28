@@ -20,7 +20,6 @@ const json = (id: string): unknown => COURSE_JSON.find((j) => parseTrack(j).id =
 const OVAL = json(TRACK_ID.oval);
 
 describe("given every course", () => {
-  // mutation: sed -i 's|  return h / 4294967296;|  return h / 4294967296 + Math.random() * 1e-3;|' src/game/world/scenery-field.ts  (the two dressings differ: the dressed-twice row goes red)
   it("when it is dressed twice from separate parses, then both lists come out the same", () => {
     for (const j of COURSE_JSON) {
       const a = dress(j);
@@ -55,7 +54,6 @@ describe("given every course", () => {
     expect(slabs, "the course has an apron").toBeGreaterThan(0);
     expect(thinScenery(d.drawn, 0.3).filter((p) => p.prefab === PREFAB.sidewalk).length).toBe(slabs);
   });
-  // mutation: sed -i 's/p.prefab === PREFAB.sidewalk || unit(/unit(/' src/game/world/scenery.ts
 });
 
 describe("given the scenery on every course", () => {
@@ -247,8 +245,6 @@ function stretchDistance(track: Track, p: Placed): number {
 }
 
 describe("given the scenery's cost on every course", () => {
-  // mutation: sed -i 's/const DRAWS_MAX = 70;/const DRAWS_MAX = 1;/' src/game/world/scenery.test.ts  (the draws row: oval adds 23 groups)
-  // mutation: sed -i 's/const ASSET_DRAW_CELL = 8192;/const ASSET_DRAW_CELL = 512;/' src/game/world/scenery-assets/draw-group.ts  (the draws row: four-count adds 113 groups, over 70)
   it("when the draw cells of the generated props are counted, then each course adds few draws and no cell holds too many of one kind", () => {
     // Before assets four-count added 45 (a long course over many 512 m draw cells, six kinds in each). An asset's group is its kind and
     // family in an 8192 m cell (a solid card, cross or box draws with its plain kind's mesh: a course holds a few hundred sprites of a

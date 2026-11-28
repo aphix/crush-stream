@@ -23,7 +23,6 @@ const drawn = (mesh: PackedMesh, name: "position" | "normal" | "color"): string 
 const drawnAll = (mesh: PackedMesh): string => [drawn(mesh, "position"), drawn(mesh, "normal"), drawn(mesh, "color")].join();
 
 describe("given a packed mesh with three builds in it", () => {
-  // mutation: sed -i 's/this.slotStart\[other\] = this.slotStart\[other\]! - count;/void count;/' src/game/present/interiors/interior-pack.ts (the slots after a hole keep their old starts)
   it("when the middle one is taken out, a fourth is built and the third is taken out, then what is drawn is the first and the fourth as if packed alone", () => {
     const mesh = packed();
     const first = mesh.add([pieceAt(0, 0xff0000)], 0, 0, 0);
@@ -43,7 +42,6 @@ describe("given a packed mesh with three builds in it", () => {
     expect(mesh.mesh.visible, "drawn with one in it").toBe(true);
   });
 
-  // mutation: sed -i 's/.copyWithin(start \* STREAM_FLOATS, after \* STREAM_FLOATS, this.used \* STREAM_FLOATS)/.copyWithin(0, 0, 0)/' src/game/present/interiors/interior-pack.ts (a hole is left open)
   it("when the first is taken out, then the ones after it move down and a build into the space reads as the last", () => {
     const mesh = packed();
     const first = mesh.add([pieceAt(0, 0xff0000)], 0, 0, 0);
@@ -56,7 +54,6 @@ describe("given a packed mesh with three builds in it", () => {
     expect(drawnAll(mesh)).toBe(drawnAll(fresh));
   });
 
-  // mutation: sed -i 's/    this.send(start, moved);/    this.send(start, 0);/' src/game/present/interiors/interior-pack.ts (the moved vertices are never sent to the card)
   it("when the first is taken out after the card has what was packed, then the vertices that moved are the ones to send", () => {
     const mesh = packed();
     const first = mesh.add([pieceAt(0, 0xff0000)], 0, 0, 0);
@@ -72,7 +69,6 @@ describe("given a packed mesh with three builds in it", () => {
 });
 
 describe("given a packed mesh that a build outgrows", () => {
-  // mutation: sed -i 's/      (next.array as Float32Array).set((stream.array as Float32Array).subarray(0, this.used \* STREAM_FLOATS));//' src/game/present/interiors/interior-pack.ts (the new storage starts empty)
   it("when it grows, then its storage is new, twice the size, and what was packed is kept; room enough, it is the same storage", () => {
     const mesh = packed(2 * BRICK_VERTICES);
     mesh.add([pieceAt(0, 0xff0000)], 0, 0, 0);
@@ -89,7 +85,6 @@ describe("given a packed mesh that a build outgrows", () => {
 });
 
 describe("given a piece packed with a turn and a place", () => {
-  // mutation: sed -i 's/      position\[out\] = cos \* px + sin \* pz + x;/      position[out] = cos * px - sin * pz + x;/' src/game/present/interiors/interior-pack.ts
   it("when its corners and normals are read, then they are the piece turned about y and moved, as a geometry's rotateY and translate do", () => {
     const mesh = packed();
     mesh.add([pieceAt(2, 0x336699)], YAW, PLACE.x, PLACE.z);

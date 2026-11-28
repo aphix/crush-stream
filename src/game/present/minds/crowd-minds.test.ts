@@ -35,7 +35,6 @@ function asked() {
 afterEach(() => vi.restoreAllMocks());
 
 describe("given the Minds setting off", () => {
-  // mutation: sed -i 's/      if (this.on) this.ask(hour);/      this.ask(hour);/' src/game/present/minds/crowd-minds.ts
   it("when a resident is looked at and a crash pulse lingers beside the crowd for 1000 frames, then the panel has her thought, and no worker is made and nothing is fetched", () => {
     const fetched = vi.spyOn(globalThis, "fetch");
     const { crowd, resident, gaze, workers } = minds();
@@ -56,7 +55,6 @@ describe("given the Minds setting off", () => {
     expect(workers[0]!.sent[0]?.kind, "its first message").toBe("load");
   });
 
-  // mutation: sed -i 's/    if (row >= 0) this.world.gaze?.attend(/    if (row < 0) this.world.gaze?.attend(/' src/game/present/minds/crowd-minds.ts
   it("when she is looked at with a car going by 5 m off, then her thought is a look at the car and she turns to it once", () => {
     const { crowd, resident, gaze } = minds();
     const attend = vi.spyOn(gaze, "attend");
@@ -68,7 +66,6 @@ describe("given the Minds setting off", () => {
 });
 
 describe("given the Minds setting on and a resident looked at", () => {
-  // mutation: sed -i '/^    this.verdicts\[verdict\]!++;/d' src/game/present/minds/crowd-minds.ts
   it("when the model answers with a tool that is not a thought, then her panel line stays the fallback's and the answer is counted as unknown", () => {
     const { crowd, resident, fallback, worker } = asked();
     worker.reply({ kind: "answer", id: worker.lastAsk(), text: '<tool_call>[{"name":"dance","arguments":{"style":"waltz"}}]' });
@@ -76,7 +73,6 @@ describe("given the Minds setting on and a resident looked at", () => {
     expect(crowd.verdicts[VERDICT.unknownTool], "unknown answers").toBe(1);
   });
 
-  // mutation: sed -i 's/    if (verdict !== VERDICT.taken || this.thoughtStamp\[resident\] !== ask.stamp) return;/    if (this.thoughtStamp[resident] !== ask.stamp) return;/' src/game/present/minds/crowd-minds.ts
   it("when the model answers with a look at a crash nobody saw, then her panel line stays the fallback's: the answer does not fit her moment", () => {
     const { crowd, resident, fallback, worker } = asked();
     worker.reply({ kind: "answer", id: worker.lastAsk(), text: '<tool_call>[{"name":"look_at","arguments":{"stimulus":"crash"}}]' });
@@ -84,7 +80,6 @@ describe("given the Minds setting on and a resident looked at", () => {
     expect(crowd.verdicts[VERDICT.absent], "answers that do not fit").toBe(1);
   });
 
-  // mutation: sed -i 's/    this.keep(resident, ask.hour, this.pick, ask.sit.purpose);/    void ask.sit;/' src/game/present/minds/crowd-minds.ts
   it("when the model answers with a thought that fits, then her panel line becomes it", () => {
     const { crowd, resident, fallback, worker } = asked();
     worker.reply({ kind: "answer", id: worker.lastAsk(), text: '<tool_call>[{"name":"ignore","arguments":{}}]' });
@@ -93,7 +88,6 @@ describe("given the Minds setting on and a resident looked at", () => {
     expect(crowd.verdicts[VERDICT.taken], "answers taken").toBe(1);
   });
 
-  // mutation: sed -i 's/^const ASK_BUDGET_S = 15;/const ASK_BUDGET_S = 1e9;/' src/game/present/minds/crowd-minds.ts
   it("when the model takes longer than 15 s, then the worker is ended, the answer is late and her line stays the fallback's", () => {
     const { crowd, resident, fallback, worker } = asked();
     for (let frame = 0; frame < 16 * FRAME_HZ; frame++) crowd.frame(FRAME);
@@ -103,7 +97,6 @@ describe("given the Minds setting on and a resident looked at", () => {
     expect(crowd.lookAt(resident), "her line").toBe(fallback);
   });
 
-  // mutation: sed -i 's/    if (verdict !== VERDICT.taken || this.thoughtStamp\[resident\] !== ask.stamp) return;/    if (verdict !== VERDICT.taken) return;/' src/game/present/minds/crowd-minds.ts
   it("when a crash turns her group while her ask is in flight, then the model's later answer does not replace the crash thought", () => {
     const { crowd, resident, world, gaze, worker } = asked();
     world.poses!.shown.fill(0);
@@ -117,7 +110,6 @@ describe("given the Minds setting on and a resident looked at", () => {
     expect(crowd.lookAt(resident), "her line after the answer").toBe(crash);
   });
 
-  // mutation: sed -i '/^    if (on) return;$/{n;d}' src/game/present/minds/crowd-minds.ts
   it("when the setting is turned off with a worker running, then the worker is ended, and her thought in a new hour makes none", () => {
     const { crowd, world, resident, worker, workers } = asked();
     crowd.setOn(false);
@@ -129,8 +121,6 @@ describe("given the Minds setting on and a resident looked at", () => {
 });
 
 describe("given a crowd standing together", () => {
-  // mutation: sed -i 's/^const STAGGER_STEP_S = 0.15;/const STAGGER_STEP_S = 0;/' src/game/present/minds/crowd-minds.ts
-  // mutation: sed -i 's/^    this.fanOut(count, hourKey(this.world.tick), this.pick, this.sit);/&\n    if (this.on) this.ask(hourKey(this.world.tick));/' src/game/present/minds/crowd-minds.ts
   it("when a crash pulse appears 2 m away with the Minds on, then within 2.5 s a group of them turn to it one after another, the last over a second after the first, and no worker is made: a group's thought is the pick's", () => {
     const { crowd, gaze, workers } = minds();
     crowd.setOn(true);
@@ -146,7 +136,6 @@ describe("given a crowd standing together", () => {
     expect(workers.length, "workers made").toBe(0);
   });
 
-  // mutation: sed -i 's/      if (!PULSE_KINDS.includes(kind) || table.life\[row\]! < KIND_LIFE\[kind\]! - FRESH_S || /      if (!PULSE_KINDS.includes(kind) || /' src/game/present/minds/crowd-minds.ts
   it("when the crash pulse in the table is already old, then nobody turns to it", () => {
     const { crowd, gaze } = minds();
     const attend = vi.spyOn(gaze, "attend");

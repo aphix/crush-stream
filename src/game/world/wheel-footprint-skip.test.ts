@@ -83,7 +83,6 @@ describe("given wheels over a patchwork of steps and edges", () => {
     setGround(null);
   });
 
-  // mutation: sed -i '/^        if (_pid\[kn\] !== _pid\[kn\]) askSkipped(hub, axes, skip, kn, out);/d' src/game/world/surfaces.ts
   it("when 1000 wheels are read with the footprint's skip and with every point asked, then every contact entry is the same bit for bit", () => {
     for (const seed of [1, 2, 3]) {
       const skipped = readAll(seed, true);
@@ -92,14 +91,12 @@ describe("given wheels over a patchwork of steps and edges", () => {
     }
   });
 
-  // mutation: sed -i 's/    treadReach.tops !== null || (n === FOOT \&\& !BAKE.on)/    treadReach.tops !== null || n === FOOT/' src/game/world/surfaces.ts
   it("when the same wheels are read, then the skip asks the ground at least a fifth fewer times than asking every point", () => {
     const skipped = readAll(1, true);
     const asked = readAll(1, false);
     expect(skipped.seeks, `seeks ${skipped.seeks} against ${asked.seeks}`).toBeLessThan(0.8 * asked.seeks);
   });
 
-  // mutation: sed -i 's/      if (s.cellStart\[c + 1\]! !== s.cellStart\[c\]!) return false;/      if (false) return false;/' src/game/world/surfaces.ts
   it("when the same wheels are read among 30 solid props, then every contact entry is the same bit for bit with the solids left unasked where they list nothing", () => {
     for (const seed of [1, 2, 3]) {
       const skipped = readAll(seed, true, true);
@@ -108,14 +105,12 @@ describe("given wheels over a patchwork of steps and edges", () => {
     }
   });
 
-  // mutation: sed -i 's/  live.noSolids = BAKE.on \&\& live.solids !== null \&\& solidsEmpty(/  live.noSolids = false \&\& solidsEmpty(/' src/game/world/surfaces.ts
   it("when wheels are read among 30 solid props, then the solids are asked of at least a fifth fewer points than asking every point", () => {
     const skipped = readAll(1, true, true);
     const asked = readAll(1, false, true);
     expect(skipped.solidFinds, `solid finds ${skipped.solidFinds} against ${asked.solidFinds}`).toBeLessThan(0.8 * asked.solidFinds);
   });
 
-  // mutation: sed -i 's/1.001 \* hypot2(RING_X \* across, RING_R \* scale) + 1e-6/0.01 * hypot2(RING_X * across, RING_R * scale)/' src/game/world/surfaces.ts
   it("when a hub stands in an empty index cell with a prop in the next cell 0.3 m from its hub along its roll, then the solids are asked and the prop is read as the all-points reading reads it", () => {
     const solids = new Surface();
     solids.addPrism({ x: 0, z: 8.6, yaw: 0, hx: 1, hz: 0.3, base: 0, top: 0.4, id: 0, moves: false });
@@ -139,7 +134,6 @@ describe("given wheels over a patchwork of steps and edges", () => {
     expect(firstMismatch(skipped, asked)).toBeUndefined();
   });
 
-  // mutation: sed -i 's/^const TREAD_MISS = 1e-3;/const TREAD_MISS = 1e-4;/' src/game/world/surfaces.ts
   it("when a wheel stands on ground whose slope turns by 0.04 m/m along each axis (a tread's tenth to a millimetre of arc over its ring bottom), then only its five ring bottoms and its hub ask the ground", () => {
     const g = new Ground();
     const N = 40;

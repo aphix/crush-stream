@@ -30,13 +30,11 @@ describe("given the walker's key line", () => {
     });
   }
 
-  // mutation: sed -i 's/(slot === arms.slot ? `▸${hint}` : hint)/hint/' src/game/hud/drive-keys.ts
   it("when he holds the shotgun, then the key line lists the four weapons with the shotgun marked", () => {
     expect(footKeys(false, null, { slot: 2 })).toContain("1 Fists · 2 Pistol · ▸3 Shotgun · 4 Rifle");
     expect(footKeys(false, null)).not.toContain("Pistol");
   });
 
-  // mutation: sed -i 's/`▸0 Hook ${cables}\/6`/"▸0 Hook"/' src/game/hud/drive-keys.ts
   it("when he holds the hook with two cables out, then the key line reads 0 Hook 2/6, marked", () => {
     expect(footKeys(false, null, { slot: 4 }, 2)).toContain("▸0 Hook 2/6");
   });

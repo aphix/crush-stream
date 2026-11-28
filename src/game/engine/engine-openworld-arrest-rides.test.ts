@@ -84,7 +84,6 @@ function carAtStation(): DeformableCar {
 }
 
 describe("given the host's arrest of a civilian by a patrol car that has come, on a map with a police station", () => {
-  // mutation: sed -i '/      this.hooks.rode(slot, cars.carIndexOf(car));/d' src/game/ai/openworld-crime/arrests.ts
   it("when the pair has got into the car, then the engine is told once of the resident and the car's place in its list", () => {
     const run = hostArrest();
     runUntil(run, STAGE_LIMIT_SECONDS, () => run.rodes.length > 0);
@@ -95,7 +94,6 @@ describe("given the host's arrest of a civilian by a patrol car that has come, o
     expect(run.alighteds, "nobody has got out").toHaveLength(0);
   });
 
-  // mutation: sed -i '/      this.hooks.alighted(slot, cars.carIndexOf(carSlot));/d' src/game/ai/openworld-crime/arrests.ts
   it("when the car has come to the station, then the engine is told once more, later, that she gets out of the same car", () => {
     const { rode, alighted } = hostTold();
     expect(alighted.resident, "who").toBe(CRIMINAL);
@@ -105,7 +103,6 @@ describe("given the host's arrest of a civilian by a patrol car that has come, o
 });
 
 describe("given the player on foot held by a cop and taken to the station in the cop's own patrol car", () => {
-  // mutation: sed -i 's/this.table.isPlayerSlot(slot) ? playerSubject(this.table.actorOfSlot(slot)) :/false ? playerSubject(this.table.actorOfSlot(slot)) :/' src/game/ai/openworld-crime/foot-law.ts
   it("when the pair has got into the car, then the engine is told of the player's own arrest by the resident no one is", () => {
     const run = harness([40, 0, 0], { station: true, withCars: true });
     const street = streetOf(run);
@@ -119,7 +116,6 @@ describe("given the player on foot held by a cop and taken to the station in the
 });
 
 describe("given a client whose own law is walking an arrested civilian to the station on foot while the host drives her there", () => {
-  // mutation: sed -i '/    this.cops.ride(cop);$/d' src/game/ai/openworld-crime/arrests.ts
   it("when it reads the host's ride, then she is conveyed in that car, off the street, with her cop riding", () => {
     const { rode } = hostTold();
     const { guest, rides } = guestArrest(carAtStation());
@@ -134,7 +130,6 @@ describe("given a client whose own law is walking an arrested civilian to the st
     expect(cops.onStreet(table.holder[0]!), "her cop with her").toBe(false);
   });
 
-  // mutation: sed -i 's/      if (when > seconds) return;/      if (when > seconds + 1000) return;/' src/game/engine/engine-openworld-arrest-rides.ts
   it("when the ride is in the log before this peer's law has reached its second, then she is seated only once it has", () => {
     const { rode } = hostTold();
     const { guest, rides } = guestArrest(carAtStation());
@@ -147,7 +142,6 @@ describe("given a client whose own law is walking an arrested civilian to the st
     expect(table.mode[0], "now").toBe(SUBJECT_MODE.conveyed);
   });
 
-  // mutation: sed -i 's/      this.handledAtNewest = sameSecond;/      this.handledAtNewest = 0;/' src/game/engine/engine-openworld-arrest-rides.ts
   it("when the log that seated her is read again while she is led away in a later arrest, then the old ride seats her no more", () => {
     const { rode } = hostTold();
     const { guest, rides } = guestArrest(carAtStation());
@@ -161,8 +155,6 @@ describe("given a client whose own law is walking an arrested civilian to the st
     expect(table.mode[0], "the heard ride is not heard again").toBe(SUBJECT_MODE.escorted);
   });
 
-  // mutation: sed -i 's/    this.cars()\[car\]?.setDoorOpen(DRIVER_SIDE, radians);/    this.cars()[car]?.setDoorOpen(DRIVER_SIDE, 0);/' src/game/engine/engine-openworld-arrest-rides.ts
-  // mutation: sed -i '/private noteRide/{n;d}' src/game/ai/openworld-crime/foot-law.ts
   it("when it reads the host's alighting at the station, then she and her cop get out at the car's door, its door swinging, and walk in at the station, telling the engine of nothing", () => {
     const { rode, alighted } = hostTold();
     const car = carAtStation();
@@ -184,7 +176,6 @@ describe("given a client whose own law is walking an arrested civilian to the st
     expect(guest.alighteds, "a client tells the engine of nothing").toHaveLength(0);
   });
 
-  // mutation: sed -i 's/ || !this.hooks.cars()?.doorSpot(carIndex, this.door)) return false;/) return false;/' src/game/ai/openworld-crime/arrests.ts
   it("when the log names a car this peer does not have, or the player's own arrest, then nothing changes", () => {
     const { rode } = hostTold();
     const { guest, rides } = guestArrest(carAtStation());
@@ -199,7 +190,6 @@ describe("given a client whose own law is walking an arrested civilian to the st
 describe("given the host's log with rides and alightings among the other events", () => {
   const BUST = [EVENT_KIND.bust, 5, 100];
 
-  // mutation: sed -i 's/  return (kind === EVENT_KIND.knock || kind === EVENT_KIND.crime/  return (kind === EVENT_KIND.arrestRide || kind === EVENT_KIND.arrestAlight || kind === EVENT_KIND.knock || kind === EVENT_KIND.crime/' src/game/ai/civilians/civilian-events.ts
   it("when the brain queues it, then it has the bust alone: the same as without them", () => {
     const told: Ride = { resident: 3, car: 1, seconds: 100 };
     const withRides = createCityState(9, map, 60);
@@ -241,13 +231,11 @@ function ridesReadInAFrame(client: boolean): number {
 }
 
 describe("given the open world's director with police", () => {
-  // mutation: sed -i 's/      this.law?.hearRides();//' src/game/engine/engine-openworld.ts
   it("when it is a client's frame, then the law reads the host's rides from the crowd's log, and a host's frame reads none", () => {
     expect(ridesReadInAFrame(true), "a client reads once a frame").toBe(1);
     expect(ridesReadInAFrame(false), "a host has none to read").toBe(0);
   });
 
-  // mutation: sed -i '/    this.crowd.raiseEvent(kind, carIndex, seconds);/d' src/game/engine/engine-openworld-law.ts
   it("when the host's law tells of a ride and an alighting, then the crowd's log has each as two entries of one kind at one second: the resident, then the car", () => {
     const director = lawDirector(false);
     const ports = director["law"]!["scene"]["ports"];

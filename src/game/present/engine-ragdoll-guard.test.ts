@@ -88,7 +88,6 @@ describe("given a race course's dummies simulated off the main thread and a stan
     expect(sent[0]!.purse, "a woman's purse").toBe(true);
   });
 
-  // mutation: sed -i 's/    t.life = life;/    t.life = undefined;/' src/game/present/ragdoll-throw.ts
   it("when a figure is thrown with a life of its own (someone run down in the open world, who lies till the ambulance), then the throw carries it, and the next throw without one does not", () => {
     const { cars, strike } = struck(0, 15);
     const { ragdolls, sent } = systemWithWorker();

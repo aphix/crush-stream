@@ -31,7 +31,6 @@ describe("given the real engine with a spectator race on Auto", () => {
     setGround(null);
   });
 
-  // Mutation (red): sed -i '/^      if (this\.race\.auto) this\.race\.autoStep(-1, true);$/d' src/game/engine/engine.ts
   it("given a spectator race on Auto and the spectator in free fly, when the car the panel names finishes, then the free camera stays and the spectated car moves on", () => {
     expect(hud.get().race?.auto, "the control: the race is on Auto").toBe(true);
     expect(hud.get().cam).toBe("auto");
@@ -56,7 +55,6 @@ describe("given the real engine with a spectator race on Auto", () => {
     expect(hud.get().cam).toBe("auto");
   });
 
-  // Mutation (red): in `watchCam` (engine.ts), drop `this.view.leaveFree();` so it only sets `this.view.spec = "auto"`.
   it("given the spectator in free fly, when a new spectator race starts, then free fly is left and the camera is unframed", () => {
     for (let presses = 0; presses < 10 && hud.get().cam !== "free"; presses++) engine.cycleCamera();
     expect(hud.get().cam, "the control: the free view is on").toBe("free");

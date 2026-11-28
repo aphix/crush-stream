@@ -21,7 +21,6 @@ function eyesOf(mesh: DummyMesh): [number, number] {
 }
 
 describe("given a person's dummy whose eyes turn in her head", () => {
-  // mutation: sed -i 's/    this.rows\[at + 4\] = pitch;/    this.rows[at + 4] = 0;/' src/game/present/ragdoll-mesh.ts
   it("when they are turned 0.3 rad toward her +x and 0.2 down, then her row carries both; dressed again, they are centred", () => {
     const mesh = new DummyMesh(1);
     mesh.eyes(0, 0.3, 0.2);
@@ -32,7 +31,6 @@ describe("given a person's dummy whose eyes turn in her head", () => {
     expect(eyesOf(mesh), "dressed again").toEqual([0, 0]);
   });
 
-  // mutation: sed -i 's/  vec2 inkUv = printCell < .*/  vec2 inkUv = printUv;/' src/game/present/dummy-shader.ts
   it("when her lit program is compiled, then her face print is sampled through the iris warp, which reads the eye turn from her row's orb texels", () => {
     const fragment = litFragment();
     expect(fragment, "the face print through the warp").toMatch(/vec2 inkUv = .*dollEyes\(printUv, vDollSlot\)/);
@@ -40,12 +38,10 @@ describe("given a person's dummy whose eyes turn in her head", () => {
     expect(fragment, "the turn from her row").toContain(`vec2(dollRow(${ORBS_AT}, slot).w, dollRow(${ORBS_AT + 1}, slot).w)`);
   });
 
-  // mutation: sed -i 's/\* vec2(turn.x, -turn.y);/* vec2(-turn.x, turn.y);/' src/game/present/dummy-shader.ts
   it("when the warp is read, then the print is sampled against the turn across and with it down: the iris moves toward her +x as her eyes turn there, and down as they look down", () => {
     expect(litFragment()).toContain("* vec2(turn.x, -turn.y);");
   });
 
-  // mutation: sed -i 's/ \&\& printCell != \${glslFloat(PRINT_CELL.CAP_MAN)}//' src/game/present/dummy-shader.ts
   it("when the warp is read, then the capped man's face, whose picture wears dark glasses, is not warped", () => {
     expect(litFragment()).toContain(`printCell != ${PRINT_CELL.CAP_MAN.toFixed(6)} ? dollEyes(printUv, vDollSlot)`);
   });

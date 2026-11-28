@@ -5,9 +5,6 @@ import { DISC_GROUND, setGround } from "../world/ground.ts";
 import { armSolids } from "../world/surfaces.ts";
 import { runPair, runWall } from "./crash-scenarios.test-util.ts";
 
-// Mutations (each turns the row named red): delete `wallRuns.set(key, held);` (same run); `return Object.freeze(r)` -> `return r` (frozen); drop `opts.fresh ||` (fresh);
-// drop `activeGround() !== FLAT_GROUND ||` (another ground); drop `|| armedSolids() !== null` (armed solids); `[scenario, ...args,` -> `[scenario, args[0],` (other arguments).
-
 /** A hit that runs in a moment: these rows are about which runs are shared, not about the crash. */
 const BRIEF = { after: 0.3 };
 const KPH = 30;
@@ -59,7 +56,6 @@ describe("given a two-car hit asked for twice with the same arguments", () => {
     expect(runPair(0, 2 * KPH, "t-bone", BRIEF), "a harder bullet is the first's run").not.toBe(first);
   });
 
-  // mutation: sed -i 's/const \[a, b\] = stagePair(kphA, kphB,/const [a, b] = stagePair(kphA, kphB + 1,/' src/game/contact/crash-scenarios.test-util.ts  (the shared run is staged at another speed than the one asked for)
   it("when the second asks for a run of its own, then it is a new run with the same numbers for both cars", () => {
     const own = runPair(0, KPH, "t-bone", { ...BRIEF, fresh: true });
     const shared = runPair(0, KPH, "t-bone", BRIEF);

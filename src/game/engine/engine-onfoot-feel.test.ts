@@ -80,14 +80,12 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
   });
   afterAll(() => rig.dispose());
 
-  // mutation: sed -i 's/^    this.pollInput(wallDt);$//; s/^\(          this.pace.run(simDt.*\)$/\1\n          this.pollInput(wallDt);/' src/game/engine/engine.ts
   it("when W goes down, then the car's shaped drive asks for throttle in the frame the key is first read", () => {
     expect(rig.engine["seat"].mode, "he has the wheel").toBe("drive");
     expect(secondsUntil(["KeyW"], () => rig.engine["seat"]["out"].throttle > 0, FRAME), "throttle in the first frame").toBe(FRAME);
     rig.run(0.5);
   });
 
-  // mutation: sed -i 's/^      this.onFoot.frame(wallDt);$//; s/^\(      this.ragdolls.update(simDt, .*\)$/\1\n      this.onFoot.frame(wallDt);/' src/game/engine/engine.ts
   it("when he is out and W goes down, then his walker is moving in the frame the key is first read", () => {
     rig.getOut();
     rig.run(1);
@@ -95,7 +93,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     rig.run(1);
   });
 
-  // mutation: sed -i 's/^const JERK = 175;/const JERK = 40;/' src/game/present/walker-locomotion.ts
   it("when he stands and W is held, then he runs within 0.35 s, and with the walk control within 0.2 s", () => {
     const walker = rig.walker();
     expect(secondsUntil(["KeyW"], () => walker.loco.speed >= 0.98 * RUN_SPEED, 1), "to a run").toBeLessThanOrEqual(RUN_WITHIN_S);
@@ -104,14 +101,12 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     rig.run(1);
   });
 
-  // mutation: sed -i 's/^const BRAKE_AT_RUN = 14;/const BRAKE_AT_RUN = 5;/' src/game/present/walker-locomotion.ts
   it("when he runs and W is let go, then he stands still within 0.35 s and half a metre", () => {
     const stop = stopFromRun();
     expect(stop.seconds, "seconds to a stand").toBeLessThanOrEqual(STOP_WITHIN_S);
     expect(stop.metres, "metres to a stand").toBeLessThanOrEqual(STOP_WITHIN_M);
   });
 
-  // mutation: sed -i 's/^      this.smoothSide = intent.strafe;/      this.smoothSide = 0;/' src/game/engine/engine-onfoot-steer.ts
   it("when he gets out and holds forward and right from a stand with the view held still, then his heading is that diagonal off the view's from the first frame and never curves", () => {
     rig.getIn();
     rig.getOut();

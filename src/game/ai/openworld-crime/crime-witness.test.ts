@@ -21,7 +21,6 @@ function unreported(copX: readonly number[], options: HarnessOptions = {}) {
 }
 
 describe("the police come for what a cop saw or a call told them of", () => {
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts poll(), change `if (spell === table.handledSpell[resident] || !this.witnessed(resident, spell, tick)) continue;` to `if (spell === table.handledSpell[resident]) continue;`
   it("opens no case for a crime no cop saw and nobody reported", () => {
     const run = unreported([0, 0, 0]);
     runFor(run, CALL_SECONDS + 2);
@@ -29,21 +28,18 @@ describe("the police come for what a cop saw or a call told them of", () => {
     expect(run.scene.foot.table.phase[0], "none open").toBe(CASE_PHASE.free);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts witnessed(), change `return source.standing(resident, this.seconds, this.spot) && this.copSeesSpot(this.spot.x, this.spot.z);` to `return false;`
   it("opens the case at once when a cop sees the crime", () => {
     const run = unreported([40, 0, 0]);
     runFor(run, 1);
     expect(run.scene.stats.cases, "the cop saw it").toBe(1);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts sees(), change `this.lineOfSight === null || this.lineOfSight(` to `true || this.lineOfSight(`
   it("does not count a cop who has a building between him and the crime", () => {
     const run = unreported([40, 0, 0], { wall: BUILDING });
     runFor(run, 5);
     expect(run.scene.stats.cases, "the building hid it").toBe(0);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts witnessed(), change `tick >= table.reportDue[resident]!` to `true`
   it("opens the case when the witness's call ends, not before, and not for a call nobody made", () => {
     const run = unreported([0, 0, 0]);
     run.offences.reportedAt[CRIMINAL] = CALL_ENDS;
@@ -53,7 +49,6 @@ describe("the police come for what a cop saw or a call told them of", () => {
     expect(run.scene.stats.cases, "the call ended").toBe(1);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts witnessed(), change `if (table.reportSpell[resident] !== spell) {` to `if (true) {`
   it("keeps a call it saw even after the witness has gone back to their day", () => {
     const run = unreported([0, 0, 0]);
     run.offences.reportedAt[CRIMINAL] = CALL_ENDS;
@@ -63,7 +58,6 @@ describe("the police come for what a cop saw or a call told them of", () => {
     expect(run.scene.stats.cases, "the call still brought the police").toBe(1);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts copSeesSpot(), change `return this.copSees(x, z, COP_SIGHT) || (this.otherCopsSee?.(x, z, COP_SIGHT) ?? false);` to `return false;`
   it("opens the case when a cop walks into sight of a wanted criminal nobody reported", () => {
     const run = unreported([0, 0, 0]);
     runFor(run, 4);
@@ -73,7 +67,6 @@ describe("the police come for what a cop saw or a call told them of", () => {
     expect(run.scene.stats.cases, "a cop came by").toBe(1);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts poll(), change `const brawling = source.fightTick(resident) !== NEVER_TICK && source.fightPartner(resident) >= 0;` to `const brawling = false;`
   it("holds a fight to the same rule: unreported and unseen, no case; a cop near it, a case", () => {
     const unseen = harness([0, 0, 0]);
     unseen.offences.x[CRIMINAL] = 60;

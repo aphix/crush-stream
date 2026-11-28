@@ -32,7 +32,6 @@ function overlap(a: { deep0: number; deep1: number; across0: number; across1: nu
 }
 
 describe("given every kind of interior built for a place of the map", () => {
-  // mutation: sed -i 's/d.put("stool", 0, 4.3 + stool \* 0.85, -3, toLeft)/void stool/' src/game/world/openworld/interior-layouts.ts (bar: 24 -> 16)
   it("when its seats are published for every storey count, then there is one per seat of every piece of furniture, in x z yaw height rows", () => {
     for (const { label, kind, storeys, place, plan } of variants) {
       const { seats, stoopSeats } = interiorSpots(place, plan);
@@ -50,7 +49,6 @@ describe("given every kind of interior built for a place of the map", () => {
     }
   });
 
-  // mutation: sed -i 's/serves: true, serveAt: -3.3/serveAt: -3.3/' src/game/world/openworld/interior-layouts.ts (bar loses its counter)
   it("when its counter spots are published, then a business has a customer's and a clerk's, facing each other across the counter top, and a home none", () => {
     for (const kind of KINDS) {
       const counter = interiorSpots(firstOf(kind)).counter;
@@ -68,7 +66,6 @@ describe("given every kind of interior built for a place of the map", () => {
 });
 
 describe("given a place's door on the street face", () => {
-  // mutation: sed -i 's/centre: ROWHOME_DOOR_OFFSET, width: 1, sill: 0/centre: 0, width: 1, sill: 0/' src/game/world/openworld/interior-kinds.ts (the plan's doorway moves off the place's door)
   it("when the interior's walls are probed at the door, then the doorway is open at body height and wall stands just outside its width", () => {
     for (const place of furnished) {
       const solids = interiorSolids(place);
@@ -93,7 +90,6 @@ describe("given a place's door on the street face", () => {
 });
 
 describe("given every place's doors", () => {
-  // mutation: sed -i 's/openX: frame.x(deep + face, hinge) - frame.x(deep, hinge),/openX: frame.x(deep - face, hinge) - frame.x(deep, hinge),/' src/game/world/openworld/interior-plan.ts
   it("when its door leaves are read, then each street doorway has a leaf shut along the face that swings into the room with a vestibule behind it, and a rowhome has a back door too", () => {
     const wrong: string[] = [];
     for (const place of furnished) {
@@ -119,7 +115,6 @@ describe("given every place's doors", () => {
 });
 
 describe("given every rowhome's stoop", () => {
-  // mutation: sed -i 's/const across = doorAcross + (at === 0 ? -1 : 1) \* STOOP_SEAT_SPREAD;/const across = (at === 0 ? -1 : 1) * STOOP_SEAT_SPREAD;/' src/game/world/openworld/interior-plan.ts
   it("when its two stoop seats are read, then both sit on the stoop's steps either side of the door, on its third step, facing the street", () => {
     const off: string[] = [];
     for (const home of furnished.filter((place) => place.interior === "rowhome" && place.doorNode >= 0)) {
@@ -143,7 +138,6 @@ const NOMINAL_STOREY = 3;
 const ceilingOf = (plan: InteriorPlan, level: number): number => ceilingOver(plan.floors, plan.topCeiling, level);
 
 describe("given an interior of any storey count", () => {
-  // mutation: sed -i 's/const floors = Array.from({ length: storeys }, (_, level)/const floors = Array.from({ length: storeys + 1 }, (_, level)/' src/game/world/openworld/interior-kinds.ts
   it("when it is planned, then it has a floor for every storey and a flight between each pair, none up from the top", () => {
     for (const { label, storeys, plan } of variants) {
       expect(plan.floors.length, `${label} floors`).toBe(storeys);
@@ -153,7 +147,6 @@ describe("given an interior of any storey count", () => {
     }
   });
 
-  // mutation: sed -i 's/    d.put("bed", level, FLAT_BED, 0.6, toStreet);//' src/game/world/openworld/interior-layouts.ts
   it("when a shop's floors above its own are read, then each is a flat with a bed and a kitchen, a rowhome's each have bedrooms, and the ground floors have none", () => {
     for (const { label, kind, storeys, plan } of variants) {
       for (let level = 0; level < storeys; level++) {
@@ -165,7 +158,6 @@ describe("given an interior of any storey count", () => {
     }
   });
 
-  // mutation: sed -i 's/export const STOREY = 3;/export const STOREY = 4;/' src/game/world/openworld/interior-kinds.ts
   it("when its floors are read, then each storey above the second is about as tall as a storey is, and every floor's room is at least a room high", () => {
     for (const { label, kind, storeys, plan } of variants) {
       for (let level = 2; level < storeys; level++) expect(Math.abs(plan.floors[level]! - plan.floors[level - 1]! - NOMINAL_STOREY), `${label} floor ${level} over the one below, off the nominal storey (m)`).toBeLessThan(0.1);
@@ -179,7 +171,6 @@ describe("given the stairs of every interior at every storey count", () => {
   /** The floor a walker needs at a flight's head before the wall ahead (m): a step and a turn. */
   const MIN_LANDING = 0.5;
 
-  // mutation: sed -i 's/const HEAD_LANDING = 0.55;/const HEAD_LANDING = 0.1;/' src/game/world/openworld/interior-layouts.ts (a flight above the ground floor's tops out against the back room's wall)
   it("when a walker reaches the head of each flight, then the floor there runs on at least a step and a turn before the wall ahead", () => {
     const short: string[] = [];
     for (const { label, plan } of variants) {
@@ -200,7 +191,6 @@ describe("given the stairs of every interior at every storey count", () => {
     expect(short.slice(0, 3).join("; "), "landings short of a step and a turn").toBe("");
   });
 
-  // mutation: sed -i 's/const MAX_RISER = 0.19/const MAX_RISER = 0.3/' src/game/world/openworld/interior-kinds.ts (a 0.3 m riser)
   it("when each flight is climbed, then no step is higher than a walker climbs and its top tread is level with the floor above", () => {
     for (const { label, plan } of variants) {
       for (const flight of plan.stairs) {
@@ -211,7 +201,6 @@ describe("given the stairs of every interior at every storey count", () => {
     }
   });
 
-  // mutation: sed -i 's/const flight = level % 2 === 1 ? d.stairsUp(level, UPPER_STAIR_FOOT, across)/const flight = level % 2 === 1 ? d.stairsUp(level, STAIR_FOOT, across)/' src/game/world/openworld/interior-layouts.ts (the flights stacked again)
   it("when a walker stands on any tread of any flight, then nothing solid is lower over it than a standing walker and a margin", () => {
     const short: string[] = [];
     for (const { label, plan } of variants) {
@@ -232,7 +221,6 @@ describe("given the stairs of every interior at every storey count", () => {
     expect(short.slice(0, 3).join("; "), "treads short of headroom").toBe("");
   });
 
-  // mutation: sed -i '/d.spineWall(0, hallEdge + PARTITION \/ 2, PARLOUR_WALL, KITCHEN_WALL);/d' src/game/world/openworld/interior-layouts.ts
   it("when a rowhome's ground flight is looked at from the dining room, then a full-height wall closes its side along every tread, and a walker meets it as a solid", () => {
     const home = firstOf("rowhome");
     const plan = planInterior(home);
@@ -257,7 +245,6 @@ describe("given the stairs of every interior at every storey count", () => {
     expect(open.slice(0, 3).join("; "), "the stair's side toward the dining room").toBe("");
   });
 
-  // mutation: sed -i '/  d.spineWall(0, partition, head - PARTITION, d.back, \[doorway(d.back - 0.45)\]);/d' src/game/world/openworld/interior-layouts.ts (a shop's service stair open to the shop)
   it("when a shop's service stair is looked at from the shop, then its side is walled the whole length of the flight but for a doorway at its foot, and its head is closed across", () => {
     for (const { label, kind, plan } of variants.filter((variant) => variant.kind !== "rowhome" && variant.storeys === MIN_STOREYS)) {
       const flight = plan.stairs.find((candidate) => candidate.level === 0)!;
@@ -292,7 +279,6 @@ describe("given any interior's furniture and walls at any storey count", () => {
     return boxes.filter((box) => box.y1 - box.y0 > 1);
   };
 
-  // mutation: sed -i 's/d.put("sofa", level, FLAT_LIVING, left + FURNISHING.sofa.depth \/ 2, toRight);/d.put("sofa", level, FLAT_LIVING, left + FURNISHING.sofa.depth \/ 2, toLeft);/' src/game/world/openworld/interior-layouts.ts (a sofa turned into the wall)
   it("when each solid piece is laid on its plan, then it clears every wall and every other solid piece of its level by at least a centimetre inside the room", () => {
     for (const { label, plan } of variants) {
       const clash: string[] = [];
@@ -311,7 +297,6 @@ describe("given any interior's furniture and walls at any storey count", () => {
     }
   });
 
-  // mutation: sed -i 's/d.floor(level + 1, \[well\]);/d.floor(level + 1);/' src/game/world/openworld/interior-layouts.ts (no hole in the floor above a rowhome's flight)
   it("when a room's solid piece stands over the hole a flight's well leaves in a floor, then it does not: the well of every flight is clear of furniture", () => {
     for (const { label, plan } of variants) {
       const stray: string[] = [];
@@ -331,14 +316,12 @@ describe("given any interior's furniture and walls at any storey count", () => {
 });
 
 describe("given the plan of an office", () => {
-  // mutation: sed -i 's/^const OFFICE_LAMP_GRID = 3;/const OFFICE_LAMP_GRID = 1;/' src/game/world/openworld/interior-layouts.ts
   it("when it is laid out, then its ground floor has eleven ceiling lamps: nine over the open floor and one in each back room", () => {
     for (const storeys of STOREY_COUNTS) expect(planInterior({ ...firstOf("office"), storeys }).furnishings.filter((piece) => piece.kind === "lamp" && piece.level === 0).length, `office of ${storeys} storeys`).toBe(11);
   });
 });
 
 describe("given every place of the map with an interior", () => {
-  // mutation: sed -i 's/^const AISLE_CLEAR = 0.35;/const AISLE_CLEAR = 0;/' src/game/world/openworld/interior-aisle.ts
   it("when its aisle is read, then a business's starts within a metre and a half of its door, every node is half a metre or a diagonal step from the one it is reached from and clear of every solid at body height, and a home has none", () => {
     for (const place of furnished) {
       const aisle = place.aisle;

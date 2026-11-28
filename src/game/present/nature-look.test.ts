@@ -22,7 +22,6 @@ function compile(material: THREE.Material): THREE.WebGLProgramParametersWithUnif
 }
 
 describe("given the material of rocks, trees, palms and bushes", () => {
-  // mutation: sed -i 's/^diffuseColor.rgb \*= natureShade;`;$/`;/' src/game/present/nature-look.ts
   it("when it is compiled, then the fragment shader takes the world-space tint, the dust and moss cover and the foot shade, and the vertex shader hands it the world position", () => {
     const { vertexShader, fragmentShader } = compile(new NatureMaterial());
     expect(vertexShader, "the world position of the vertex").toContain("vNatureWorld = (modelMatrix * natureAt).xyz;");
@@ -31,14 +30,12 @@ describe("given the material of rocks, trees, palms and bushes", () => {
     expect(fragmentShader, "a darker foot").toContain("diffuseColor.rgb *= natureShade;");
   });
 
-  // mutation: sed -i 's/^export class NatureMaterial extends THREE.MeshStandardMaterial {/export class NatureMaterial extends THREE.MeshStandardMaterial {\n  clone(): this { return new THREE.MeshStandardMaterial().copy(this) as unknown as this; }/' src/game/present/nature-look.ts
   it("when the track art copies it for another draw kind (a clone), then the copy is patched the same", () => {
     const copy = new NatureMaterial().clone();
     expect(compile(copy).fragmentShader).toContain("natureShade");
     expect(copy.customProgramCacheKey()).toBe(new NatureMaterial().customProgramCacheKey());
   });
 
-  // mutation: sed -i 's/LOOK.value = tier === "high" || tier === "ultra" ? 1 : 0;/LOOK.value = 1;/' src/game/present/nature-look.ts
   it("when the effects tier is Low or under, then the detail switch is off (only the foot's shade stays), and on High and Ultra it is on", () => {
     const detail = (): number => (compile(new NatureMaterial()).uniforms.uNatureLook as THREE.IUniform<number>).value;
     for (const tier of ["off", "minimal", "low"] as const) {
@@ -51,7 +48,6 @@ describe("given the material of rocks, trees, palms and bushes", () => {
     }
   });
 
-  // mutation: sed -i 's/return one(rock(), mats.nature);/return one(rock(), mats.plain);/' src/game/present/prefabs.ts
   it("when a rock, a tree, a palm, a bush and a cone are built, then the first four are drawn on the nature material and the cone on the plain one", () => {
     const [plain, nature] = [new THREE.MeshBasicMaterial(), new THREE.MeshBasicMaterial()];
     const mats = { ...plainMaterials(plain), nature };
@@ -67,7 +63,6 @@ describe("given the street trees' leaf material", () => {
     return shader.fragmentShader;
   };
 
-  // mutation: sed -i 's/    this.alphaTest = LEAF_ALPHA_TEST;/    this.alphaTest = 0;/' src/game/present/nature-look.ts
   it("when it is made or copied for another draw kind, then it is smooth-shaded and two-sided, keeps the nature look, and cuts leaf fragments by its atlas's alpha, not by noise", () => {
     const texture = new THREE.Texture();
     for (const material of [new LeafMaterial(texture), new LeafMaterial(texture).clone()]) {
@@ -84,7 +79,6 @@ describe("given the street trees' leaf material", () => {
     }
   });
 
-  // mutation: sed -i 's/  if (!(material instanceof LeafMaterial)) return null;/  return null;/' src/game/present/nature-look.ts
   it("when its shadow is drawn, then the leaf material and its copies cast through a depth material that carries their atlas and cuts leaf fragments by its alpha, and the nature material casts through the plain one", () => {
     expect(leafDepth(new NatureMaterial()), "rocks and old trees").toBeNull();
     const texture = new THREE.Texture();

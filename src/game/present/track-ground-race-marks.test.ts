@@ -27,13 +27,11 @@ describe("given a street course with tight corners on its loop", () => {
   const withMarks = layersOf(true);
   const withoutMarks = layersOf(false);
 
-  // mutation: sed -i 's/  if (raceMarks) addKerbs(/  addKerbs(/' src/game/present/track-ground.ts
   it("when its race marks are on, then the loop has kerb stripes on its corners, and when off, then it has none", () => {
     expect(withMarks.some((layer) => layer.kind === "kerb"), "kerb layer with race marks").toBe(true);
     expect(withoutMarks.some((layer) => layer.kind === "kerb"), "kerb layer without race marks").toBe(false);
   });
 
-  // mutation: sed -i 's/const main = pi === 0 \&\& raceMarks;/const main = pi === 0;/' src/game/present/track-ground.ts
   it("when its race marks are on, then the markings carry a chequered band as well as the white lines, and when off, the white lines alone", () => {
     const markings = (layers: typeof withMarks): Mesher => layers.find((layer) => layer.kind === "marking")!.m;
     expect(coloursOf(markings(withMarks)), "colours with race marks (white lines and the black squares)").toBe(2);

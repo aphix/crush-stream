@@ -17,7 +17,6 @@ import { TrackArt } from "./track-art.ts";
 const SLAB_LENGTH = "3.20";
 
 describe("given the sidewalk slabs' paving, which overlapping slabs (a bend's neighbours, two streets' strips at a block corner) draw over one point", () => {
-  // mutation: sed -i 's/return vertexShader.replace("#include <uv_vertex>", PAVING_UV_VERTEX);/return vertexShader;/' src/game/present/ground-relief.ts
   it("when its vertex shader is built, then a slab's top takes its colour and relief uv from the ground point under it, after the slab's own uv", () => {
     const built = pavingVertex(THREE.ShaderLib.standard.vertexShader);
     const stock = built.indexOf("#include <uv_vertex>");
@@ -29,7 +28,6 @@ describe("given the sidewalk slabs' paving, which overlapping slabs (a bend's ne
     expect(built.indexOf("vNormalMapUv = ( normalMapTransform * vec3( pavingUv, 1 ) ).xy;"), "the relief's uv is the ground's").toBeGreaterThan(ground);
   });
 
-  // mutation: sed -i 's/  material.customProgramCacheKey = () => `${key.call(material)}|paving`;//' src/game/present/ground-relief.ts
   it("when the slabs' material is made, then its program is the paving's, keyed apart from the plain concrete's", () => {
     stubBrowser();
     const materials = makePrefabMaterials(raceTextures());
@@ -39,7 +37,6 @@ describe("given the sidewalk slabs' paving, which overlapping slabs (a bend's ne
 });
 
 describe("given the sidewalk slabs of a course laid in brick", () => {
-  // mutation: sed -i 's/  material.defines = { ...material.defines, PAVING_BRICK: "" };//' src/game/present/ground-relief.ts
   it("when the paving material is laid in brick, then its program carries the brick and its shader makes a running bond of bricks and joints on the ground, fading to their mean where they are finer than a pixel", () => {
     stubBrowser();
     const paving = makePrefabMaterials(raceTextures()).paving;
@@ -56,7 +53,6 @@ describe("given the sidewalk slabs of a course laid in brick", () => {
     expect(shader.vertexShader, "the ground point reaches the fragment").toContain("vPavingGround = ( modelMatrix * pavingPoint ).xz;");
   });
 
-  // mutation: sed -i 's/, roadDecals: \[\], paving: PAVING.brick }/, roadDecals: [] }/' src/game/world/openworld/openworld-course.ts
   it("when the open world's art is built, then its sidewalk slabs are drawn in a material laid in brick", () => {
     stubBrowser();
     const track = new Track(OFF_MENU.find((json) => parseTrack(json).id === OPENWORLD_ID)!);

@@ -44,13 +44,11 @@ function robbery() {
 }
 
 describe("the law reads a witness's call off the society's rows", () => {
-  // mutation: in src/game/ai/openworld-crime/state-offence-source.ts reportDoneTick(), delete the line `if (hypot2(placeX[at]! - this.scratch.x, placeZ[at]! - this.scratch.z) > WITNESS_RADIUS) continue;`
   it("takes the end of the call of a witness near the crime and ignores one who phones from beyond sight of it", () => {
     const { source } = robbery();
     expect(source.reportDoneTick(CRIMINAL), "the near witness's call ends").toBe(CALL_ENDS);
   });
 
-  // mutation: in src/game/ai/openworld-crime/state-offence-source.ts reportDoneTick(), change `|| this.int(caller, RESIDENT_INT.departTick) < since` to `|| false`
   it("ignores a call that began before the crime, and says none when nobody phones", () => {
     const { source, ints } = robbery();
     setInt(ints, NEAR_CALLER, RESIDENT_INT.departTick, CRIME_TICK - 1);
@@ -67,7 +65,6 @@ describe("the law reads a witness's call off the society's rows", () => {
 });
 
 describe("given a resident not drawn, still walking out of one place on a leg to another", () => {
-  // mutation: sed -i 's/this.atDoor(placeNow(this.crowd.state, resident, seconds \* DECISION_HZ), out)/this.atDoor(this.int(resident, RESIDENT_INT.place), out)/' src/game/ai/openworld-crime/state-offence-source.ts
   it("when the law asks where she stands, then before her leg sets off she is at the door of the place she is leaving, and after it at her destination's", () => {
     const { crowd, ints, source, far } = robbery();
     const walker = 3;

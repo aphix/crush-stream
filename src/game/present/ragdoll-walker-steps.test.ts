@@ -221,7 +221,6 @@ describe("given the paced command and a curb ahead", () => {
     floor.boxes = [{ x0: -4, x1: 4, z0: 0.6, z1: 4, y0: 0, y1: 0.15 }];
     const paces: number[] = [];
     for (let z = -0.2; z <= 0.7; z += 0.01) paces.push(floor.pace(0, z, 0, RUN_SPEED));
-    // mutation: sed -i 's/STEP_PACE + (top - STEP_PACE) \* share/STEP_PACE/' src/game/present/walker-floor.ts
     let worst = 0;
     for (let i = 1; i < paces.length; i++) worst = Math.max(worst, Math.abs(paces[i]! - paces[i - 1]!));
     expect(worst, `largest 1 cm step in pace ${worst.toFixed(3)} m/s`).toBeLessThan(0.2);
@@ -229,7 +228,6 @@ describe("given the paced command and a curb ahead", () => {
     expect(paces[paces.length - 1]).toBeLessThan(RUN_SPEED);
   });
 
-  // mutation: sed -i 's/^      if (box.y1 > ask + WALL_RISE) return NO_FLOOR;/      if (box.y1 > ask + WALL_RISE) continue;/' src/game/present/walker-floor.ts
   it("when he runs on a landing 30 degrees toward a wall beside it, then the wall is no step: the pace is the run asked for", () => {
     const floor = new WalkFloor();
     floor.boxes = [
@@ -263,29 +261,24 @@ function staysUp(sys: RagdollSystem, heading: number, seconds: number): boolean 
 }
 
 describe("given a walker by a stoop", () => {
-  // mutation: sed -i 's/^    this.slack = Math.min(lag, this.slack + travelled);/    this.slack = 0;/' src/game/present/ragdoll-walker.ts
   it("when he walks along a stoop's foot, across its bottom step, toward +x, then he is on his feet every frame", async () => {
     const sys = await standingOn(groundWith([]), -3);
     sys.setFixedBoxes(stoopAt(-0.2));
     expect(staysUp(sys, Math.PI / 2, 6)).toBe(true);
   });
 
-  // mutation: sed -i 's/height - this.floor.level < FALL_HEIGHT - this.floor.rise/height - this.floor.level < FALL_HEIGHT/' src/game/present/ragdoll-walker.ts
   it("when he walks along a stoop's foot, across its bottom step, toward -x, then he is on his feet every frame", async () => {
     const sys = await standingOn(groundWith([]), 2.7);
     sys.setFixedBoxes(stoopAt(-0.2));
     expect(staysUp(sys, -Math.PI / 2, 6)).toBe(true);
   });
 
-  // mutation: sed -i 's/const tipped = this.state === "getUp" || (standing \&\& this.strength >= 1) ? 1 :/const tipped = this.state === "getUp" ? 1 :/' src/game/present/ragdoll-walker.ts
-  // mutation: sed -i 's/^const LEASH = 0.08;/const LEASH = 0.2;/' src/game/present/ragdoll-walker.ts
   it("when he walks across a stoop's corner at 30 degrees, then he is on his feet every frame", async () => {
     const sys = await standingOn(groundWith([]), -1.6);
     sys.setFixedBoxes(stoopAt(1));
     expect(staysUp(sys, 0.52, 6)).toBe(true);
   });
 
-  // mutation: sed -i 's/this.loco.yaw, this.command));/this.loco.yaw, 0));/' src/game/present/ragdoll-walker.ts
   it("when he walks the same three ways for 6 s, then his torso travels along his heading at least 4 m across the foot and 3 m across the corner", async () => {
     const walks = [
       { x: -3, foot: -0.2, heading: Math.PI / 2, least: 4 },

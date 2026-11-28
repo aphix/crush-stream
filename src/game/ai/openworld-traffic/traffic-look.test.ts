@@ -13,7 +13,6 @@ const blank = (): ResidentCarPose => ({ x: 0, z: 0, yaw: 0, groundY: -1, bodySty
 const groundAt = (x: number, z: number): number => 0.01 * x + 0.02 * z;
 
 describe("given a resident's parked car as the crowd reads it", () => {
-  // mutation: sed -i 's/  out.groundY = groundAt(out.x, out.z);/  out.groundY = 0;/' src/game/ai/openworld-traffic/traffic-look.ts
   it("when the pose is asked for a resident at a place's door, then it is that resident's space: its middle, its yaw, the ground there and his body", () => {
     for (let resident = 0; resident < RESIDENTS; resident++) {
       const spot = residentSpotAt(spots, DOOR.x, DOOR.z, resident);
@@ -27,7 +26,6 @@ describe("given a resident's parked car as the crowd reads it", () => {
     }
   });
 
-  // mutation: sed -i 's/  return EVERYDAY_BODIES\[Math.floor(hash01(resident, RESIDENT_CAR_SEED)/  return EVERYDAY_BODIES[Math.floor(hash01(0, RESIDENT_CAR_SEED)/' src/game/ai/openworld-traffic/traffic-look.ts
   it("when a hundred residents are looked at, then each has an everyday body and a paint, and not all alike", () => {
     const bodies = new Set<string>();
     const colours = new Set<number>();

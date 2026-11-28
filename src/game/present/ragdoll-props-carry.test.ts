@@ -61,8 +61,6 @@ async function secondsCarried(prefab: PrefabId, speed: number): Promise<number> 
 }
 
 describe("given a car driving through a prop it knocks over, lying broadside across its way", () => {
-  // mutation: sed -i 's/    return this.carry\[i\]! >= this.grace;/    return false;/' src/game/present/ragdoll-props.ts
-  // mutation: sed -i 's/        this.drop(i);//' src/game/present/ragdoll-props.ts
   it("when the car goes on at 8 and at 14 m/s, then no prop rides along with it for longer than twice the car's grace (the knock's, then the carry's): a fence section, a bench, a bin, a news box, a bike rack, a crate, a cone and a hay bale are all left behind", async () => {
     const carried: string[] = [];
     for (const speed of [8, 14]) {

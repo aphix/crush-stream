@@ -49,7 +49,6 @@ function uploaded(draw: SeatDraw): void {
 const rangeOf = (draw: SeatDraw): { start: number; count: number } => (draw.mesh.geometry.getAttribute("position") as THREE.BufferAttribute).updateRanges[0]!;
 
 describe("given a draw whose packed seats change from the middle", () => {
-  // mutation: sed -i 's/else for (const shared .* first++;/else void 0;/' src/game/vehicle/seat-draw.ts
   it("when its third seat changes variant, then only the vertices from that seat on are written for upload and the buffers equal a fresh pack's", () => {
     const draw = new SeatDraw(VARIANTS, new THREE.MeshBasicMaterial(), 16, "none");
     sync(draw, [0, 1, 2, 0]);
@@ -64,7 +63,6 @@ describe("given a draw whose packed seats change from the middle", () => {
     expect(firstMismatch(now.index, fresh.index), "indices").toBeUndefined();
   });
 
-  // mutation: sed -i 's/this.pending\[b\] = Math.min(this.pending\[b\]!, from);/this.pending[b] = from;/' src/game/vehicle/seat-draw.ts
   it("when two rebuilds come before the draw that uploads them, then the range still starts at the first of them", () => {
     const draw = new SeatDraw(VARIANTS, new THREE.MeshBasicMaterial(), 16, "none");
     sync(draw, [0, 1, 2, 0]);
@@ -76,7 +74,6 @@ describe("given a draw whose packed seats change from the middle", () => {
     expect(firstMismatch(buffers(draw).position, fresh.position), "positions").toBeUndefined();
   });
 
-  // mutation: sed -i '/^    if (to <= from) return;/d' src/game/vehicle/seat-draw.ts
   it("when seats only leave the end, then nothing is marked for upload and the draw shrinks", () => {
     const draw = new SeatDraw(VARIANTS, new THREE.MeshBasicMaterial(), 16, "none");
     sync(draw, [0, 1, 2]);

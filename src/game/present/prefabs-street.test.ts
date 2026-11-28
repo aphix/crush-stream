@@ -53,7 +53,6 @@ describe("given the open world's street kit", () => {
   const mats = plainMaterials(new THREE.MeshBasicMaterial());
 
   for (const id of KIT) {
-    // mutation: sed -i 's/  \[PREFAB.hydrant\]: hydrant,/  [PREFAB.hydrant]: litterBin,/' src/game/present/prefabs-street.ts
     it(`when the ${id} is built, then it is one painted shape of its own, inside the box the catalogue gives it, under the triangle budget`, () => {
       const parts = prefabParts(id, mats);
       expect(parts.length, id === PREFAB.bikeRack ? "the shape and the wheels' spoke sprites" : "one part").toBe(id === PREFAB.bikeRack ? 2 : 1);
@@ -77,7 +76,6 @@ describe("given the open world's street kit", () => {
 });
 
 describe("given a street lamp's night pool, an additive decal on the ground", () => {
-  // mutation: sed -i 's/^  pool.position.set(0, 0.004, ahead);/  pool.position.set(0, 0.025, ahead);/' src/game/present/engine-world.ts
   it("when an arm lamp and an acorn lamp are built, then the pool lies within 5 mm of the ground, under a lying body's lowest part, so it does not cut a stripe across one", () => {
     stubBrowser();
     for (const acorn of [false, true]) {
@@ -101,14 +99,12 @@ describe("given a street lamp's night pool, an additive decal on the ground", ()
     return { road, low };
   };
 
-  // mutation: sed -i 's/geometry: geo.translate(0, ROAD_LIFT, 0), material/geometry: geo, material/' src/game/present/prefabs.ts
   it("when a race lamp's pool is drawn, then every corner of it lies above the road ribbons' lift, onto the depth proxy it is tested against, whichever side of the lamp a road runs", () => {
     const { road } = bands(PREFAB.lamp, -Infinity, -Infinity);
     expect(road.length, "corners of the pool").toBeGreaterThan(0);
     expect(Math.min(...road), "lowest corner of the pool (m)").toBeGreaterThan(ROAD_LIFT);
   });
 
-  // mutation: sed -i 's/cutX(pool, LAMP_FROM_CURB, Infinity).translate(0, ROAD_LIFT, 0)/cutX(pool, LAMP_FROM_CURB, Infinity)/' src/game/present/prefabs.ts
   it("when the open world's street lamp's pool is drawn, then its band over the street lies above the road ribbons' lift and its band over the lot stays within 5 mm of the ground", () => {
     const { road, low } = bands(PREFAB.acornLamp, LAMP_FROM_CURB, LAMP_FROM_CURB - LAYOUT.sidewalk);
     expect(road.length, "corners over the street").toBeGreaterThan(0);

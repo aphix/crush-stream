@@ -85,7 +85,6 @@ function flight(newel = false, mirrored = false): FloorBox[] {
 }
 
 describe("given the walker beside a wall on flat ground", () => {
-  // mutation: sed -i 's/^    return Math.min(ahead, stopped);/    return ahead;/' src/game/present/ragdoll-walker.ts
   for (const speed of [RUN_SPEED, SPRINT_SPEED]) {
     it(`when he runs at ${speed} m/s into it at 30 degrees and slides along it, then he keeps his feet and his strength`, async () => {
       const sys = await standingAmong([WALL], 0);
@@ -95,7 +94,6 @@ describe("given the walker beside a wall on flat ground", () => {
     });
   }
 
-  // mutation: sed -i 's/^    return Math.min(ahead, stopped);/    return 0;/' src/game/present/ragdoll-walker.ts
   it("when a blow across his way lands on his chest as he walks along it, then he is knocked down", async () => {
     const sys = await standingAmong([WALL], 0.1);
     const torso = sys["dolls"][WALKER_SLOT]!.bodies[0]!;
@@ -113,12 +111,10 @@ const flightCases: readonly { it: string; x: number; heading: number; command: n
   { it: "when he runs up it along the party wall, 5 degrees into it, then he keeps his feet and his strength", x: 0.2, heading: 5 * DEG, command: RUN_SPEED },
   { it: "when he runs up it 5 degrees into the banister, then he keeps his feet and his strength", x: 0.2, heading: -5 * DEG, command: RUN_SPEED },
   { it: "when he walks up it across to the party wall at 10 degrees, then he keeps his feet and his strength", x: -0.2, heading: 10 * DEG, command: WALK_SPEED },
-  // mutation (a sprint ramps as a run on the treads): sed -i 's/^      const top = share < 1 ? Math.min(command, RUN_SPEED) : command;/      const top = command;/' src/game/present/walker-floor.ts
   { it: "when he sprints straight up it beside the party wall, then he keeps his feet and his strength", x: 0.2, heading: 0, command: SPRINT_SPEED },
   { it: "when he runs up it 10 degrees into the banister, then he keeps his feet and his strength", x: 0, heading: -10 * DEG, command: RUN_SPEED },
 ];
 
-// mutation (the runs): sed -i 's/^      return Math.min(command, STEP_PACE + (top - STEP_PACE) \* share, braking);/      return Math.min(command, STEP_PACE + (top - STEP_PACE) * share);/' src/game/present/walker-floor.ts
 describe("given the walker at the foot of a rowhome's stair flight between its party wall and a banister", () => {
   for (const testCase of flightCases) {
     it(testCase.it, async () => {
@@ -131,7 +127,6 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
     });
   }
 
-  // mutation (the post's end holds his shoulder): sed -i 's/^    const aside = Math.max(-SIDESTEP_SPEED \* dt, Math.min(SIDESTEP_SPEED \* dt, edge));/    const aside = 0;/' src/game/present/ragdoll-walker.ts
   it("when he walks up it 10 degrees into the banister, its end a post at the first riser, then he sidesteps the post, keeps his feet and his strength, and climbs it", async () => {
     const sys = await standingAmong(flight(true), -0.2);
     const start = sys["dolls"][WALKER_SLOT]!.bodies[0]!.translation().z;
@@ -141,7 +136,6 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
     expect(climb.z - start, `he went up the flight: ${(climb.z - start).toFixed(2)} m`).toBeGreaterThan(NEWEL_CLIMB);
   });
 
-  // mutation (a part of him through the banister carries him back and forth across it): sed -i 's/^      if (x \* this.carried\[0\]! + z \* this.carried\[1\]! < 0) {/      if (false) {/' src/game/present/ragdoll-walker.ts
   it("when he walks 20 degrees into the banister from beside it, past the post at its end and on along its outside, then he keeps his feet and his strength, and his torso is not thrown sideways across the banister", async () => {
     const sys = await standingAmong(flight(true), -0.2);
     let sway = 0;
@@ -153,7 +147,6 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
     expect(sway, `his torso's fastest sideways speed: ${sway.toFixed(2)} m/s`).toBeLessThan(NEWEL_SWAY);
   });
 
-  // mutation (a riser under his lagging root reads a stride away, and he speeds into a skipped tread): sed -i '/^    if (this.stepAt(x, z, sin, cos, 0)) return STEP_PACE;/d' src/game/present/walker-floor.ts
   it("when he runs up it 10 degrees into the banister from 0.2 m toward the party wall, on the flight as built and on its mirror image, then both ways he keeps his feet and his strength and climbs it", async () => {
     for (const mirrored of [false, true]) {
       const sys = await standingAmong(flight(false, mirrored), mirrored ? -0.2 : 0.2);
@@ -170,13 +163,9 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
 
   /** Each starts 0.2 m from the middle toward the banister, its end a post at the first riser, and heads into it (`mirrored`: the flight's mirror image, the banister at +x). */
   const newelCases: readonly { it: string; x: number; heading: number; command: number; mirrored: boolean }[] = [
-    // mutation: sed -i 's/^const HOP_EXPLAINS = 3;/const HOP_EXPLAINS = 0;/' src/game/present/ragdoll-walker.ts
     { it: "when he walks up its mirror image 5 degrees into the banister from beside the post, then he keeps his feet and his strength", x: 0.2, heading: 5 * DEG, command: WALK_SPEED, mirrored: true },
-    // mutation: sed -i 's/^const HOP_EXPLAINS = 3;/const HOP_EXPLAINS = 0;/' src/game/present/ragdoll-walker.ts
     { it: "when he runs up it 5 degrees into the banister from beside the post, then he keeps his feet and his strength", x: -0.2, heading: -5 * DEG, command: RUN_SPEED, mirrored: false },
-    // mutation: sed -i 's/^const HOP_EXPLAINS = 3;/const HOP_EXPLAINS = 0;/' src/game/present/ragdoll-walker.ts
     { it: "when he sprints up it 5 degrees into the banister from beside the post, then he keeps his feet and his strength", x: -0.2, heading: -5 * DEG, command: SPRINT_SPEED, mirrored: false },
-    // mutation (his torso going out along getOut's carry past the post reads as a blow): sed -i 's/^    const carry = hypot2(this.carried\[0\]!, this.carried\[1\]!);/    const carry = 0;/' src/game/present/ragdoll-walker.ts
     { it: "when he sprints 20 degrees into the banister from beside it, past the post at its end and on along its outside, then he keeps his feet and his strength", x: -0.2, heading: -20 * DEG, command: SPRINT_SPEED, mirrored: false },
   ];
   for (const testCase of newelCases) {
@@ -195,8 +184,6 @@ const TREAD_Z = FLIGHT_FOOT_Z + TREAD_RUN * (TREAD + 0.5);
 const ACROSS_X = -FLIGHT_HALF - 0.25;
 
 describe("given the walker standing on a high tread of the flight, the banister beside him", () => {
-  // mutation (a foot across the banister reads the floor beyond it): sed -i 's/this.floor.walled(this.anchorPos\[0\]!, this.anchorPos\[2\]!, x, z) ? NO_FLOOR : this.floor.under(x, z)/this.floor.under(x, z)/' src/game/present/ragdoll-walker.ts
-  // mutation (no floor reads as the ground's 0): sed -i 's/^    return height !== NO_FLOOR ? height : this.floor.level;/    return height !== NO_FLOOR ? height : 0;/' src/game/present/ragdoll-walker.ts
   it("when a foot is set across the banister, then it reads the tread he stands on, not the floor below the flight", () => {
     const walker = new Walker();
     walker.floor.boxes = flight();
@@ -206,7 +193,6 @@ describe("given the walker standing on a high tread of the flight, the banister 
     expect(walker["groundAt"](ACROSS_X, TREAD_Z), "the floor under a foot across the banister (m)").toBeCloseTo(walker.floor.level, 6);
   });
 
-  // mutation (a foot planted across the banister sets his floor): sed -i 's/^      if (planted\[f\] !== 1 || this.walled(fromX, fromZ, plant\[f \* 3\]!, plant\[f \* 3 + 2\]!)) continue;/      if (planted[f] !== 1) continue;/' src/game/present/walker-floor.ts
   it("when one foot is planted across the banister, then his floor stays the tread and he is not read as mid-step (a fall would be missed)", () => {
     const floor = new WalkFloor();
     floor.boxes = flight();
@@ -225,8 +211,6 @@ describe("given the walker on his feet, his torso at his root", () => {
     return walker["blowSpeed"]({ cur, vel: Float64Array.from(vel) } as never, 0);
   }
 
-  // mutation: sed -i 's/^const CARRY_EXPLAINS = 3;/const CARRY_EXPLAINS = Infinity;/' src/game/present/ragdoll-walker.ts
-  // mutation: sed -i 's/^const HOP_EXPLAINS = 3;/const HOP_EXPLAINS = Infinity;/' src/game/present/ragdoll-walker.ts
   it("when his torso goes out along a carry at 6 m/s, or up mid-hop at 6 m/s, then it reads as a blow of the speed past what his own step explains; at 1.9 m/s it reads nothing", () => {
     const walker = new Walker();
     walker["carried"][0] = -0.05;

@@ -125,7 +125,6 @@ function firstDifference(fresh: Run, pool: Run): string {
 }
 
 describe("given the pooled cars of the crash rows (a class car per slot in the ejection matrix, a shape car per slot in the pair-squeeze rows)", () => {
-  // mutation: sed -i 's/^    this.angular.set(0, 0, 0);$/    ;/' src/game/vehicle/car.ts  (a pooled car is placed again with the spin its last hit left it: the class-car row and the shape-car row go red; dropping `deform.reset()` instead never ends the run)
   it("when pooled class cars have served other hits and then play a hit, then every frame of it and the cars' end state equal new cars', bit for bit", () => {
     const served: [("head-on" | "t-bone"), VehicleClassId, VehicleClassId, number][] = [
       ["head-on", "sedan", "truck", 40],

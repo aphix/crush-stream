@@ -55,7 +55,6 @@ describe("given the rowhomes of the open world's layout", () => {
     expect(frontages.length, "frontages").toBe(homes.length);
   });
 
-  // mutation: sed -i 's/return Math.imul(Math.round(x \* 8) ^ Math.imul(Math.round(z \* 8), 0x9e3779b1), 0x85ebca6b) >>> 0;/return 0;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the houses' accents are picked, then the same lot gets the same one every time and neighbours differ", () => {
     const again = homeFrontages(playable);
     expect(again.every((frontage, at) => frontage.variant === frontages[at]!.variant), "same variants on a second call").toBe(true);
@@ -63,7 +62,6 @@ describe("given the rowhomes of the open world's layout", () => {
     expect(accents.size, "accents among the houses").toBeGreaterThanOrEqual(5);
   });
 
-  // mutation: sed -i 's/height: buildingHeight(storeys, false), style, enterable: true/height: buildingHeight(DEFAULT_STOREYS, false), style, enterable: true/' src/game/world/openworld/openworld-lots.ts
   it("when the homes' buildings are measured, then each is one lot wide and as tall as its place's storeys make it, and the layout builds houses of several storey counts", () => {
     const counts = new Set<number>();
     const wrong: string[] = [];
@@ -79,7 +77,6 @@ describe("given the rowhomes of the open world's layout", () => {
     expect(Math.max(...homes.map((place) => Math.abs(place.width - LOT_WIDTH))), "widest miss of a home's width to the lot width (m)").toBeLessThan(EPSILON);
   });
 
-  // mutation: sed -i 's/  const door = interiorDoor(place.interior, place.width, place.depth, place.x, place.z, place.yaw);/  const door = { x: place.doorX, z: place.doorZ };/' src/game/world/openworld/openworld-lots.ts
   it("when each home's door point is read against its stoop, then the door stands 1.8 m across the lot, on the stoop's landing between its cheeks", () => {
     const misses = homes.filter((place, at) => {
       const { out, across } = against(frontages[at]!, place.doorX, place.doorZ);
@@ -89,7 +86,6 @@ describe("given the rowhomes of the open world's layout", () => {
     expect(misses.length, "homes whose door is off its stoop").toBe(0);
   });
 
-  // mutation: sed -i 's/+ DOOR_ACROSS \* detSin(yaw), z: frontZ + inset \* detSin(yaw) + DOOR_ACROSS \* detCos(yaw) };/- DOOR_ACROSS * detSin(yaw), z: frontZ + inset * detSin(yaw) - DOOR_ACROSS * detCos(yaw) };/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the door point of a lot facing north and of one facing south are made, then each is 1.8 m along the building's local z from the lot's middle, on the drawn front wall", () => {
     for (const yaw of [FACING.north, FACING.south]) {
       const door = homeDoorPoint(10, 20, yaw, HOUSE_DEPTH);
@@ -100,7 +96,6 @@ describe("given the rowhomes of the open world's layout", () => {
     expect(DOOR.across, "door across (u)").toBe(DOOR_HOLE_ACROSS);
   });
 
-  // mutation: sed -i 's/const ROWHOME_DOOR_OFFSET = 1.8;/const ROWHOME_DOOR_OFFSET = 1.9;/' src/game/world/openworld/interior-kinds.ts (or sed -i 's/const front = drawnHalf(this.place.depth) - deep;/const front = this.place.depth \/ 2 - deep;/' src/game/world/openworld/interior-plan.ts: the interior door 0.125 m out of the wall)
   it("when the door the facade kit stands at and the door the rowhome interior gives are compared for the lots of each face, then they are the same point, on the drawn front wall", () => {
     const compared = { north: 0, south: 0 };
     const apart: string[] = [];
@@ -122,7 +117,6 @@ describe("given the rowhomes of the open world's layout", () => {
 });
 
 describe("given the interiors of the homes", () => {
-  // mutation: sed -i 's/const draft = new Draft(kind, 2 \* (drawnHalf(width) - STREET_SKIN), 2 \* drawnHalf(depth));/const draft = new Draft(kind, width, depth);/' src/game/world/openworld/interior-plan.ts
   it("when every solid of each home's interior is read in its building's frame, then none reaches the drawn walls: no interior wall stands in front of the facade's picture", () => {
     let solidsRead = 0;
     let deepest = { out: -Infinity, across: -Infinity };
@@ -148,14 +142,12 @@ describe("given the interiors of the homes", () => {
 });
 
 describe("given one rowhome's stoop", () => {
-  // mutation: sed -i 's/const STOOP_STEPS = 5;/const STOOP_STEPS = 4;/' src/game/world/openworld/openworld-facade-solids.ts (or sed -i 's/export const ROWHOME_FLOOR_Y = 0.9;/export const ROWHOME_FLOOR_Y = 0.95;/' src/game/world/openworld/interior-kinds.ts)
   it("when its top step is read, then it meets the rowhome interior's floor at the door sill", () => {
     expect(stoopStepRange(STOOP.steps).top, "top step (m)").toBeCloseTo(ROWHOME_FLOOR_Y, 9);
     expect(STOOP.sill, "stoop sill (m)").toBeCloseTo(ROWHOME_FLOOR_Y, 9);
     expect(DOOR.sill, "door sill (m)").toBeCloseTo(ROWHOME_FLOOR_Y, 9);
   });
 
-  // mutation: sed -i 's/const STOOP_TREAD = 0.28;/const STOOP_TREAD = 0.2;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when its steps are read, then every riser and tread is a walker's step and no step overhangs another", () => {
     let previousNear = Infinity;
     for (let step = 1; step <= STOOP.steps; step++) {
@@ -169,7 +161,6 @@ describe("given one rowhome's stoop", () => {
     expect(previousNear, "the landing starts at the wall").toBeCloseTo(0, 9);
   });
 
-  // mutation: sed -i 's/{ ...boxOn(frontage, (STOOP.landing + STOOP.run) \/ 2, DOOR.across, \[STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width\]), stairs: true }/boxOn(frontage, (STOOP.landing + STOOP.run) \/ 2, DOOR.across, [STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width])/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the stoop's ramp is read, then it is a flight of stairs of as many treads and risers as the visible steps', falling from the landing's end", () => {
     const solids = facadeSolidsOf(frontages[0]!);
     const ramp = solids[1]!;
@@ -180,7 +171,6 @@ describe("given one rowhome's stoop", () => {
     expect(ramp.size[1] / treads, "riser the flight's height gives (m)").toBeCloseTo(STOOP.rise, 9);
   });
 
-  // mutation: sed -i 's/Math.ceil(climbed \* flight.treads)/Math.floor(climbed * flight.treads)/' src/game/world/stairs.ts
   it("when the stoop's ramp is read as the course places it, then the flight stands on the drawn treads' heights and nowhere off the stoop", () => {
     const frontage = frontages[0]!;
     const ramp = facadeSolidsOf(frontage)[1]!;
@@ -199,7 +189,6 @@ describe("given one rowhome's stoop", () => {
     expect(flightHeightAt(flights[0]!, beside.x, beside.z), "beside the stoop").toBe(NO_FLOOR);
   });
 
-  // mutation: sed -i 's/boxOn(frontage, STOOP.landing \/ 2, DOOR.across, \[STOOP.landing, STOOP.sill, STOOP.width\]),/boxOn(frontage, STOOP.landing \/ 2, DOOR.across, [STOOP.landing, STOOP.sill + 0.3, STOOP.width]),/' src/game/world/openworld/openworld-facade-solids.ts
   it("when a rowhome's colliders are read, then there are three boxes: the bay stack, the stoop's ramp and its landing flush with the sill", () => {
     const frontage = frontages[0]!;
     const solids = facadeSolidsOf(frontage);
@@ -223,7 +212,6 @@ describe("given one rowhome's stoop", () => {
 });
 
 describe("given the course's rowhome colliders", () => {
-  // mutation: sed -i 's/    boxOn(frontage, STOOP.landing \/ 2, DOOR.across, \[STOOP.landing, STOOP.sill, STOOP.width\]),//' src/game/world/openworld/openworld-facade-solids.ts
   it("when the layout's colliders are counted, then every home inside the walls has three and no solid lies behind its facade", () => {
     const solids = facadeSolidProps(lots);
     expect(solids.length, "colliders for the layout").toBe(frontages.length * SOLIDS_PER_HOME_MAX);
@@ -231,7 +219,6 @@ describe("given the course's rowhome colliders", () => {
     expect(behind.length, "colliders reaching behind the facade").toBe(0);
   });
 
-  // mutation: sed -i 's/const BAY_CAP_SLAB = 0.15;/const BAY_CAP_SLAB = 1.5;/' src/game/world/openworld/openworld-facade-solids.ts (or sed -i 's/const BAY_SILL_ABOVE_FLOOR = 0.75;/const BAY_SILL_ABOVE_FLOOR = 0.1;/' src/game/world/openworld/interior-kinds.ts)
   it("when the bay stack of a house of each storey count is read, then it has a window over every floor of its interior, the same height over each, every head under the next floor and the roof slab under the cornice", () => {
     for (const storeys of STOREY_COUNTS) {
       const stack = bayStackOf(storeys);
@@ -247,7 +234,6 @@ describe("given the course's rowhome colliders", () => {
     }
   });
 
-  // mutation: sed -i 's/\[BAY.out, bayStackOf(frontage.storeys).top, BAY.width - BAY.out\]/[BAY.out, BAY.top, BAY.width - BAY.out]/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the bay boxes of the layout's houses are read, then each reaches its own stack's roof slab, and the storey counts give several heights", () => {
     const tops = new Set<number>();
     const wrong: string[] = [];
@@ -270,7 +256,6 @@ describe("given the course's rowhome colliders", () => {
     expect(wallLow.out, "wall corner on the facade (m)").toBe(0);
   });
 
-  // mutation: sed -i 's/const BAY_OUT = 0.7;/const BAY_OUT = 1.2;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the bay stack is read, then it projects as a rowhome bay does, ends under the cornice and shares the lot with the stoop and the piers", () => {
     expect(BAY.out, "bay projection (m)").toBeGreaterThanOrEqual(BAY_OUT_RANGE[0]);
     expect(BAY.out, "bay projection (m)").toBeLessThanOrEqual(BAY_OUT_RANGE[1]);

@@ -38,15 +38,12 @@ function drawnPoles(): { x: number; z: number }[] {
 describe("given the open world's traffic lights", () => {
   const drawn = drawnPoles();
 
-  // mutation: sed -i 's/ + ((heading + 2) % HEADING_COUNT)\]! < 0) continue;/ + ((heading + 2) % HEADING_COUNT)]! < -1) continue;/' src/game/world/openworld/openworld-signal-poles.ts
-  // mutation: sed -i 's/fromCurb: 0.6,/fromCurb: 0.7,/' src/game/world/openworld/openworld-signal-poles.ts
   it("when the poles are drawn, then a solid of the pole's size stands at every one, and at no other spot", () => {
     expect(drawn.length, "poles drawn").toBeGreaterThan(30);
     expect(solid.length, "solid poles").toBe(drawn.length);
     for (const spot of drawn) expect(solid.filter((pole) => hypot2(pole.x - spot.x, pole.z - spot.z) < SAME_SPOT).length, `solid poles at the drawn one at ${spot.x.toFixed(2)}, ${spot.z.toFixed(2)}`).toBe(1);
   });
 
-  // mutation: sed -i 's/...signalPoleProps(buildRoadNetwork(geometry)), //' src/game/world/openworld/openworld-course.ts
   it("when the course is placed, then every pole is a solid prop a car meets, reaching a bumper's height", () => {
     const course = parseTrack(openWorldCourse(fixtureLots(LAYOUT.wallReach)));
     const poles = course.props.filter((prop) => prop.prefab === PREFAB.invisibleWall && prop.size?.[0] === SIGNAL_POLE.width && prop.size[1] === SIGNAL_POLE.poleHeight);

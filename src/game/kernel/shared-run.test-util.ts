@@ -1,4 +1,3 @@
-// Mutation: `sed 's|const key = args.join("/");|const key = "";|'` turns engine-record-scale's strictly rising sweep red (every speed reads the first run).
 /** `run`'s result for these arguments, made once per file: for plain-number results that rows only read. */
 export function memoRun<A extends readonly (string | number | boolean | undefined)[], R>(run: (...args: A) => R): (...args: A) => R {
   const kept = new Map<string, { out: R }>();

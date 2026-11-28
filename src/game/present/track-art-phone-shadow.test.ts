@@ -32,7 +32,6 @@ const FURNITURE = [PREFAB.hydrant, PREFAB.bollard, PREFAB.litterBin, PREFAB.benc
 const SHADE = [PREFAB.cafeSet, PREFAB.dumpster];
 
 describe("given the open world's course drawn for a phone and for a desktop", () => {
-  // mutation: sed -i 's/ \&\& !(this.phone \&\& PHONE_NO_SHADOW.has(id)));/);/' src/game/present/track-art.ts
   it("when the art is built, then the desktop's street furniture casts shadows and the phone's casts none, while the trees cast on both", () => {
     const desktop = casts(false, FURNITURE);
     const phone = casts(true, FURNITURE);

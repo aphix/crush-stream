@@ -294,7 +294,6 @@ describe("given the shop signs of the open world", () => {
     expect(Math.min(...brightness(0)), "no list: every shop open").toBe(1);
   });
 
-  // mutation: sed -i 's/const SIGN_NIGHT_GAIN = 3;/const SIGN_NIGHT_GAIN = 1;/' src/game/present/openworld-shop-signs.ts
   it("when night falls, then an open sign glows past the bloom's threshold while a shut one stays dim, a drift inside a step writes nothing, and by day it is a plain board again", () => {
     const shop = new ShopSigns(map.places);
     const colour = colourOf(shop.group);
@@ -316,7 +315,6 @@ describe("given the shop signs of the open world", () => {
     expect(colour.getX(4) * lightInk, "by day nothing blooms").toBeLessThan(BLOOM_THRESHOLD);
   });
 
-  // mutation: sed -i 's/  if (neon !== undefined) drawNeonTube(g, neon, x, y, width);//' src/game/present/openworld-shop-signs.ts
   it("when the signs are painted, then every bar's carries a pink neon tube and every corner store's (the bodega's) a cyan one, and no other business's does", () => {
     strokes.length = 0;
     new ShopSigns(map.places);

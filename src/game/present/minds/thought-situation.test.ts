@@ -22,7 +22,6 @@ function fallbackWith(kind: number): { sit: Situation; thought: Thought } {
 }
 
 describe("given a resident whose gaze table holds one stimulus where she stands, of each kind in turn, or none", () => {
-  // mutation: sed -i 's/    if (!isArgOf(THOUGHT.look_at, kind)) continue;/    if (kind === 0) continue;/' src/game/present/minds/minds-read.ts
   it("when the fallback picks her thought, then it is a thought tool with a valid argument that fits her moment", () => {
     for (const [name, kind] of Object.entries(STIMULUS)) {
       const { sit, thought } = fallbackWith(kind);
@@ -31,7 +30,6 @@ describe("given a resident whose gaze table holds one stimulus where she stands,
     }
   });
 
-  // mutation: sed -i 's/    if (weight <= best) continue;/    if (weight <= 9) continue;/' src/game/present/minds/thought-situation.ts
   it("when the stimulus is one a thought can look at, then she looks at it", () => {
     for (const kind of LOOKABLE) {
       const { thought } = fallbackWith(kind);
@@ -41,7 +39,6 @@ describe("given a resident whose gaze table holds one stimulus where she stands,
 });
 
 describe("given a resident whose most pressing need is food", () => {
-  // mutation: sed -i '/^    case THOUGHT.worry_about:/,+1d' src/game/present/minds/thought-situation.ts
   it("when a worry is checked against her moment, then a worry about food fits and a worry about rest does not", () => {
     const sit = new Situation();
     sit.resident = 0;

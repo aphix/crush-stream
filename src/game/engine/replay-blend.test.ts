@@ -207,7 +207,6 @@ describe("given a crash replayed in slow motion from its clip", () => {
     assertSameNumbers(poses(), before, "the sim's own pose handed back");
   });
 
-  // mutation: sed -i 's/^    this.blend.forget(this.cars);$/    ;/' src/game/engine/engine-replay.ts  (a replay starts blending the play before it: the shared recording's second replay differs from the fresh one's)
   it("when the shared recording is replayed a second time and a fresh recording once, then every entity's drawn pose on every frame is the same, bit for bit", () => {
     const shared = recorded();
     shares(FIRST_PLAY_S, 0, shared);

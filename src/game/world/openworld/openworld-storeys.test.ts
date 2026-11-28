@@ -25,7 +25,6 @@ const SAME = 1e-3;
 const faces = Array.from({ length: ROWS * COLUMNS * 2 }, (_, at) => ({ row: Math.floor(at / (COLUMNS * 2)), column: Math.floor(at / 2) % COLUMNS, south: at % 2 === 1 }));
 
 describe("given the storeys of the lots of every face of every block", () => {
-  // mutation: sed -i 's/const CORNER_BONUS = 1;/const CORNER_BONUS = 0;/' src/game/world/openworld/openworld-storeys.ts
   it("when a face is walked, then each end lot is a storey taller than the walk alone gives it, and the lots between are the walk's", () => {
     for (const { row, column, south } of faces) {
       const walk = walkOfFace(row, column, south, FACE_LOTS);
@@ -39,7 +38,6 @@ describe("given the storeys of the lots of every face of every block", () => {
     }
   });
 
-  // mutation: sed -i 's/const LOW_RUN_CHANCE = 0.08;/const LOW_RUN_CHANCE = 0;/' src/game/world/openworld/openworld-storeys.ts
   it("when every face is read, then the counts stay within the range, three is the commonest, every count turns up, and a run of two-storey houses stands somewhere", () => {
     const counts = new Map<number, number>();
     let lowRuns = 0;
@@ -57,7 +55,6 @@ describe("given the storeys of the lots of every face of every block", () => {
     expect(lowRuns, "neighbouring two-storey lots").toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's/  const random = mulberry32(SEED_MIX.salt + row \* SEED_MIX.row + column \* SEED_MIX.column + (south ? SEED_MIX.south : 0));/  const random = Math.random;/' src/game/world/openworld/openworld-storeys.ts
   it("when a face is walked twice, then it is the same; when it is walked longer, then its lots so far are the same", () => {
     for (const { row, column, south } of faces) {
       expect(walkOfFace(row, column, south, FACE_LOTS).join(), "the same walk").toBe(walkOfFace(row, column, south, FACE_LOTS).join());
@@ -67,8 +64,6 @@ describe("given the storeys of the lots of every face of every block", () => {
 });
 
 describe("given the places of the map", () => {
-  // mutation: sed -i 's/const storeys = venueStoreys(venue, spanned);/const storeys = venue.storeys;/' src/game/world/openworld/openworld-lots.ts
-  // mutation: sed -i 's/lots: 3, shopGround: false, storeys: 3, hours: \[7, 20\] };/lots: 3, shopGround: true, storeys: 3, hours: [7, 20] };/' src/game/world/openworld/openworld-programme.ts (a church with a shop's ground storey)
   it("when each building is read, then its height is its storeys' and its place says the same count, the supermarket keeps its two, and no shop is lower than its programme says", () => {
     for (const building of lots.buildings.filter((candidate) => candidate.annex !== true)) {
       const place = playable.find((candidate) => Math.abs(candidate.x - building.x) < SAME && Math.abs(candidate.z - building.z) < SAME && candidate.storeys > 0)!;
@@ -84,7 +79,6 @@ describe("given the places of the map", () => {
     expect(Math.min(...buildings.map((place) => place.storeys)), "lowest").toBe(MIN_STOREYS);
   });
 
-  // mutation: sed -i 's/const CORNER_BONUS = 1;/const CORNER_BONUS = 0;/' src/game/world/openworld/openworld-storeys.ts
   it("when the heights of a face's corner places are read, then each end of a block's face stands taller than its walk alone gave a house, so a block reads as a corner and a run", () => {
     const corners = buildings.filter((place) => place.openSides !== undefined && atBlockEnd(place));
     expect(corners.length, "corner buildings").toBeGreaterThan(0);
@@ -93,7 +87,6 @@ describe("given the places of the map", () => {
 });
 
 describe("given a building's height and its storeys", () => {
-  // mutation: sed -i 's/ROOF_ALLOWANCE) \/ STOREY) + 1;/ROOF_ALLOWANCE) \/ STOREY);/' src/game/world/openworld/interior-kinds.ts
   it("when a height is turned into storeys and back, then every count in the range returns itself, for a house and for a shop", () => {
     for (const shop of [false, true]) {
       for (let storeys = MIN_STOREYS; storeys <= MAX_STOREYS; storeys++) expect(storeysOfHeight(buildingHeight(storeys, shop), shop), `${shop ? "shop" : "house"} of ${storeys}`).toBe(storeys);

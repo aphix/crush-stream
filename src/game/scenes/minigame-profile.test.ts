@@ -293,7 +293,7 @@ describe("given each of the 7 car types released at full throttle from the high 
   const MID_SHARE = 0.7;
   const MID_SHARE_TOLERANCE = 0.03;
   /**
-   * The mutations the apex rows must fail: a kicker too shallow to throw high (deg), and one tight and steep enough (radius m, pitch deg)
+   * The wrong kickers the apex rows must fail: a kicker too shallow to throw high (deg), and one tight and steep enough (radius m, pitch deg)
    * that the sedan family's climb cliffs while the monster's tyres carry it, found by a sweep of radius, pitch and run-up.
    * With the lip's push the honest climb carries more at every pitch: the shallow one is 24° (the lowest class's apex 34.6 m under the minimum 40; the shipped 36 read
    * 69 to 84), and the cliff 3 m at 88° (apexes 21 to 107 m, ratio 5.0; at 85° it reads 3.6).
@@ -496,7 +496,6 @@ describe("given each of the 7 car types released at full throttle from the long 
     expect(Math.abs(hit.arrivalSpeed - LOWEST_FAILING_ARRIVAL) <= 0.1 && hit.ejections === 1, `arrival ${hit.arrivalSpeed}, ${hit.ejections} throws`).toBeTruthy();
   });
 
-  // mutation: sed -i 's|if (!drawn) car.updateSkin = () => {};|if (!drawn) car.updateSkin = () => { car.velocity.x *= 1.001; };|' src/game/scenes/minigame-profile.test-util.ts  (the undrawn drive then differs from the drawn one: this row goes red)
   it("when a drive into the barrier is made with the car drawn every frame, then its hit is the undrawn drive's, number for number (the drives here leave the car undrawn)", () => {
     for (const type of [truck, monsterCar]) {
       const undrawn = driveToBarrier(type, longJumpVariant(shipped), START_PHASES[2]!, Infinity);

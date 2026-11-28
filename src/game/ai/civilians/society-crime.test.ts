@@ -72,7 +72,6 @@ describe("given a criminal at a shop and the host's desk", () => {
 });
 
 describe("given a mugger at a door and her victim still walking out of it on a leg to the bodega", () => {
-  // mutation: sed -i 's/^  return placeNow(state, victim, tick) === place \&\& isOutdoorPurpose/  return intAt(state, victim, RESIDENT_INT.place) === place \&\& isOutdoorPurpose/' src/game/ai/civilians/society-crime.ts
   it("when the crime comes due, then the victim counts as at the door she is leaving, and not at the bodega she is walking to", () => {
     const dueFor = (target: number): number => {
       const cast = crimeScene();
@@ -190,7 +189,6 @@ function bustedInStationCity(): { cast: Cast; bustAt: number } {
 }
 
 describe("given a city with a police station and a wanted criminal busted by the police", () => {
-  // mutation: sed -i 's/const held = state.index.placeByName.get(PLACE_NAMES.policeStation) ?? ints\[base + RESIDENT_INT.home\]!;/const held = ints[base + RESIDENT_INT.home]!;/' src/game/ai/civilians/society-reactions.ts
   it("when the bust's tick comes, then they are held in the police station until the jail time is up, not at home", () => {
     const { cast, bustAt } = bustedInStationCity();
     const { state, resident } = cast;
@@ -201,7 +199,6 @@ describe("given a city with a police station and a wanted criminal busted by the
     expect(historyLines(state, resident)[0], "the newest line").toBe("was arrested outside Bodega Supreme");
   });
 
-  // mutation: sed -i 's/  if (letOut) goHomeFromCustody(state, resident, current);//' src/game/ai/civilians/civilian-plan.ts
   it("when the jail time is up, then they walk home from the station, and are let out with a line saying so", () => {
     const { cast, bustAt } = bustedInStationCity();
     const { state, resident } = cast;
@@ -317,7 +314,6 @@ describe("given the host raises a fight between two residents at a door", () => 
 });
 
 describe("given the host raises a fight against a resident on her walk", () => {
-  // mutation: sed -i 's/  const onLane = second >= 0 \&\& legPose(/  const onLane = second < -1 \&\& legPose(/' src/game/ai/civilians/society-reactions.ts
   it("when they are drawn a moment into it, then the two stand a metre apart along the way she was walking, facing each other, so passers go by beside them", () => {
     const cast = newCast(NOON);
     const { state, resident, neighbour } = cast;

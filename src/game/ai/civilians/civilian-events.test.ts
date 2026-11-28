@@ -266,7 +266,6 @@ describe("given the pirate radio comes on at midnight", () => {
     expect(spared, "residents of C3 who heard it").toBe(0);
   });
 
-  // mutation: sed -i 's/STATIC_HOLD_TICKS : MOOD_HOLD_TICKS;/MOOD_HOLD_TICKS : MOOD_HOLD_TICKS;/' src/game/ai/civilians/civilian-names.ts
   it("when the night is over, then the static no longer colours anyone's mood: by noon nobody it reached is annoyed by it", () => {
     const noon = tickOfHour(state, 1, 12);
     runTicks(state, noon - state.nextTick);
@@ -283,7 +282,6 @@ describe("given the pirate radio comes on at midnight", () => {
 });
 
 describe("given two civilians in a fight", () => {
-  // mutation: sed -i '/^      releaseFightPartner(state, event.subject);/d' src/game/ai/civilians/civilian-events.ts
   it("when a knock is applied to one of them, then neither she nor her partner is in a fight any more", () => {
     const cast = newCast(12);
     const { state, resident, neighbour } = cast;

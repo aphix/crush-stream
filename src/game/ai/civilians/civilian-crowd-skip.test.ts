@@ -24,7 +24,6 @@ function steppedCrowd(hours: number): CivilianCrowd {
 }
 
 describe("given a host crowd skipped through hours of its day", () => {
-  // mutation: sed -i '/^    while (this.advancedThrough < last) {$/,/^    }$/{/this.postBatch();/d}' src/game/ai/civilians/civilian-crowd.ts
   it("when a crime falls due in the hours skipped, then it is raised in the log at its own time and the brain has committed it before any step", () => {
     const crowd = steppedCrowd(STEPPED_HOURS);
     const before = crowd.eventLog().length;
@@ -37,7 +36,6 @@ describe("given a host crowd skipped through hours of its day", () => {
     expect(crowd.state.ints[CRIMINAL * RESIDENT_INT_STRIDE + RESIDENT_INT.crimeTick], "committed by the brain").toBe(CRIME_TICK);
   });
 
-  // mutation: sed -i 's/    const last = tickAt(crowdSeconds) - 1;/    const last = tickAt(crowdSeconds) - 2;/' src/game/ai/civilians/civilian-crowd.ts
   it("when it skips to a time, then the society has lived every tick before the one that time falls in, the crowd's clock stands there, and the next step takes the last tick", () => {
     const crowd = steppedCrowd(STEPPED_HOURS);
     const seconds = secondsOfHour(SKIPPED_TO_HOUR) + 0.25;
@@ -48,7 +46,6 @@ describe("given a host crowd skipped through hours of its day", () => {
     expect(crowd.state.nextTick, "the step took that tick").toBe(SKIPPED_TO_HOUR * TICKS_PER_GAME_HOUR + 1);
   });
 
-  // mutation: sed -i 's/    if (!this.authority) return false;/    if (false) return false;/' src/game/ai/civilians/civilian-crowd.ts
   it("when a client's crowd, or one that has not stepped, is asked to skip, then nothing happens", () => {
     const client = newCrowd(map, CRIME_RESIDENTS, CRIME_SEED);
     for (let tick = 0; tick <= STEPPED_HOURS * TICKS_PER_GAME_HOUR; tick++) client.step(tick / DECISION_HZ, [], false);

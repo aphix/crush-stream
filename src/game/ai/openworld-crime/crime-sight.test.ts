@@ -17,7 +17,6 @@ function crimeRun(wall?: Wall) {
 }
 
 describe("a cop does not see through buildings", () => {
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts stepAtLarge(), change `this.caseCopSees(caseIndex, table.spotX[slot]!, table.spotZ[slot]!)` to `this.nearestGap <= COP_SIGHT`
   it("does not send a criminal running while a building stands between them, and does once it comes round it", () => {
     const hidden = crimeRun(BUILDING);
     runFor(hidden, 1.2);
@@ -29,7 +28,6 @@ describe("a cop does not see through buildings", () => {
     expect(hidden.scene.foot.table.mode[0], "the cop has come round the building").not.toBe(SUBJECT_MODE.atLarge);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts copSees(), delete ` && this.sees(cop, x, z)`
   it("sends no patrol car after a red light the only cop in range could not see past a building", () => {
     const run = harness([40, 0, 0], { withCars: true, wall: BUILDING });
     const runner = run.street!.addCar(60, 0, EAST, 12, RUNNER_RESIDENT, true);

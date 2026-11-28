@@ -26,8 +26,7 @@ stash, `reset --hard`, clean, rebase, squash, `rm` with a glob or `pkill`.
 touched or wrote, each once per change: `CAP=1100M ~/crash-wt/capped ~/crash-wt/gate-slot npx vitest run --project app <files>
 --maxWorkers=1 < /dev/null`. Never `test:app`, `test:all`, a long-run file, a sweep, a bench or a cost matrix in a lane. Static
 checks one at a time: `npm run typecheck`, `npm run lint`, `node scripts/check-boundaries.mjs --ratchet`,
-`node scripts/check-links.mjs`. A new behaviour gets a row seen red once without the change; no `// mutation: sed` comment is
-written and none a port brings in is kept; no bound is loosened and no test deleted. On a red: read the test whole, its setup,
+`node scripts/check-links.mjs`. A new behaviour gets a row seen red once without the change; no bound is loosened and no test deleted. On a red: read the test whole, its setup,
 the source under test, state the behaviour it protects, then decide.
 
 **Code.** `docs/CODING_STANDARDS.md` and `docs/ARCHITECTURE.md` bind. Per-frame, per-step and per-message code allocates nothing
@@ -110,8 +109,7 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
   ShutPlaces, CarsSeePlayers, Sweep, HubRules, KerbClaims, and three fixes of reds the gate found: ReplayTilt (97fe97786),
   TiltDraw (b92dab303 with Main's near-car gate) and ReelView (a8f7ad5f1); their worktrees are removed. Under them: ae0007683
   (a derby driver that cannot get rolling lifts off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251). The
-  crash digests were re-derived once (`whole-digest`, `car-smooth`). The six `// mutation:` comments the pass had added are
-  stripped.
+  crash digests were re-derived once (`whole-digest`, `car-smooth`).
 - **Landed with a cost not measured** (the owner's rule is never worse for performance): PerfPath's two cuts are bit-equal by
   review and its micro-bench read about 23 % on `projectPath`, but the whole simulation's speed with them was not measured;
   the crash cam's second sight line on a sunk hit (ReelView) runs on each of a pick's samples outside its budget and was not

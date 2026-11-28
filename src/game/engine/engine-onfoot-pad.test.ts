@@ -24,7 +24,6 @@ describe("given the pad's one dead zone and curve on foot", () => {
     const state = blankPad();
     readPad(stickPad(raw), state);
     const intent = readWalkIntent(new Set(), state, noTouch, blankWalkIntent());
-    // mutation: sed -i 's/CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) \* Math.min(1, reach)/CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) * Math.min(1, reach) ** 1.5/' src/game/engine/engine-onfoot-steer.ts
     return OnFootSteer.prototype["pace"].call(null as never, intent, hypot2(intent.forward, intent.strafe));
   };
 
@@ -51,7 +50,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     rig.run(CLIMB_S);
   };
 
-  // mutation: sed -i 's/const ON_FOOT_BUTTON = 1 << PAD_BUTTON.north/const ON_FOOT_BUTTON = 1 << PAD_BUTTON.east/' src/game/engine/engine-onfoot.ts
   it("when Y is pressed at the wheel, then he gets out, and Y at his door gets him back in; B does neither", () => {
     tap(PAD_BUTTON.east);
     expect(rig.phase(), "B did not get him out").toBe("inCar");
@@ -63,7 +61,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(rig.phase(), "Y got him back in").toBe("inCar");
   });
 
-  // mutation: sed -i 's/const VIEW_BUTTON = 1 << PAD_BUTTON.east/const VIEW_BUTTON = 1 << PAD_BUTTON.north/' src/game/engine/engine-onfoot.ts
   it("when he is out and B is pressed, then the on-foot view cycles over his shoulder, to his eyes and back to the follow, and Y does not cycle it", () => {
     tap(PAD_BUTTON.north);
     rig.run(SETTLE_S);
@@ -76,7 +73,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(rig.engine["onFoot"].footView, "B again: the follow").toBe("follow");
   });
 
-  // mutation: sed -i 's/^const INTENT_SECONDS = 0.08;/const INTENT_SECONDS = 1e-9;/' src/game/engine/engine-onfoot-steer.ts
   it("when D is pressed while W is held, then his heading has turned by less than 0.6 rad three frames later, and by 0.7 rad or more half a second later", () => {
     if (rig.phase() !== "onFoot") rig.getOut();
     rig.engine["keys"].add("KeyW");

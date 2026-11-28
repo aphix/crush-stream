@@ -52,7 +52,6 @@ async function throwInto(gated: boolean): Promise<{ trace: number[]; out: number
 }
 
 describe("given a dummy thrown into two crates and a cone while ten props stand 40 m and more away", () => {
-  // mutation: sed -i 's/^const REACH_ON = 6;/const REACH_ON = 0.1;/' src/game/present/ragdoll-prop-reach.ts
   it("when the standing props are kept in the world only near a moving body, then every part of the dummy moves as with all of them in to within a millimetre, and the far ones were out of it", async () => {
     const all = await throwInto(false);
     const near = await throwInto(true);
@@ -83,7 +82,6 @@ describe("given a crate standing 15 m from the walker's eye, with the walker 15 
     return length;
   }
 
-  // mutation: sed -i '/^    this.props.watch(x, z, x + dx \* length, z + dz \* length);/d' src/game/present/ragdoll-throw.ts
   it("when the camera's sweep is cast through it, then it stops short of the crate, as with every prop in the world", async () => {
     const all = await sweep(false);
     expect(all, "control: with every prop in, the crate stops the sweep").toBeLessThan(15);
@@ -92,7 +90,6 @@ describe("given a crate standing 15 m from the walker's eye, with the walker 15 
 });
 
 describe("given a world nobody asked to gate its props", () => {
-  // mutation: sed -i 's/^  private gatingOn = false;/  private gatingOn = true;/' src/game/present/ragdoll-props.ts
   it("when a dummy is thrown on a course with far props, then every standing prop stays in the world: only a phone in the open world gates", async () => {
     const track = new Track(parseTrack(square({ props: [...NEAR, ...FAR].map((p) => ({ ...p, yaw: 0, scale: 1 })) })));
     const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
@@ -109,7 +106,6 @@ describe("given a world nobody asked to gate its props", () => {
 });
 
 describe("given a gated world whose far props are out", () => {
-  // mutation: sed -i '/^    if (!on \&\& this.built) this.gated.restore(this);/d' src/game/present/ragdoll-props.ts
   it("when the gate is turned off, then every standing prop is back in the world", async () => {
     const track = new Track(parseTrack(square({ props: [...NEAR, ...FAR].map((p) => ({ ...p, yaw: 0, scale: 1 })) })));
     const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
@@ -127,7 +123,6 @@ describe("given a gated world whose far props are out", () => {
 });
 
 describe("given a gated course where props far from a walker are knocked, taken out and made again while he starts and stops", () => {
-  // mutation: sed -i '/^    this.world!.removeRigidBody(body);/{N;s/.*\n.*/    body.setEnabled(false);/}' src/game/present/ragdoll-props.ts
   it("when a prop that is out of the world is knocked, a walker is despawned in the same frame and steps go on, then Rapier stays sound and the prop flies", async () => {
     const track = new Track(parseTrack(square({ props: [...NEAR, ...FAR].map((p) => ({ ...p, yaw: 0, scale: 1 })) })));
     const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
@@ -179,7 +174,6 @@ describe("given a world where the count of moving bodies wobbles round the bound
     return { sys, reach, owner, made, out, tend };
   }
 
-  // mutation: sed -i 's/^    else if (this.movers < RELEASE_MOVERS) this.allIn = false;/    else this.allIn = false;/' src/game/present/ragdoll-prop-reach.ts
   it("when it alternates 129 and 127 for 20 frames, then the props are made at most once: every prop stays in from the first frame past the bound", async () => {
     const { sys, made, tend } = await wobbling();
     for (let f = 0; f < 20; f++) tend(f % 2 === 0 ? 0 : 2);
@@ -187,7 +181,6 @@ describe("given a world where the count of moving bodies wobbles round the bound
     sys.dispose();
   });
 
-  // mutation: sed -i 's/^const RELEASE_MOVERS = 96;/const RELEASE_MOVERS = 0;/' src/game/present/ragdoll-prop-reach.ts
   it("when the count falls to 95 after it was past the bound, then every far prop is taken out", async () => {
     const { sys, out, tend } = await wobbling();
     tend(0);
@@ -196,7 +189,6 @@ describe("given a world where the count of moving bodies wobbles round the bound
     sys.dispose();
   });
 
-  // mutation: sed -i '/^    this.watching = false;/{n;d}' src/game/present/ragdoll-prop-reach.ts
   it("when a new run puts every prop back while the latch is on, then at 127 movers the far props are taken out as on a fresh boot", async () => {
     const { sys, reach, owner, out, tend } = await wobbling();
     tend(0);

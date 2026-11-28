@@ -19,7 +19,6 @@ const ROAD_DECALS_AT_LEAST = 150;
 const RAY_TOP = 10;
 
 describe("given the open world's art: the decals on its roads (crossings, manhole covers) and the road ribbons' depth proxy", () => {
-  // mutation: sed -i 's/.translate(0, ROAD_LIFT, 0))\]);/)]);/' src/game/present/scenery-assets-art.ts
   it("when each decal on a road is read, then no part of it is drawn under the proxy it is depth-tested against", () => {
     stubBrowser();
     const track = new Track(OFF_MENU.find((json) => parseTrack(json).id === OPENWORLD_ID)!);

@@ -38,7 +38,6 @@ function poses(car: ReturnType<typeof drive>): number[] {
 }
 
 describe("given a wreck driven on while no camera sees it", () => {
-  // mutation: sed -i 's/    if (!onRoad || !this.unseen || p.region !== null) return false;/    return false;/' src/game/vehicle/part-pose-wait.ts
   it("when it is driven, then far fewer part poses are written than when seen, and every one is owed", () => {
     const seen = drive(false);
     const hidden = drive(true);
@@ -46,7 +45,6 @@ describe("given a wreck driven on while no camera sees it", () => {
     expect(hidden.partsOwed, "poses left owed").toBe(true);
   });
 
-  // mutation: sed -i 's/^    this.poseOwed();$/    this.wait.owed = false;/' src/game/vehicle/car-parts.ts
   it("when it is seen again and settled, then every part stands as in a run that was seen throughout", () => {
     const seen = drive(false);
     const hidden = drive(true);
@@ -65,7 +63,6 @@ function doorMovedWhileUnseen(unseen: boolean) {
 }
 
 describe("given a wreck whose door moved while no camera saw it", () => {
-  // mutation: sed -i '/this.wait.owed) this.poseOwed();/{N;/const o = this.parts\[slot\]/s/^[^\n]*\n//}' src/game/vehicle/car-parts.ts
   it("when its parts' boxes are read for the dummies' world, then they are the seen car's", () => {
     const seen = doorMovedWhileUnseen(false);
     const hidden = doorMovedWhileUnseen(true);
@@ -81,7 +78,6 @@ describe("given a wreck whose door moved while no camera saw it", () => {
 });
 
 describe("given a wreck whose door moved while no camera saw it and whose mirror is then torn off", () => {
-  // mutation: sed -i '/this.wait.owed) this.poseOwed();/{N;/The part leaves in the pose/s/^[^\n]*\n//}' src/game/vehicle/car-parts.ts
   it("when the mirror leaves, then its place and velocity are those of a car that was seen", () => {
     const leave = (unseen: boolean): number[] => {
       const car = doorMovedWhileUnseen(unseen);
@@ -98,7 +94,6 @@ describe("given a wreck whose door moved while no camera saw it and whose mirror
 });
 
 describe("given a wreck whose door moved while no camera saw it", () => {
-  // mutation: sed -i '/this.wait.owed) this.poseOwed();/{N;/return super.glassWorld/s/^[^\n]*\n//}' src/game/vehicle/car-parts.ts
   it("when the door pane's centre is read, as the ejection places a thrown driver from it, then it is where the seen car has it", () => {
     for (const pane of ["doorL", "doorR"] as const) {
       const seen = doorMovedWhileUnseen(false).glassWorld(pane, new THREE.Vector3());
@@ -107,7 +102,6 @@ describe("given a wreck whose door moved while no camera saw it", () => {
     }
   });
 
-  // mutation: sed -i '/this.wait.owed) this.poseOwed();/{N;/super.shatterGlass/s/^[^\n]*\n//}' src/game/vehicle/car-parts.ts
   it("when its door pane shatters, then the shards burst from where the seen car's pane bursts them", () => {
     const burst = (unseen: boolean): number[] => {
       const car = doorMovedWhileUnseen(unseen);
@@ -123,7 +117,6 @@ describe("given a wreck whose door moved while no camera saw it", () => {
 });
 
 describe("given a wreck whose door moved while no camera saw it and a shot's ray is cast at it", () => {
-  // mutation: sed -i '/^    this.poseOwed();$/{N;/updateMatrixWorld(true)/s/^[^\n]*\n//}' src/game/vehicle/car-parts.ts
   it("when the car is made ready for the ray, then every part's world matrix is the seen car's", () => {
     const seen = doorMovedWhileUnseen(false);
     seen.group.updateMatrixWorld(true);
@@ -168,7 +161,6 @@ function barWorld(car: ReturnType<typeof policeDrive>): number[] {
 }
 
 describe("given a police wreck whose light bar moved while no camera saw it", () => {
-  // mutation: sed -i '/^    this.poseOwed();$/{N;/return super.lampWorld(i, pos, dir, false);/s/^[^\n]*\n//}' src/game/vehicle/car-parts.ts
   it("when its lit siren is placed, then it is where the seen car's is", () => {
     const seen = policeDrive(false);
     const hidden = policeDrive(true);
@@ -178,7 +170,6 @@ describe("given a police wreck whose light bar moved while no camera saw it", ()
     assertSameNumbers(sirenAt(hidden), sirenAt(seen), "siren place and axis", POSE_TOLERANCE);
   });
 
-  // mutation: sed -i 's/    if (!this.wait.owed || (kind !== "red" \&\& kind !== "blue")) return kind;/    if (!this.wait.owed) return kind;/' src/game/vehicle/car-parts.ts
   it("when its sirens are off and its siren lamps are asked for, then its poses stay owed", () => {
     const hidden = policeDrive(true);
     hidden.setSirens(false);

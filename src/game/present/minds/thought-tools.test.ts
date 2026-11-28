@@ -7,7 +7,6 @@ import { THINK, THOUGHT, Thought, VERDICT, readCall } from "./thought-tools.ts";
 const said = (call: string): string => `<think>Something is going on.</think><tool_call>${call}`;
 
 describe("given a model's completion", () => {
-  // mutation: sed -i 's/  if (!Object.hasOwn(THOUGHTS, call.name)) return VERDICT.unknownTool;//' src/game/present/minds/thought-tools.ts
   it("when it calls a tool that is not a thought, then the call is refused as unknown and the pick is untouched", () => {
     const pick = new Thought();
     pick.tool = THOUGHT.think_about;
@@ -16,30 +15,25 @@ describe("given a model's completion", () => {
     expect(firstMismatch([pick.tool, pick.arg], [THOUGHT.think_about, THINK.home]), "the pick").toBeUndefined();
   });
 
-  // mutation: sed -i 's/  if (arg < 0) return VERDICT.badArgs;//' src/game/present/minds/thought-tools.ts
   it("when its argument is not one of the tool's closed values, then the call is refused for its arguments", () => {
     expect(readCall(said('{"name":"look_at","arguments":{"stimulus":"restaurant"}}'), new Thought())).toBe(VERDICT.badArgs);
   });
 
-  // mutation: sed -i 's/Object.keys(call.arguments).length !== (argName === null ? 0 : 1) || //' src/game/present/minds/thought-tools.ts
   it("when it passes an argument beyond the tool's one, or none to a tool that takes one, then the call is refused for its arguments", () => {
     expect(readCall(said('{"name":"look_at","arguments":{"stimulus":"car","time":"now"}}'), new Thought()), "an extra argument").toBe(VERDICT.badArgs);
     expect(readCall(said('{"name":"ignore","arguments":{"stimulus":"car"}}'), new Thought()), "an argument to ignore").toBe(VERDICT.badArgs);
     expect(readCall(said('{"name":"look_at","arguments":{}}'), new Thought()), "no argument").toBe(VERDICT.badArgs);
   });
 
-  // mutation: sed -i 's/  if (!read.success) return VERDICT.malformed;/  if (!read.success) return VERDICT.absent;/' src/game/present/minds/thought-tools.ts
   it("when its call is not whole JSON, then it is malformed", () => {
     expect(readCall(said('{"name":"look_at","arguments":{"stimulus":"car"'), new Thought())).toBe(VERDICT.malformed);
     expect(readCall("I would look at the car.", new Thought()), "no call at all").toBe(VERDICT.malformed);
   });
 
-  // mutation: sed -i 's/  if (payload.trimStart().startsWith(ABSTAIN)) return VERDICT.abstained;//' src/game/present/minds/thought-tools.ts
   it("when it answers an empty list, then it abstained", () => {
     expect(readCall(said("[]"), new Thought())).toBe(VERDICT.abstained);
   });
 
-  // mutation: sed -i 's/  out.arg = arg;/  out.arg = 0;/' src/game/present/minds/thought-tools.ts
   it("when it lists two calls and is cut off inside the second, then the first is taken", () => {
     const pick = new Thought();
     expect(readCall(said('[{"name":"look_at","arguments":{"stimulus":"crash"}}, {"name":"remark_on","arguments":{"ev'), pick)).toBe(VERDICT.taken);

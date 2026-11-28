@@ -164,7 +164,6 @@ function sideswipe(scene: Scene, steer: number, turnIn: number, boost = false): 
 const NO_STEP = (j: Jump): string => `step ${j.step} (frame ${j.frame}) moved the car ${j.moved.toFixed(3)} m, allowed ${j.allowed.toFixed(3)} m (footprint ${j.overlap.toFixed(3)} m in a solid), ${j.at}; placements fired ${j.placements}`;
 
 describe("given a car on Havana's avenue, a palm in its path", () => {
-  // mutation: sed -i 's/^      const over = pen - WALL_REACH;$/      const over = pen + 3;/' src/game/contact/pair-contact.ts  (a solid shoves a wreck 3 m too far: red at the step that carries the car past its allowance)
   it("when a sedan on the gas taps the handbrake at full right lock 14 m out so its rear half sideswipes the palm, then no physics step carries it further than its speed times the step plus 5 cm plus its depth in a solid", () => {
     const worst = sideswipe(SEDAN, 1, 14);
     expect(worst.moved, NO_STEP(worst)).toBeLessThanOrEqual(worst.allowed);

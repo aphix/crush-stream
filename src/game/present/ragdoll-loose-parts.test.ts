@@ -251,7 +251,6 @@ describe("given a part lying still on the road", () => {
     expect(deepest, `his deepest corner went ${deepest.toFixed(3)} m into the door (its top at ${top.toFixed(2)} m)`).toBeLessThan(THROUGH_M);
   });
 
-  // mutation: sed -i '/^    walker.floor.parts = this.loose;/d' src/game/present/ragdoll-pool.ts
   it(`when the walker walks at ${WALK_SPEED} m/s into a wheel lying on its side in his way, then he steps over it on his feet and no corner of him goes over ${THROUGH_M} m into it`, async () => {
     const sys = await standingWalker();
     const wheel = lyingStill("wheel", new THREE.Vector3(0, 0.3, 1.2));

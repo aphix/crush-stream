@@ -109,7 +109,7 @@ describe("given a fixed solid (a course wall, a solid box prop, the flank of a m
  * Owner: "hitting a wall should be like crushing in to a jersey barrier ... a building, like any hard surface". Every hardness-1 solid at
  * a sedan's top speed: the same health band (`HEALTH_BAND`) and the same block travel within that band's share of the slab's kill travel
  * (0.45 m), each against the slab's at the same speed. The monument's tip stands on an embankment: a contact point left at ground level
- * fed the crush nothing, and the car stopped dead at health 1 with no travel (mutation: the point at 0.48 m -> this row fails).
+ * fed the crush nothing, and the car stopped dead at health 1 with no travel.
  */
 describe("given a sedan at 55 m/s square into each hard surface and the slab as the reference", () => {
   const KILL_TRAVEL = 0.45;

@@ -25,7 +25,6 @@ describe("given a course whose props name scenery assets", () => {
   const placed = placeProps(new Track(course), SCENERY_ARM.off);
   const [hydrant, tall, crosswalk, cone] = placed;
 
-  // mutation: sed -i 's/sz: sz \* p.scale, asset });/sz: sz * p.scale });/' src/game/world/placements.ts
   it("when it is placed, then an asset prop stands at its exact point with its asset and the asset's own size", () => {
     expect(placed.length, "authored props").toBe(4);
     expect(hydrant!.prefab, "hydrant prefab").toBe(PREFAB.assetCard);
@@ -35,7 +34,6 @@ describe("given a course whose props name scenery assets", () => {
     expect(hydrant!.sz, "hydrant width (m)").toBeCloseTo(HYDRANT_WIDTH, 6);
   });
 
-  // mutation: sed -i 's/sx: sx \* p.scale, sy: sy \* p.scale, sz: sz \* p.scale/sx, sy, sz/' src/game/world/placements.ts
   it("when it carries a scale or a size, then the scale multiplies the asset's size and the size replaces it", () => {
     expect(tall!.sy, "scaled hydrant height (m)").toBeCloseTo(2 * HYDRANT_HEIGHT, 6);
     expect(tall!.sz, "scaled hydrant width (m)").toBeCloseTo(2 * HYDRANT_WIDTH, 6);
@@ -45,7 +43,6 @@ describe("given a course whose props name scenery assets", () => {
     expect(crosswalk!.asset, "crosswalk asset").toBe(SCENERY_ASSETS.findIndex((row) => row.id === CROSSWALK));
   });
 
-  // mutation: sed -i 's/sx: (p.size ? p.size\[0\] \/ size\[0\] : 1) \* s,/sx: 2 * s,/' src/game/world/placements.ts
   it("when a prop names no asset, then it is placed as before: no asset, its prefab's own size", () => {
     expect(cone!.prefab, "cone prefab").toBe(PREFAB.cone);
     expect([cone!.x, cone!.z, cone!.sx, cone!.sy, cone!.sz], "cone x, z and scales").toEqual([31, 20, 1, 1, 1]);
@@ -54,7 +51,6 @@ describe("given a course whose props name scenery assets", () => {
 });
 
 describe("given a prop that names an asset", () => {
-  // mutation: sed -i 's/return row === undefined || assetPrefab(row) === p.prefab;/return true;/' src/game/world/track-schema.ts
   it("when its prefab is not the asset's generic one or the id is no asset's, then the course is rejected", () => {
     const withProp = (prop: object): unknown => ({ ...square(), props: [prop] });
     expect(() => parseTrack(withProp({ prefab: PREFAB.cone, asset: HYDRANT, x: 0, z: 0 }))).toThrow(/props\.0\.prefab/);

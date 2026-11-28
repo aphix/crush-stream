@@ -17,7 +17,6 @@ import { writePoseRows } from "./openworld-shared.ts";
 const map = buildOpenWorldMap(layOutLots());
 
 describe("given the open world's director started on the real map", () => {
-  // mutation: sed -i 's/    crowd.stoops = new Stoops(homeFrontages(stooped), Array.from(stooped, (place) => place.doorNode));/    crowd.stoops = null;/' src/game/engine/engine-openworld.ts
   it("when it starts, then its crowd lifts the walk out of a rowhome's door and none out of another place's", () => {
     const director = new OpenWorldDirector(idleOpenWorldPorts());
     director.startOpenWorld(map);
@@ -32,7 +31,6 @@ describe("given the open world's director started on the real map", () => {
 });
 
 describe("given the open world's director whose ports make an art that draws feet", () => {
-  // mutation: sed -i 's/^    if (this.art !== null) this.art.stoops = crowd.stoops;$/    void 0;/' src/game/engine/engine-openworld.ts
   it("when it starts, then the crowd's art is given the crowd's stoops", () => {
     const arts: { stoops?: unknown; dispose(): void }[] = [];
     const director = new OpenWorldDirector({

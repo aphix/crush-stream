@@ -44,7 +44,6 @@ const radiusAt = (id: PrefabId, y: number, band: number): number => Math.max(...
 const heightOf = (id: PrefabId): number => Math.max(...drawnRadii(id).map((v) => v.y));
 
 describe("given breaker-yard's plant (two cooling towers where the Havana spires stood, a smokestack, four warehouse halls)", () => {
-  // mutation: sed -i 's/collider: coolingTowerPlan(), foot/collider: [], foot/' src/game/world/catalog.ts
   it("when the first two props are read, then they are cooling towers at the original's places, each with a circle collider from the ground up as wide as its base", () => {
     expect(props.map((p) => p.prefab).includes("monument"), "a Havana spire left in the course").toBe(false);
     const towers = ofKind(authored.slice(0, 2), PREFAB.coolingTower);
@@ -58,7 +57,6 @@ describe("given breaker-yard's plant (two cooling towers where the Havana spires
     }
   });
 
-  // mutation: sed -i 's/waist: 12,/waist: 18.5,/' src/game/world/catalog.ts
   it("when the tower is drawn, then it is a hyperboloid 45 to 55 m tall: 16 to 20 m at the base, 11 to 13 m at the waist, 13 to 15 m at the open top", () => {
     const id = PREFAB.coolingTower;
     expect(heightOf(id), "height").toBeGreaterThanOrEqual(45);
@@ -67,7 +65,6 @@ describe("given breaker-yard's plant (two cooling towers where the Havana spires
     expect([base >= 16 && base <= 20, waist >= 11 && waist <= 13, top >= 13 && top <= 15], `radii base ${base.toFixed(1)}, waist ${waist.toFixed(1)}, top ${top.toFixed(1)}`).toEqual([true, true, true]);
   });
 
-  // mutation: sed -i 's/height: 66,/height: 6,/' src/game/world/catalog.ts
   it("when the smokestack is read, then one stands 60 to 70 m tall and 4 m or more across at the foot, beside the western hall, with a collider from the ground up", () => {
     const [stack] = ofKind(authored, PREFAB.smokestack);
     must(stack, "a smokestack among the authored props");
@@ -80,7 +77,6 @@ describe("given breaker-yard's plant (two cooling towers where the Havana spires
     expect(foot.hx, "footing collider radius").toBeGreaterThanOrEqual(SMOKESTACK.base - 0.1);
   });
 
-  // mutation: sed -i 's/^        60,$/        600,/' src/game/world/tracks/breaker-yard.json
   it("when the plant's props are measured against every road and run-off, then each footprint stands 8 m or more clear, and every hall is a slab 36 m or more long on the axes", () => {
     expect(plant.length, "towers, stack and halls").toBeGreaterThanOrEqual(7);
     for (const p of plant) {
@@ -96,21 +92,18 @@ describe("given breaker-yard's plant (two cooling towers where the Havana spires
     }
   });
 
-  // mutation: sed -i '172,175s/"x": 250,/"x": 270,/' src/game/world/tracks/breaker-yard.json
   it("when the plant's footprints are compared with every other authored prop (the yard, scatter, lamps), then none overlaps another", () => {
     for (const p of plant) {
       for (const q of authored) if (q !== p) expect(overlap(p, q), `${p.prefab} at (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) overlaps ${q.prefab} at (${q.x.toFixed(1)}, ${q.z.toFixed(1)})`).toBe(false);
     }
   });
 
-  // mutation: sed -i 's/"prefab": "barrier-block",/"prefab": "cone",/' src/game/world/tracks/breaker-yard.json
   it("when the east edge is read, then crates and jersey barriers stand outside the loop's east leg, behind its wall", () => {
     const edge = authored.filter((p) => p.x >= EAST_EDGE_X);
     expect(ofKind(edge, PREFAB.crate).length, "crates").toBeGreaterThanOrEqual(25);
     expect(ofKind(edge, PREFAB.barrierBlock).length, "jersey barriers").toBeGreaterThanOrEqual(15);
   });
 
-  // mutation: sed -i '435s/"z": -385,/"z": -384,/' src/game/world/tracks/breaker-yard.json
   it("when the halls' facades are picked, then each draws in the warehouse style", () => {
     for (const h of ofKind(plant, PREFAB.building)) {
       const size = PREFABS[h.prefab].size;

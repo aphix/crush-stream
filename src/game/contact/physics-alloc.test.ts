@@ -114,7 +114,6 @@ function kbPerFrame(pile: PileUp, frames: number, extra: () => void = () => {}):
 }
 
 describe("given a warmed 24-car derby pile-up with every car driving at the arena centre", () => {
-  // mutation: sed -i 's/^const BOUND_KB = 540;/const BOUND_KB = 100;/' src/game/contact/physics-alloc.test.ts  (the bar under every pile-up's reading: this row goes red after its 120 s of retries)
   it(`when 300 frames are stepped, then physics allocates at most ${BOUND_KB} KB per frame (boxed doubles, iterators and per-call arrays would show up as race GC pauses)`, () => {
     const kb = untilQuiet(() => {
       lastPile = null;
@@ -131,7 +130,6 @@ describe("given the allocation measure on a derby pile-up", () => {
     setGround(null);
   });
 
-  // mutation: sed -i 's/^const CONTROL_VECTORS = 12000;/const CONTROL_VECTORS = 100;/' src/game/contact/physics-alloc.test.ts  (the vectors fall under the bar: both readings go red)
   it("when each frame also makes twelve thousand vectors, then it reads over the bar on the pile-up the reading before it ended on and on a fresh warmed one", () => {
     const kept: THREE.Vector3[] = [];
     const vectors = (): void => {

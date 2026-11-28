@@ -45,7 +45,6 @@ function leave(w: World): void {
 }
 
 describe("given a co-op race on the oval: the host and a peer who never touches the pedals against two AI cars", () => {
-  // mutation: sed -i 's/^      if (c.place < place) place = c.place;$/      if (c.place > place || place === Infinity) place = c.place;/' src/game/match/session.ts  (the team takes its worst human place: red at the team place, rows 1 to 3)
   it("when the scripted host drives flat out, then the team's place is the better of the two humans' places, the peer is a DNF, and the team won exactly when a human crossed first", (t) => {
     const w = coopWorld();
     t.onTestFinished(() => leave(w));

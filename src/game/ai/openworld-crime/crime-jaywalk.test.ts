@@ -17,7 +17,6 @@ function crossingRun(x: number, against: boolean, options: HarnessOptions = {}) 
 }
 
 describe("a walker crossing against the signal", () => {
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts poll(), delete the line `if (this.signals !== null) this.watchCrossings(this.signals);`
   it("is stopped by the cop who sees it and taken off the street, and the host raises the jaywalk arrest, not a bust", () => {
     const run = crossingRun(ON_CROSSING_X, true);
     runFor(run, 15);
@@ -28,7 +27,6 @@ describe("a walker crossing against the signal", () => {
     expect(run.scene.foot.table.phase[0], "the case is closed").toBe(CASE_PHASE.free);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts watchCrossings(), change `if (crossing < 0 || !signals.againstSignal(` to `if (crossing < 0 || !!signals.againstSignal(`
   it("is left alone when the signal is for them", () => {
     const run = crossingRun(ON_CROSSING_X, false);
     runFor(run, 10);
@@ -36,14 +34,12 @@ describe("a walker crossing against the signal", () => {
     expect(run.jaywalks).toHaveLength(0);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts freeCopSeeing(), delete ` || !this.sees(cop, x, z)`
   it("is left alone when the only cop near stands behind a building", () => {
     const run = crossingRun(ON_CROSSING_X, true, { wall: { minX: 45, maxX: 55 } });
     runFor(run, 10);
     expect(run.scene.stats.cases, "no case").toBe(0);
   });
 
-  // mutation: in src/game/ai/openworld-crime/crime-constants.ts, change `CROSSING_KERB_SHARE = 0.15` to `CROSSING_KERB_SHARE = 0`
   it("is not a jaywalker while still waiting at the kerb", () => {
     const run = crossingRun(AT_KERB_X, true);
     runFor(run, 10);
@@ -52,7 +48,6 @@ describe("a walker crossing against the signal", () => {
 });
 
 describe("a walker a car runs down is not arrested for it", () => {
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts, delete the line `this.spareKnocked(caseIndex);` in stepCase() and ` || !this.source.onStreet(table.resident[slot]!, this.walk)` in stepAtLarge()
   it("lets a jaywalker go whom a car hits before the cop comes", () => {
     const run = crossingRun(ON_CROSSING_X, true);
     runFor(run, 2);
@@ -63,7 +58,6 @@ describe("a walker a car runs down is not arrested for it", () => {
     expect(run.scene.foot.table.phase[0], "the case is closed").toBe(CASE_PHASE.free);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts stepCase(), delete the line `this.spareKnocked(caseIndex);`
   it("does not bust a criminal a car ran down while the cops were on their way", () => {
     const run = harness([0, 0, 0]);
     run.offences.x[CRIMINAL] = 60;

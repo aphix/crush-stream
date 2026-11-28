@@ -559,7 +559,6 @@ export type WallApproach = "front" | "rear" | "side";
 const wallRuns = new Map<string, CrashResult>();
 const pairRuns = new Map<string, readonly [CrashResult, CrashResult]>();
 
-// Mutation: `sed 's/\[scenario, \.\.\.args,/[scenario, args[0],/'` turns crash-parts' "64 km/h 40 % offset" hub row red (it reads the full-width run).
 /** A shared run's key; null where the run is not shared: another ground or armed solids put more of the world into it than the arguments, and `fresh` asks for its own. */
 function runKey(scenario: string, args: readonly (string | number)[], opts: ScenarioOpts): string | null {
   if (opts.fresh || activeGround() !== FLAT_GROUND || armedSolids() !== null) return null;

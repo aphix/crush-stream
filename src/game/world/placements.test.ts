@@ -160,9 +160,6 @@ const KNOWN_AWAY: Record<string, { angle?: number; gap?: number; why: string }> 
 };
 
 describe("given every course's grandstands", () => {
-  // mutation: sed -i 's/"yaw": 3.927/"yaw": 0.785/' src/game/world/tracks/stunt.json
-  // mutation: sed -i '1871s/"x": 40/"x": -30/;1872s/"z": 42.5/"z": 155/;1873s/"yaw": -1.5708/"yaw": 0/' src/game/world/tracks/four-count.json
-  // mutation: sed -i 's/const STAND_GAP = 8;/const STAND_GAP = 3;/' src/game/world/placements.test.ts
   it("when the stands are placed, then each front (+X) points within 30° of the nearest centreline and its front edge stands 8 m clear of the nearest wall line, and a KNOWN_AWAY course still breaks that", () => {
     let courses = 0;
     for (const json of TRACKS) {

@@ -362,7 +362,6 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     expect(drawn, "redraws in 1 s").toBeLessThanOrEqual(1 / DENT_REBUILD_S + 1);
   });
 
-  // mutation: sed -i 's/    if (same) return true;/    if (false) return true;/' src/game/present/paint-scratch.ts
   it("when only a tyre hold's lift moves its drawn skin (the written skin stands), then its dents are not redrawn, and they are once the skin is written again", () => {
     const drawnBy = (write: () => void): number => {
       const before = redraws();
@@ -376,7 +375,6 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
   });
 
   // Main's version of this row never redrew (it read settled frames). Staged so every frame redraws: the redraw is the work the row bounds.
-  // mutation: sed -i 's|const work = { ms: 0, timed: false };|const work = { ms: 0, timed: true };|' src/game/kernel/tier-work.ts  (the tier-work clock reads with nothing reading it: a redraw's crease pass reads it twice, and Node's `performance.now` allocates a wrapper's argument array a call: this row reads over 16 B)
   todoRow(
     `when its skin is written and its dents redrawn every frame, a contact each frame holding its crush open, then a frame, with its flush, allocates at most ${FRAME_BOUND_B} B`,
     "36.9 B a frame in the full suite on the worker (69.6 before the tier-work clock was read once per redraw, not twice per creased face); the rest is not yet attributed",
@@ -432,7 +430,6 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     }
   });
 
-  // mutation: sed -i 's|const work = { ms: 0, timed: false };|const work = { ms: 0, timed: true };|' src/game/kernel/tier-work.ts  (the tier-work clock reads with nothing reading it: a redraw's crease pass reads it twice, and Node's `performance.now` allocates a wrapper's argument array a call: this row reads over 16 B)
   todoRow(
     `when the crease tier flips every frame, so each dent redraw changes texels and each flush sends them, then a frame allocates at most ${FRAME_BOUND_B} B`,
     "over 16 B a frame in the full suite on the worker after the once-per-redraw clock; the dent redraw's remaining allocation is not yet attributed",
@@ -638,7 +635,6 @@ describe("given the real engine with its cars on the screen", () => {
     expect(finishable, "the control: some bumper wears a finishing trim").toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's|timeTierWork(this.autoFx.auto);|timeTierWork(false);|' src/game/engine/engine-input.ts  (the tier-work clock stays off while the FX tier is automatic: the first expect reads 0)
   it("when the FX tier is automatic, then a frame leaves the tier-gated present work's clock reading for the FX governor, and once the player picks a tier it reads none", async () => {
     engine.setFxAuto();
     runSeconds(engine, 1 / FRAME_HZ);

@@ -37,7 +37,6 @@ describe("given the acorn lamp the open world stands on its streets and in its p
   const acorn = partsOf(PREFAB.acornLamp);
   const arm = partsOf(PREFAB.lamp);
 
-  // mutation: sed -i 's/      return lamp(mats.plain, true, skin !== PARK_LAMP);/      return lamp(mats.plain);/' src/game/present/prefabs.ts
   it("when it is built, then it is a slim post under an acorn globe, ACORN_LAMP tall, with no arm", () => {
     const whole = boundsOf(acorn.pole).clone().union(boundsOf(acorn.globe));
     expect(whole.max.y, "its height (m)").toBeCloseTo(ACORN_LAMP.height, 5);
@@ -48,7 +47,6 @@ describe("given the acorn lamp the open world stands on its streets and in its p
     expect(Math.abs(offsetOf(arm.globe)), "the other courses' lamp keeps its arm: its head hangs off the post (m)").toBeGreaterThan(ARM_OFFSET);
   });
 
-  // mutation: sed -i 's/    return withPool ? addPool(g, 0) : g;/    return withPool ? addPool(g, 0.15) : g;/' src/game/present/engine-world.ts
   it("when its light is read, then it is the lamp's own: the same lit head and pool materials, the pool under the post's middle", () => {
     expect(acorn.shared[0], "the lit head's material").toBe(arm.shared[0]);
     expect(acorn.shared[1], "the light pool's material").toBe(arm.shared[1]);
@@ -71,8 +69,6 @@ describe("given the acorn lamp the open world stands on its streets and in its p
     return out;
   }
 
-  // mutation: sed -i 's/geometry: slabPool(geo)/geometry: geo.translate(0, PREFABS[PREFAB.sidewalk].size[1], 0)/' src/game/present/prefabs.ts
-  // mutation: sed -i 's/cutX(pool, back, LAMP_FROM_CURB).translate(0, PREFABS\[PREFAB.sidewalk\].size\[1\], 0)/cutX(pool, back, LAMP_FROM_CURB)/' src/game/present/prefabs.ts
   it("when the pools are read, then the acorn lamp's lies on the slab's top over its sidewalk and on the ground over the road and the lot, whole, and a race lamp's stays on the ground", () => {
     const slabTop = PREFABS[PREFAB.sidewalk].size[1];
     const back = LAMP_FROM_CURB - LAYOUT.sidewalk;
@@ -91,7 +87,6 @@ describe("given the acorn lamp the open world stands on its streets and in its p
     expect(boundsOf(arm.pool).max.y, "the race lamp's pool under a slab's height").toBeLessThan(slabTop);
   });
 
-  // mutation: sed -i '/^    uv.setXY(at, uvFrom/d' src/game/present/prefabs.ts
   it("when the street pool is cut at the kerb and the lot, then every corner reads the light picture where the whole pool would: its uv the park lamp's uncut pool's at that point", () => {
     const park = prefabParts(PREFAB.acornLamp, plainMaterials(new THREE.MeshBasicMaterial()), PARK_LAMP)[2]!.geometry;
     const whole = park.getAttribute("position");
@@ -114,7 +109,6 @@ describe("given the acorn lamp the open world stands on its streets and in its p
     }
   });
 
-  // mutation: sed -i 's/^      return lamp(mats.plain);/      return lamp(mats.plain, false, true);/' src/game/present/prefabs.ts
   it("when a race course's lamp is built, then its pool is the one uncut square it always was: four corners, two triangles, every corner at the pool's height over the ground, its uv the whole picture", () => {
     const fit = 4.4 / 5.2;
     const p = arm.pool.getAttribute("position");
@@ -133,7 +127,6 @@ describe("given the acorn lamp the open world stands on its streets and in its p
     expect(corners.size, "the picture's four corners, one each").toBe(4);
   });
 
-  // mutation: sed -i 's/      return lamp(mats.plain, true, skin !== PARK_LAMP);/      return lamp(mats.plain, true);/' src/game/present/prefabs.ts
   it("when a park's lamp is built, then it stands on the ground with no slab, so its pool lies under a slab's height, as a race lamp's does", () => {
     const park = prefabParts(PREFAB.acornLamp, plainMaterials(new THREE.MeshBasicMaterial()), PARK_LAMP);
     expect(boundsOf(park[2]!.geometry).max.y, "the park lamp's pool over its foot (m)").toBeLessThan(PREFABS[PREFAB.sidewalk].size[1]);

@@ -94,7 +94,6 @@ describe("given the National Mall's secret mushroom cloud (a backdrop hidden unt
 });
 
 describe("given the Mall's Track and props built once for the file (`mallCourse`) and read by the arts above", () => {
-  // mutation: sed -i 's/^    this.props = this.tumble(placed, mats);$/    placed[0]!.x += 1e-9; drawn[0]!.x += 1e-9; &/' src/game/present/track-art.ts  (an art writes into the shared placed and drawn lists)
   it("when the Mall is built again after the arts read the shared one, then its placed and drawn props are the shared ones, bit for bit", () => {
     const shared = mallCourse();
     const fresh = buildMall();

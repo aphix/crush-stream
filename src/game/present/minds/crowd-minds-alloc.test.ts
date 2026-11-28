@@ -37,7 +37,6 @@ function windowPerFrame(): number {
 }
 
 describe("given the Minds off over a crowd, a car and a crash pulse that moves 3 m every 10 s", () => {
-  // mutation: sed -i 's/    this.scanAcc += dt;/    this.scanAcc += Number(dt.toFixed(9));/' src/game/present/minds/crowd-minds.ts
   it(`when a window of frames runs, scanning the table and turning scheduled heads, then the Minds allocate no more than ${BOUND_B} bytes a frame`, () => {
     for (let f = 0; f < WARM_FRAMES; f++) frame();
     const perFrame = untilQuiet(windowPerFrame, BOUND_B);

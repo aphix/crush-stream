@@ -52,8 +52,6 @@ describe("given two street signs, one turned, sharing a street", () => {
   const painter = new PrintedNames();
   paintNames(painter, atlas);
 
-  // mutation: sed -i 's/      { name: sign.alongX, height: STREET_SIGN.alongXHeight, normalX: sin, normalZ: cos },/      { name: sign.alongZ, height: STREET_SIGN.alongXHeight, normalX: sin, normalZ: cos },/' src/game/present/street-name-blades.ts
-  // mutation: sed -i 's/      for (const side of \[1, -1\]) {/      for (const side of [1]) {/' src/game/present/street-name-blades.ts
   it("when their blades are printed, then each blade carries its street's name on both faces, the faces back to back and each reading left to right", () => {
     expect(signs.length, "street signs read (not the lamp)").toBe(2);
     expect(atlas.cells.size, "names printed once each").toBe(3);
@@ -81,7 +79,6 @@ describe("given two street signs, one turned, sharing a street", () => {
     }
   });
 
-  // mutation: sed -i 's/    g.fillText(name.toUpperCase(), cell.x + CELL_WIDTH \/ 2, cell.y + CELL_HEIGHT \/ 2, CELL_WIDTH - 2 \* NAME_MARGIN);/    g.fillText(name.toUpperCase(), cell.x, cell.y + CELL_HEIGHT * 2, CELL_WIDTH);/' src/game/present/street-name-blades.ts
   it("when the atlas is painted, then each name is printed in capitals inside its own cell, squeezed to fit it", () => {
     expect(painter.printed.length, "names printed").toBe(atlas.cells.size);
     for (const [name, cell] of atlas.cells) {
@@ -95,7 +92,6 @@ describe("given two street signs, one turned, sharing a street", () => {
 });
 
 describe("given the open world's course drawn", () => {
-  // mutation: sed -i 's/    if (this.streetNames !== null) this.add(this.streetNames.mesh, { kind: "prop", prefab: PREFAB.streetSign }, false);//' src/game/present/track-art.ts
   it("when its art is built, then every kit piece is drawn by one instanced mesh per part of its prefab, and the street names by one mesh of four faces a sign", () => {
     stubBrowser();
     const track = new Track(OFF_MENU.find((json) => parseTrack(json).id === OPENWORLD_ID)!);

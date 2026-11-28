@@ -67,7 +67,7 @@ function allocating<A extends unknown[]>(update: (...args: A) => void, kept: THR
 }
 
 /** Each pool's update made to allocate. */
-const MUTATIONS: Record<PoolName, (p: Pools, kept: THREE.Vector3[]) => void> = {
+const LEAKS: Record<PoolName, (p: Pools, kept: THREE.Vector3[]) => void> = {
   debris: (p, kept) => void (p.debris.update = allocating(p.debris.update.bind(p.debris), kept)),
   sparks: (p, kept) => void (p.sparks.update = allocating(p.sparks.update.bind(p.sparks), kept)),
   glass: (p, kept) => void (p.glass.update = allocating(p.glass.update.bind(p.glass), kept)),
@@ -75,10 +75,10 @@ const MUTATIONS: Record<PoolName, (p: Pools, kept: THREE.Vector3[]) => void> = {
   smoke: (p, kept) => void (p.smoke.update = allocating(p.smoke.update.bind(p.smoke), kept)),
 };
 
-/** KB a frame of a fresh warmed scene over `MEASURE` frames; `mutate` names a pool whose update is made to allocate. */
-function kbPerFrame(mutate?: PoolName): number {
+/** KB a frame of a fresh warmed scene over `MEASURE` frames; `leak` names a pool whose update is made to allocate. */
+function kbPerFrame(leak?: PoolName): number {
   const pools = makePools();
-  if (mutate !== undefined) MUTATIONS[mutate](pools, []);
+  if (leak !== undefined) LEAKS[leak](pools, []);
   let f = 0;
   for (; f < WARM; f++) frame(pools, f);
   const kb =
@@ -87,7 +87,7 @@ function kbPerFrame(mutate?: PoolName): number {
     }) /
     1024 /
     MEASURE;
-  if (process.env.ALLOC_PRINT) console.log(`engine-fx-alloc ${mutate ?? "clean"}: ${kb.toFixed(2)} KB/frame`);
+  if (process.env.ALLOC_PRINT) console.log(`engine-fx-alloc ${leak ?? "clean"}: ${kb.toFixed(2)} KB/frame`);
   return kb;
 }
 

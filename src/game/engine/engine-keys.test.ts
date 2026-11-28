@@ -26,7 +26,6 @@ describe("given the key tables the engine reads", () => {
 });
 
 describe("given the open world's day keys", () => {
-  // mutation: sed -i 's/  dayForward: "NumpadAdd",/  dayForward: "Minus",/' src/game/engine/engine-keys.ts
   it("when the day keys are set against the scene keys, the race view and each other, then they are the number pad's, none of them is another job's, and H stays the race view", () => {
     const dayKeys = [SEAT_KEYS.dayBack, SEAT_KEYS.dayForward];
     expect(new Set(dayKeys).size, "two keys").toBe(2);

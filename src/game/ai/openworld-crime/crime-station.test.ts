@@ -43,7 +43,6 @@ function arrestWithCar(): Harness {
 }
 
 describe("an arrest on a map with a police station", () => {
-  // mutation: sed -i 's/if (!escorted || !this.arrests.endsAtStation) this.raiseArrest/if (true) this.raiseArrest/' src/game/ai/openworld-crime/foot-law.ts
   it("when the cuffs go on, then the host's bust is not raised yet: she is led along the street past the six seconds a street arrest lasts", () => {
     const run = arrestWithStation();
     runFor(run, GRIP_SECONDS + ESCORT_SECONDS + 4);
@@ -53,7 +52,6 @@ describe("an arrest on a map with a police station", () => {
     expect(run.poses.activity[CRIMINAL], "cuffed").toBe(ACTIVITY.cuffed);
   });
 
-  // mutation: sed -i 's/ESCORT_TO.station, station.x, station.z/ESCORT_TO.station, station.x - 30, station.z/' src/game/ai/openworld-crime/arrests.ts
   it("when she is walked the whole way, then the bust is raised with her cop at the station's door, after a walk's time, and she is gone from the street and the case closes", () => {
     const run = arrestWithStation();
     runUntil(run, 2 * walkSeconds(CRIME_X), () => run.busts.length > 0);
@@ -67,8 +65,6 @@ describe("an arrest on a map with a police station", () => {
     expect(table.phase[0], "the case is closed").toBe(CASE_PHASE.free);
   });
 
-  // mutation: sed -i 's/    this.sendOtherCopsBack(caseIndex, cop);//' src/game/ai/openworld-crime/arrests.ts
-  // mutation: sed -i 's/ || this.table.allCaught(caseIndex)) return;/) return;/' src/game/ai/openworld-crime/foot-law.ts
   it("when the cuffs go on with no one left to catch, then the case's other cop goes back to patrol while hers leads her away", () => {
     const run = arrestWithStation();
     const { cops, table } = run.scene.foot;
@@ -81,7 +77,6 @@ describe("an arrest on a map with a police station", () => {
     expect(cops.mode[table.holder[0]!], "hers leads her").toBe(COP_MODE.escort);
   });
 
-  // mutation: sed -i 's/ESCORT_TO.station ? STATION_ESCORT_SECONDS : ESCORT_SECONDS/ESCORT_SECONDS/' src/game/ai/openworld-crime/arrests.ts
   it("when a cop stops a jaywalker, then the jaywalk arrest is raised at the door too, not a bust", () => {
     const run = harness([40, 0, 0], { station: true });
     run.offences.x[WALKER] = CROSSING_X;
@@ -96,7 +91,6 @@ describe("an arrest on a map with a police station", () => {
 });
 
 describe("an arrest by a case whose patrol car has come, on a map with a police station", () => {
-  // mutation: sed -i 's/<= BOARD_REACH && cars.isStill(car)) {/<= -1) {/' src/game/ai/openworld-crime/arrests.ts
   it("when she is cuffed, then she and her cop get into the car at its driver's door, the door swinging with the clip, and are off the street once it is over", () => {
     const run = arrestWithCar();
     const street = streetOf(run);
@@ -116,7 +110,6 @@ describe("an arrest by a case whose patrol car has come, on a map with a police 
     expect(street.doorRadians[0], "the door is shut").toBe(0);
   });
 
-  // mutation: sed -i '/^    this.ports.setSirens(handle, false);$/d' src/game/ai/openworld-crime/patrol-cars.ts
   it("when the car drives to the station, then its siren is off, and there they get out and walk in at the door, where the bust is raised with her cop", () => {
     const run = arrestWithCar();
     const street = streetOf(run);
@@ -135,7 +128,6 @@ describe("an arrest by a case whose patrol car has come, on a map with a police 
     expect(run.busts[0]!.seconds, "sooner than the whole walk would take").toBeLessThan(walkSeconds(CAR_CRIME_X));
   });
 
-  // mutation: sed -i 's/    if (slot < MAX_PATROL_CARS) {/    if (false) {/' src/game/ai/openworld-crime/patrol-cars.ts
   it("when the arrest is over, then the case's car is put away in a few seconds", () => {
     const run = arrestWithCar();
     const street = streetOf(run);
@@ -145,7 +137,6 @@ describe("an arrest by a case whose patrol car has come, on a map with a police 
     expect(street.released, "put away").toContain(0);
   });
 
-  // mutation: sed -i 's/    if (mode === SUBJECT_MODE.boarding && cars.convey(car, station.x, station.z, seconds)) {/    if (mode === SUBJECT_MODE.boarding) {/' src/game/ai/openworld-crime/arrests.ts
   it("when the car finds no way to the station, then she is walked there instead", () => {
     const run = arrestWithCar();
     const street = streetOf(run);
@@ -166,7 +157,6 @@ describe("the foot cops' own patrol cars, on a map with a police station", () =>
     return run;
   }
 
-  // mutation: sed -i 's/      cars.keepHome(cop, nodeX\[node\]!, nodeZ\[node\]!, this.seconds);//' src/game/ai/openworld-crime/foot-law.ts
   it("when the law starts, then each foot cop has a car of his own, siren off, sent to the kerb by his beat's start", () => {
     const run = homeRun();
     const street = streetOf(run);
@@ -178,7 +168,6 @@ describe("the foot cops' own patrol cars, on a map with a police station", () =>
     }
   });
 
-  // mutation: sed -i 's/    if (cop >= HOME_CARS || this.mode\[home\] !== PATROL_MODE.parked) return -1;/    return -1;/' src/game/ai/openworld-crime/patrol-cars.ts
   it("when a cop makes an arrest with no case car at the scene, then his own car is called to him and takes her to the station", () => {
     const run = homeRun();
     const street = streetOf(run);

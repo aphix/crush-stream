@@ -54,7 +54,6 @@ describe("given a road and points asked about more than once", () => {
     }
   });
 
-  // mutation: sed -i 's/^  for (let m = 0; m < MEMO; m++) {/  for (let m = 0; m < 0; m++) {/' src/game/world/path-grid.ts
   it("when a point is asked again after the road's samples moved, then the answer is the one kept for that point, and a new point is found on the moved road (paths are built once: this is how a kept answer shows)", () => {
     const path = road(120, 10);
     const kept = ask(path, 77.5, 60);
@@ -75,7 +74,6 @@ describe("given a road and points asked about more than once", () => {
     expect(ask(flat, 150.2, 55).dist2, "the flat road asked again").toBe(a.dist2);
   });
 
-  // mutation: /usr/bin/sed -i 's/g.memoNext = at + 1 === MEMO ? 0 : at + 1;/g.memoNext = at + 1;/' src/game/world/path-grid.ts
   it("when 40 distinct points are asked, more than the memo holds, then the last one asked is kept after the road's samples moved: the ring wraps to the oldest entry", () => {
     const path = road(120, 10);
     let last = blank();

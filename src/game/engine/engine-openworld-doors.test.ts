@@ -109,7 +109,6 @@ describe("given residents with cars parked at two doors' kerbs", () => {
     expect(door(OWNER, ACTIVITY.carIn, blankDoor()), "the kerb before the trip is still there").toBe(true);
   });
 
-  // mutation: sed -i '/^    if (!carThere(owner, car, door)) return false;/d' src/game/engine/engine-openworld-doors.ts
   it("when her car does not stand at its kerb space, then no door spot is made; when it does, the spot is made, and the question was asked for her car's owner at the space's pose", () => {
     const pose = blankCar();
     residentCarPose(spots, FIRST_DOOR.doorX, FIRST_DOOR.doorZ, OWNER, groundAt, pose);
@@ -158,14 +157,12 @@ describe("given residents with cars parked at two doors' kerbs", () => {
 });
 
 describe("given cars standing in a street", () => {
-  // mutation: sed -i 's/^const CAR_AT_SPOT_M = 2.5;/const CAR_AT_SPOT_M = 25;/' src/game/engine/engine-openworld-doors.ts
   it("when a space is asked about, then a car within 2.5 m of it stands there and one 3 m off does not", () => {
     const car = (x: number, z: number) => ({ group: { position: { x, z } } });
     expect(carStandsNear([car(40, 0), car(12, 0)], 10, 0), "2 m off").toBe(true);
     expect(carStandsNear([car(40, 0), car(13, 0)], 10, 0), "3 m off").toBe(false);
   });
 
-  // mutation: sed -i 's/hypot2(spot.x - x, spot.z - z)/hypot2(spot.x - x, 0)/' src/game/engine/engine-openworld-doors.ts
   it("when a car stands 2 m off along z, then it stands there, and 40 m off along z it does not", () => {
     const car = (x: number, z: number) => ({ group: { position: { x, z } } });
     expect(carStandsNear([car(10, 2)], 10, 0), "2 m off along z").toBe(true);

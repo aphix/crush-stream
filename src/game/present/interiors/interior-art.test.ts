@@ -129,7 +129,6 @@ const last = (heard: InteriorSolid[][]): number => heard[heard.length - 1]?.leng
 const digest = (floats: Float32Array): string => createHash("sha1").update(Buffer.from(floats.buffer, floats.byteOffset, floats.byteLength)).digest("hex");
 
 describe("given the interiors of the open world's map, a coffee shop's door held open", () => {
-  // mutation: sed -i 's/const INTERIOR_NEAR = 35/const INTERIOR_NEAR = 0/' src/game/present/interiors/interior-constants.ts
   it("when the eye comes to the door, then the shop is furnished and the whole set is drawn in four draws at most (envelope, furniture, lamps, glass)", () => {
     const set = new InteriorSet(map);
     const who = openers();
@@ -143,7 +142,6 @@ describe("given the interiors of the open world's map, a coffee shop's door held
     set.dispose();
   });
 
-  // mutation: sed -i 's/const INTERIOR_LINGER = 3/const INTERIOR_LINGER = 1e9/' src/game/present/interiors/interior-constants.ts
   it("when the eye goes past the far radius for the linger, then the furniture is dropped, then the envelope; a return before the linger keeps them", () => {
     const set = new InteriorSet(lone);
     const who = openers();
@@ -164,7 +162,6 @@ describe("given the interiors of the open world's map, a coffee shop's door held
     set.dispose();
   });
 
-  // mutation: sed -i 's/      for (let figure = 0; figure < other.count; figure++) if (other.shown\[figure\] === 1/      for (let figure = 0; figure < 0; figure++) if (other.shown[figure] === 1/' src/game/present/interiors/interior-doors.ts
   it("when no civilian is at a home's door but a foot cop or a medic stands there, then the door opens and the rooms behind it are built", () => {
     const set = new InteriorSet(loneHouse);
     const who = openers();
@@ -184,7 +181,6 @@ describe("given the interiors of the open world's map, a coffee shop's door held
     expect(INTERIOR_FAR).toBeLessThan(SHELL_NEAR);
   });
 
-  // mutation: sed -i 's/if (entry.shellBuilt \&\& distance < SOLIDS_NEAR) return SOLIDS.full;/if (false) return SOLIDS.full;/' src/game/present/interiors/interior-art.ts
   it("when the eye is at the built shop and then leaves it, then the physics is handed its solids, then an empty list", () => {
     const set = new InteriorSet(lone);
     const heard = listen(set);
@@ -199,7 +195,6 @@ describe("given the interiors of the open world's map, a coffee shop's door held
 });
 
 describe("given a house with its door shut and the player's walker on the sidewalk before it", () => {
-  // mutation: sed -i 's/if (entry.shellBuilt \&\& distance < SOLIDS_NEAR) return SOLIDS.full;/if (distance < SOLIDS_NEAR) return SOLIDS.full;/' src/game/present/interiors/interior-art.ts
   it("when the eye looks at the shut door, then no room is built and the physics holds the vestibule behind the door alone", () => {
     const set = new InteriorSet(loneHouse);
     const heard = listen(set);
@@ -213,7 +208,6 @@ describe("given a house with its door shut and the player's walker on the sidewa
     set.dispose();
   });
 
-  // mutation: sed -i '/^    if (pinned !== undefined \&\& pinned.count > 0 \&\& holdsPinned(entry.place, pinned)) return SOLIDS.full;/d' src/game/present/interiors/interior-art.ts
   it("when a hooked body stands in the house with the eye far out of range, then the physics holds the house's solids (its floors), and lets them go when the body is gone", () => {
     const set = new InteriorSet(loneHouse);
     const heard = listen(set);
@@ -244,7 +238,6 @@ describe("given a house with its door shut and the player's walker on the sidewa
 });
 
 describe("given a civilian opening a house's door", () => {
-  // mutation: sed -i 's/if (sight.seenThroughFace(leaf.boxX, leaf.boxZ, entry.place.yaw, entry.halfDepth, leaf.width \/ 2, leaf.floorY + leaf.height, FACE.front)) return true;/return true;/' src/game/present/interiors/interior-art.ts
   it("when no player's eye sees the doorway (one in range looking away, or every eye out of range), then the door swings but nothing is built", () => {
     const away = new InteriorSet(loneHouse);
     const who = openers();
@@ -259,7 +252,6 @@ describe("given a civilian opening a house's door", () => {
     far.dispose();
   });
 
-  // mutation: sed -i 's/return sight.unseenFor(id) >= sight.hideGrace ? VIEW.hidden : VIEW.kept;/return VIEW.kept;/' src/game/present/interiors/interior-art.ts
   it("when a player's eye in range sees the open doorway, then the house is built; once the civilian has gone and the door is shut, it is released after the hide grace, its seats untouched", () => {
     const set = new InteriorSet(loneHouse);
     const who = openers();
@@ -279,7 +271,6 @@ describe("given a civilian opening a house's door", () => {
 });
 
 describe("given a coffee shop with its door shut", () => {
-  // mutation: sed -i 's/ || entry.shopfront || / || /' src/game/present/interiors/interior-art.ts
   it("when a player's eye in range sees its street front, then the room is furnished and listed for its windows with no door open; once the eye looks away it is released after the hide grace, its seats and counter untouched", () => {
     const set = new InteriorSet(lone);
     const who = openers();
@@ -301,7 +292,6 @@ describe("given a coffee shop with its door shut", () => {
     set.dispose();
   });
 
-  // mutation: sed -i 's/      if (poses.shown\[person\] === 0 || poses.look\[person\]! >>> LOOK.speciesShift !== SPECIES.person) continue;/      if (poses.shown[person] === 0) continue;/' src/game/present/interiors/interior-doors.ts
   it("when a dog rests at its door while the eye sees its built room, then the door stays shut; a person standing there opens it", () => {
     const set = new InteriorSet(lone);
     const who = openers();
@@ -317,7 +307,6 @@ describe("given a coffee shop with its door shut", () => {
     set.dispose();
   });
 
-  // mutation: sed -i 's/ || entry.distance >= (entry.detailBuilt ? INTERIOR_FAR : INTERIOR_NEAR)//' src/game/present/interiors/interior-art.ts
   it("when the eye looking at its front is past the furnished range, then nothing is built", () => {
     const set = new InteriorSet(lone);
     scene(set, INTERIOR_NEAR + 5, openers()).frames(SETTLE_FRAMES);
@@ -325,7 +314,6 @@ describe("given a coffee shop with its door shut", () => {
     set.dispose();
   });
 
-  // mutation: sed -i 's/export const SHOPFRONT_ROOMS = FACADE_OPEN_MAX - HOME_OPEN_SLOTS;/export const SHOPFRONT_ROOMS = FACADE_OPEN_MAX;/' src/game/present/interiors/interior-constants.ts
   it("when more businesses are in view than the facade's list keeps for them, then the nearest few are furnished and listed and the rest stay painted", () => {
     const shops = copies(coffee, FACADE_OPEN_MAX + 4);
     const set = new InteriorSet({ ...map, places: shops });
@@ -339,7 +327,6 @@ describe("given a coffee shop with its door shut", () => {
 });
 
 describe("given more houses built by their doors than the facade's list holds", () => {
-  // mutation: sed -i 's/count = keepNearest(this.listedAt, this.listedDistance, count, at, entry.distance);/if (count < FACADE_OPEN_MAX) { this.listedAt[count] = at; this.listedDistance[count++] = entry.distance; }/' src/game/present/interiors/interior-art.ts
   it("when each has a civilian at its door and an eye in range, then the list holds the nearest of them", () => {
     const houses = copies(house, FACADE_OPEN_MAX + 1);
     const set = new InteriorSet({ ...map, places: houses });
@@ -354,7 +341,6 @@ describe("given more houses built by their doors than the facade's list holds", 
 });
 
 describe("given the player in or at a coffee shop with no eye on its doorway", () => {
-  // mutation: sed -i 's/const seen = sight.playerInside(place.x, place.z, place.yaw, entry.halfDepth, entry.halfWidth) || /const seen = /' src/game/present/interiors/interior-art.ts
   it("when he stands inside with every door shut, then the interior is kept however long", () => {
     const set = new InteriorSet(lone);
     const inside = { x: coffee.x, z: coffee.z };
@@ -366,7 +352,6 @@ describe("given the player in or at a coffee shop with no eye on its doorway", (
     set.dispose();
   });
 
-  // mutation: sed -i 's/hypot2(walker.x - leaf.x, walker.z - leaf.z) <= VESTIBULE_REACH) return SOLIDS.vestibule;/hypot2(walker.x - leaf.x, walker.z - leaf.z) <= VESTIBULE_REACH) return SOLIDS.none;/' src/game/present/interiors/interior-art.ts
   it("when he stands in the open doorway facing the street, then the vestibule's floor stays under him past the grace", () => {
     const set = new InteriorSet(lone);
     const heard = listen(set);
@@ -381,7 +366,6 @@ describe("given the player in or at a coffee shop with no eye on its doorway", (
 });
 
 describe("given the sight field an interior set took its ids from", () => {
-  // mutation: sed -i '/this.claimedFrom?.release(this.sightBase, this.entries.length);/d' src/game/present/interiors/interior-art.ts
   it("when the set is disposed, then its ids are free again: the next claim gets the first of them", () => {
     const sight = blind();
     const set = new InteriorSet(lone);
@@ -392,7 +376,6 @@ describe("given the sight field an interior set took its ids from", () => {
 });
 
 describe("given the facade of a shop whose rooms are built", () => {
-  // mutation: sed -i 's/      if (!entry.shellBuilt || !entry.detailBuilt) continue;/      if (!entry.shellBuilt) continue;/' src/game/present/interiors/interior-art.ts
   it("when its envelope alone is built (an eye far off sees its open door), then its windows stay painted; when its rooms are built whole, then they are listed to be seen through; once the rooms above are dropped they stay painted again", () => {
     const set = new InteriorSet(lone);
     const who = openers();
@@ -412,7 +395,6 @@ describe("given the facade of a shop whose rooms are built", () => {
     set.dispose();
   });
 
-  // mutation: sed -i 's/    setOpenFacades(this.builtAt, 0);//' src/game/present/interiors/interior-art.ts
   it("when the set is disposed, then no building is left listed: a facade of the next course shows its windows painted", () => {
     const set = new InteriorSet(lone);
     const who = openers();
@@ -437,7 +419,6 @@ describe("given a coffee shop whose room is built and then released", () => {
     return { amount, furnished };
   }
 
-  // mutation: sed -i 's/export const OPEN_FADE_SECONDS = 0.5;/export const OPEN_FADE_SECONDS = 1e-6;/' src/game/present/interiors/interior-constants.ts (the windows jump open and shut)
   it("when the room is built, then its windows open a step a frame over the fade, never back, to wide open", () => {
     const set = new InteriorSet(lone);
     const view = scene(set, STREET_EYE, openers());
@@ -453,7 +434,6 @@ describe("given a coffee shop whose room is built and then released", () => {
     set.dispose();
   });
 
-  // mutation: sed -i '/    if (this.openness\[at\]! > 0) {/,/    }/d' src/game/present/interiors/interior-art.ts (a room is dropped with its windows open)
   it("when it is released, then its windows shut over the fade with the room still built, and the room is dropped only once they have", () => {
     const set = new InteriorSet(lone);
     const view = scene(set, STREET_EYE, openers());
@@ -470,7 +450,6 @@ describe("given a coffee shop whose room is built and then released", () => {
     set.dispose();
   });
 
-  // mutation: sed -i 's/entry.shellSlot = this.shells.add(built.solid, place.yaw, place.x, place.z, entry.light);/entry.shellSlot = this.shells.add(built.solid, place.yaw, place.x, place.z);/' src/game/present/interiors/interior-art.ts
   it("when its solids are drawn, then every corner carries its baked light, and the corners do not all carry the same", () => {
     const set = new InteriorSet(lone);
     settle(set, coffee.doorX, coffee.doorZ, openers());
@@ -503,7 +482,6 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     return most;
   }
 
-  // mutation: sed -i 's/this.locked\[door\] === 0 \&\& this.someoneAt(leaf, near, openers)/this.someoneAt(leaf, near, openers)/' src/game/present/interiors/interior-doors.ts
   it("when a civilian stands at its street door, then the door stays shut; once it is open again the door swings", () => {
     const set = new InteriorSet(lone);
     const who = openers();
@@ -518,7 +496,6 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     set.dispose();
   });
 
-  // mutation: sed -i 's/entries\[at\]!.business \&\& this.entries\[at\]!.locked/entries[at]!.business/' src/game/present/interiors/interior-art.ts
   it("when it is shut, then the facade's list of shut shops holds its building, and drops it once it is open", () => {
     const darkened = (): boolean => {
       const slots = FACADE_DARK_AT.value;
@@ -541,7 +518,6 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     expect(darkened(), "the course left: nothing listed").toBe(false);
   });
 
-  // mutation: sed -i 's/      if (closed\[plain.index\] !== 1) continue;/      continue;/' src/game/present/interiors/interior-art.ts
   it("when a shop with no interior (the pizzeria) is shut, then the facade's list of shut shops holds it, and not while it is open", () => {
     const pizza = map.places.find((place) => place.name === "Slice Brothers Pizza")!;
     const closed = new Uint8Array(map.places.length);
@@ -561,7 +537,6 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     set.dispose();
   });
 
-  // mutation: sed -i 's/export const CLOSED_GLOW = 0.08;/export const CLOSED_GLOW = 1;/' src/game/present/interiors/interior-constants.ts
   it("when its room is built, then its lamps and screens glow a faint share of their light while it is shut, whether it shut after the room was built or before, and as they were when it opens", () => {
     const lit = new InteriorSet(lone);
     settle(lit, coffee.doorX, coffee.doorZ, openers());
@@ -594,7 +569,6 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     return most;
   }
 
-  // mutation: sed -i '/^      this.shells.scaleLamp(entry.shellSlot, shut ? CLOSED_GLOW : 1 \/ CLOSED_GLOW);/d' src/game/present/interiors/interior-art.ts
   it("when a place shuts, then its room's baked lamp light dims to the closed share, and comes back when it opens", () => {
     const set = new InteriorSet(lone);
     settle(set, coffee.doorX, coffee.doorZ, openers());
@@ -619,7 +593,6 @@ describe("given the materials the interiors are drawn in", () => {
     return shader;
   };
 
-  // mutation: sed -i 's/diffuseColor.rgb \*= vLight.rgb \* mix(/diffuseColor.rgb *= vec3(1.0) * mix(/' src/game/present/interiors/interior-art.ts
   it("when the furniture's and the lamps' materials are compiled, then a room's surfaces are unlit by the scene and multiply each corner's colour by its baked lamp light and daylight, scaled by the night, and its lamps follow the shared glow", () => {
     const set = new InteriorSet(lone);
     const furniture = set.group.getObjectByName("interior-furniture") as THREE.Mesh;

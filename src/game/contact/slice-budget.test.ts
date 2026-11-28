@@ -144,7 +144,6 @@ describe("given a live wreck pushed by the pair solver (the amount the push cap 
 });
 
 describe("given a step cut into two slices of half its length", () => {
-  // mutation: sed -i 's/Math.max(STEP_CEIL \* this.share, PushBudget.reach(dt, touchSpeed))/Math.max(STEP_CEIL, PushBudget.reach(dt, touchSpeed))/' src/game/deform/push-budget.ts
   it("when a drift settles in each slice's window with the budget at share 0.5, then each takes half of STEP_CEIL and the two together STEP_CEIL, not twice it", () => {
     const budget = new PushBudget();
     budget.share = 0.5;

@@ -79,7 +79,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
   });
   afterAll(() => rig.dispose());
 
-  // mutation: sed -i 's/    if (this.flow.active \&\& SEAT_KEYS.camera.includes(e.code)) {/    if (false) {/' src/game/engine/engine-onfoot.ts
   it("when V is pressed at the wheel, then the drive view cycles; out of the car V goes from the follow over his shoulder to his eyes and back, and leaves the drive view as it was", () => {
     const seat = rig.engine["seat"];
     const before = seat.view;
@@ -101,7 +100,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(seat.view, "the drive view is as he left it").toBe(driven);
   });
 
-  // mutation: sed -i 's/    this.mesh.viewHidden.value = shown ? -1 : WALKER_SLOT;/    this.mesh.viewHidden.value = -1;/' src/game/present/ragdoll-throw.ts
   it("when he is out and V takes the camera to his eyes, then it stands at his head and his head and torso are not drawn to it; behind him they are", () => {
     const mesh = rig.engine["ragdolls"].pickMesh;
     rig.getOut();
@@ -123,7 +121,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(mesh.viewHidden.value, "the follow again: he is drawn whole").toBe(-1);
   });
 
-  // mutation: sed -i '/^    this.setNear(this.baseNear);$/{x;s/^/x/;/^xx$/{x;d};x}' src/game/engine/onfoot-camera.ts
   it("when V takes the camera to his eyes, then the near plane comes in under 0.1 m; when a reset puts him back at the wheel from there (no climb in to restore it), it is the car view's near exactly", () => {
     const camera = rig.engine["camera"];
     const carNear = camera.near;
@@ -140,7 +137,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(camera.near, "the near plane back at the wheel (m)").toBe(carNear);
   });
 
-  // mutation: sed -i 's/    this.boom = letGo(this.boom, stopShort(sweep(ox, py, oz, bx, sp, bz, length), length), dt);/    this.boom = length;/' src/game/present/walker-camera.ts
   it("when the mouse drags the view round him on foot with a wall close on every side, then it stays his follow view at the wheel's boom and the eye never stands in a wall", () => {
     rig.getOut();
     rig.run(SETTLE_S);
@@ -157,7 +153,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(view().orbitRadius, "the drag did not zoom").toBeCloseTo(boom, 6);
   });
 
-  // mutation: sed -i '/^      this.view.frameRide(null);$/d' src/game/engine/engine.ts
   it("when a ride-along or the Auto camera held the view just before he took over on foot, then a press, a drag and a release of the mouse round him leave it his follow view at his boom", () => {
     const stale = new THREE.Vector3(0, 1, 0);
     rig.getOut();
@@ -183,7 +178,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(onFoot().footView, "a click: still the follow").toBe("follow");
   });
 
-  // mutation: sed -i '/^    if (e.pointerId === this.dragId || e.pointerId === this.pinchId) this.release(e, true);/d' src/game/present/engine-camera.ts
   it("when a press's release is lost and he presses and drags again, then the view turns by the drag and stays the follow at his boom", () => {
     rig.getOut();
     rig.run(SETTLE_S);
@@ -200,7 +194,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     pointer("pointerup", 400 + DRAG_PX, 100);
   });
 
-  // mutation: sed -i -e 's/    return this.framed ? this.mode : "follow";/    return this.framed \&\& this.host.view.orbitRadius < SHOULDER_NEAREST ? "first" : "follow";/' -e 's/    } else if (view.orbitRadius !== this.zoomKept) {/    } else if (false) {/' src/game/engine/onfoot-camera.ts
   it("when a press lands with the orbit's pose read from a point a hand's width from his eye in a pen of walls, then it stays his follow view at his boom and the eye stays out of the walls", () => {
     rig.getOut();
     rig.run(SETTLE_S);
@@ -219,7 +212,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(view().orbitRadius, "the boom is where he had it (m)").toBeCloseTo(boom, 6);
   });
 
-  // mutation: sed -i 's/    } else if (view.orbitRadius !== this.zoomKept) {/    } else if (false) {/' src/game/engine/onfoot-camera.ts
   it("when anything but the wheel, a pinch or View moves the orbit's zoom to his eyes' distance, then he stays in the follow view and the zoom is put back, and the wheel's last notch still takes him to his eyes", () => {
     rig.getOut();
     rig.run(SETTLE_S);
@@ -237,7 +229,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(onFoot().footView, "a few notches out: over his shoulder").toBe("shoulder");
   });
 
-  // mutation: sed -i 's/    view.minRadius = FIRST_PERSON_RADIUS;/    view.minRadius = this.carMinRadius;/' src/game/engine/onfoot-camera.ts
   it("when he is out, then the wheel zooms in to his eyes and out again, its nearest within the shoulder camera's boom; back at the wheel the car's zoom range is as it was", () => {
     const carNearest = view().minRadius;
     rig.getOut();
@@ -253,7 +244,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(view().minRadius, "the car's zoom range").toBe(carNearest);
   });
 
-  // mutation: sed -i 's/      if (this.mode !== "first" \&\& view.orbitRadius < this.zoomKept \&\& reached < this.zoomKept) {/      if (false) {/' src/game/engine/onfoot-camera.ts
   it("when a wall behind him holds the camera in and the wheel turns one notch in, then the eye comes in by the notch at once, with no dead stretch of the wheel", () => {
     rig.getOut();
     rig.run(SETTLE_S);
@@ -276,7 +266,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(after, `one notch in from ${held.toFixed(2)} m: ${after.toFixed(2)} m`).toBeLessThan(held * NOTCH_IN_SHARE);
   });
 
-  // mutation: sed -i 's/sprintBoom(boomAt(level, pitch), walker.loco.speed)/boomAt(level, pitch)/' src/game/engine/onfoot-camera.ts
   it("when he runs and then sprints with the view left alone, then at the sprint the camera stands 15 % farther from the point it frames than at the run", () => {
     rig.getOut();
     rig.run(SETTLE_S);

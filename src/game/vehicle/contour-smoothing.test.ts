@@ -154,7 +154,6 @@ describe("given two flat faces meeting at a right angle with noisy normals", () 
     expect(Math.abs(after[face * 3]! - 1) < 1e-6 && Math.abs(after[face * 3 + 2]!) < 1e-6, "the side face's normal, with no neighbour inside the angle but its own face, is untouched").toBeTruthy();
   });
 
-  // mutation: sed -i 's|bookTierWork(t0);|void t0;|' src/game/vehicle/normal-smooth.ts  (the relax books no tier work: the strength 2 expect reads 0)
   it("when a moved patch is smoothed, then the relax's time is booked as tier work (the FX governors read it as render, which a tier changes); at strength 0, or with nothing moved, none is", () => {
     const { geometry, positions } = flatPatch(40, 40, [UP]);
     // The engine turns the clock on while the Auto FX tier reads the work.

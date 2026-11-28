@@ -60,7 +60,6 @@ describe("given the setup card", () => {
     inRaceMode((w) => expect(optionsOf(w).campaign.join()).toBe(CAMPAIGN.join()));
   });
 
-  // mutation: sed -i '/^  figure8: "figure-8",$/d' src/game/world/constants.ts  (the default campaign is Object.values(TRACK_ID): the figure-8 is on the menu but not in it, red)
   it("when it first opens, then every course on the race menu is in the campaign, before any is ticked off", () => {
     const campaign = new Set(DEFAULT_RACE_OPTIONS.campaign);
     for (const id of TRACKS.map((raw) => parseTrack(raw).id)) expect(campaign.has(id), `${id} is in the default campaign`).toBe(true);
@@ -116,7 +115,6 @@ describe("given the setup card", () => {
 });
 
 describe("given a Watch campaign of the rally and then the oval, the reverse of the campaign's own order", () => {
-  // mutation: sed -i 's/new Campaign(this.rules.campaign,/new Campaign([...this.rules.campaign].sort(),/' src/game/engine/engine-race.ts  (the picks race in alphabetical order, not the tapped one: red at round 1's course)
   it("when each round runs out and Next is pressed, then the rounds race on those courses in that order and the campaign ends back at the card", () => {
     inRaceMode((w) => {
       // The rounds run out unwatched: the claim is their courses and menus, so no skin is drawn.

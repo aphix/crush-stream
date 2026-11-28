@@ -97,7 +97,6 @@ describe("given the real engine in a race, lit for a time of day", () => {
     setGround(null);
   });
 
-  // mutation: sed -i '/^    if (detail === this.skyDetail) return;$/d' src/game/present/engine-world.ts  (the sky is re-applied every frame: red in all four rows, 120 writes per colour)
   for (const testCase of cases) {
     it(`when ${testCase.it} runs ${FRAMES} frames, then nothing the time of day sets is written again (colours, intensities, shadow camera, sun axes) and the drawn frames really ran`, () => {
       race(testCase.trackId, testCase.timeOfDay, true);

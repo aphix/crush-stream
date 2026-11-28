@@ -79,7 +79,6 @@ describe("given the real engine on the city bench's race, headless", () => {
     expect(engine["world"].phases.on, "a window left the phase clock on").toBe(false);
   });
 
-  // mutation: sed -i 's/unattributedMsPerSimS: perS(simMs - attributed)/unattributedMsPerSimS: perS(simMs)/' src/game/engine/bench-measure.ts  (the phases and the unattributed no longer sum to the sim's ms)
   it("when a window is watched on a clock that ticks once per read, then its phases plus the unattributed equal the sim's reads, no phase is negative, the unattributed is only the pacer's own reads, and the phases a race always runs each hold time", () => {
     let reads = 0;
     vi.spyOn(performance, "now").mockImplementation(() => ++reads);

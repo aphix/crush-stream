@@ -32,7 +32,6 @@ describe("given the real engine and a car drawn small, skinned every second fram
     return waits;
   }
 
-  // mutation: sed -i 's/^  return stride > 1 \&\& skinDeferred;/  return false;/' src/game/engine/skin-hold.ts
   it("when the skins are scheduled over two frames, then its tyre hold waits on the frame its skin is not written and runs on the other; a car skinned every frame never waits", () => {
     const cars = engine["live"]();
     drawn(cars[1]!);
@@ -45,7 +44,6 @@ describe("given the real engine and a car drawn small, skinned every second fram
     expect(near, "a car skinned every frame").toEqual([false, false]);
   });
 
-  // mutation: sed -i 's/holdWaits(stride, car.deform.skinDeferred)/holdWaits(stride, false)/' src/game/engine/engine.ts
   it("when the camera has moved and a hold is owed, then a small car whose skin is deferred keeps it owed, and a car that came to full rate has it laid", () => {
     const cars = engine["live"]();
     const small = cars[1]!;
@@ -66,7 +64,6 @@ describe("given the real engine and a car drawn small, skinned every second fram
     expect(settled).toHaveBeenCalledTimes(1);
   });
 
-  // mutation: sed -i 's/ \&\& !car.partsOwed) continue;/) continue;/' src/game/engine/engine.ts
   it("when the camera has moved and a car's parts are owed, then a car no camera sees is told so and keeps them owed, and a seen one is told so and has them settled", () => {
     const cars = engine["live"]();
     const away = cars[1]!;

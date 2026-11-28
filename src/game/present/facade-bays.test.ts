@@ -104,7 +104,6 @@ function extentAt(geometry: THREE.BufferGeometry, y: number): Extent {
 describe("given the bay stack of a rowhome of each storey count", () => {
   const stacks = STOREY_COUNTS.map((storeys) => ({ storeys, bay: buildBayGeometry(storeys), floors: bayStackOf(storeys).floors }));
 
-  // mutation: sed -i 's/ring(builder, floor.sill, floor.head, 0, WINDOW_CELLS, WHITE, FIXED);/ring(builder, floor.sill, floor.head, floor.sill > 5 ? 0.2 : 0, WINDOW_CELLS, WHITE, FIXED);/' src/game/present/facade-bay-parts.ts
   it("when each floor's bay is measured at its sill, then every one has the same x range and projection, beside the door, and a house has a bay for each of its storeys", () => {
     for (const { storeys, bay, floors } of stacks) {
       for (const [at, floor] of floors.entries()) {
@@ -118,7 +117,6 @@ describe("given the bay stack of a rowhome of each storey count", () => {
     }
   });
 
-  // mutation: sed -i 's/for (const floor of bayStackOf(storeys).floors) {/for (const floor of bayStackOf(DEFAULT_STOREYS).floors) {/' src/game/present/facade-bay-parts.ts
   it("when the plinth is measured, then the stack stands from the ground on the same footprint the floors do and each belt band sits over it", () => {
     for (const { storeys, bay, floors } of stacks) {
       const plinth = extentAt(bay, 0);
@@ -135,7 +133,6 @@ describe("given the bay stack of a rowhome of each storey count", () => {
     }
   });
 
-  // mutation: sed -i 's/^  band(builder, BAY.plinthTop, cursor, BELT_LIP);/  band(builder, BAY.plinthTop, cursor, BELT_LIP, true);/' src/game/present/facade-bay-parts.ts
   it("when the stack is read at the plinth band's top, then no upward face there lies inside the bay's walls, and its lip is six triangles", () => {
     const plinthBandTop = BAY.plinthTop + BAY.plinthBand;
     const wall = bayOutline(0).map((c) => [-c.across, c.out] as const).reverse();
@@ -178,7 +175,6 @@ describe("given the stoop and its railing", () => {
     return heights;
   }
 
-  // mutation: sed -i 's/const STOOP_STEPS = 5;/const STOOP_STEPS = 4;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the landing is measured, then its top is the door sill and the railing stands on it", () => {
     const stoopTop = Math.max(...heightsAtLandingEdge(stoop));
     const railBase = Math.min(...heightsAtLandingEdge(railing));
@@ -186,7 +182,6 @@ describe("given the stoop and its railing", () => {
     expect(railBase, "bottom of the railing at the landing (m)").toBeCloseTo(DOOR.sill, 6);
   });
 
-  // mutation: sed -i 's/const DOOR_HALF_WIDTH = 0.5;/const DOOR_HALF_WIDTH = 0.3;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when every piece's vertices are tested against the facade's door hole, then none stands in the hole and the jambs stand at its edges", () => {
     let inside = 0;
     let atEdge = 0;
@@ -207,7 +202,6 @@ describe("given the stoop and its railing", () => {
 });
 
 describe("given every piece of the kit", () => {
-  // mutation: sed -i 's/const BAY_ACROSS = -0.9;/const BAY_ACROSS = -1.9;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the pieces are measured across the lot, then all stand inside its edges, the stoop on the door's side with a clear gap to the bay", () => {
     const bayRange = xRange(buildBayGeometry(DEFAULT_STOREYS));
     const surroundRange = xRange(buildSurroundGeometry());
@@ -237,7 +231,6 @@ describe("given the kit made for the layout's rowhomes", () => {
   if (!(corniceMesh instanceof THREE.InstancedMesh)) throw new Error("the kit has no cornice mesh");
   afterAll(() => kit.dispose());
 
-  // mutation: sed -i 's/new THREE.InstancedMesh(geometry, material, stood.length)/new THREE.InstancedMesh(geometry, material, Math.min(stood.length, 8))/' src/game/present/facade-bays.ts
   it("when the kit is drawn for a few houses and then for many, then it is the same draws, an instance of each every-house piece for each house and of the others for a share", () => {
     const few = new FacadeBays(frontages.slice(0, 10));
     const many = new FacadeBays(frontages.slice(0, 40));
@@ -264,7 +257,6 @@ describe("given the kit made for the layout's rowhomes", () => {
     many.dispose();
   });
 
-  // mutation: sed -i 's/frontage.yaw + Math.PI \/ 2/frontage.yaw/' src/game/present/facade-bays.ts
   it("when each house's instance is read, then it stands on its frontage with the kit's front turned to the street", () => {
     const matrix = new THREE.Matrix4();
     const front = new THREE.Vector3();
@@ -280,7 +272,6 @@ describe("given the kit made for the layout's rowhomes", () => {
     expect(worst, "furthest an instance is from its frontage (m or unit)").toBeLessThan(EPSILON * 10);
   });
 
-  // mutation: sed -i 's/MARBLE_TINTS\[frontage.variant % MARBLE_TINTS.length\]/MARBLE_TINTS[0]/' src/game/present/facade-bays.ts
   it("when the houses' stoop colours are read, then marble whites, sandstone and brownstone all stand along the layout", () => {
     expect(stoops.instanceColor, "stoop colours set").not.toBeNull();
     const colours = new Set<number>();
@@ -288,7 +279,6 @@ describe("given the kit made for the layout's rowhomes", () => {
     expect(colours.size, "distinct stoop colours").toBe(STOOP_TINTS);
   });
 
-  // mutation: sed -i 's/frontage.variant % HOUSE_ACCENTS.length/0/g' src/game/present/facade-bays.ts
   it("when the houses' cornice colours are read, then they vary from house to house", () => {
     expect(corniceMesh.instanceColor, "cornice colours set").not.toBeNull();
     const colours = new Set<number>();
@@ -296,7 +286,6 @@ describe("given the kit made for the layout's rowhomes", () => {
     expect(colours.size, "distinct cornice colours").toBeGreaterThanOrEqual(HOUSE_ACCENTS.length - 1);
   });
 
-  // mutation: sed -i 's/frontage.storeys === storeys ? \[IN_PLACE\] : \[\]/frontage.storeys >= storeys ? [IN_PLACE] : []/' src/game/present/facade-bays.ts
   it("when the bay stacks are read, then each storey count has its own stack on the houses of that count, in their order, on their frontage", () => {
     const matrix = new THREE.Matrix4();
     const place = new THREE.Vector3();
@@ -316,7 +305,6 @@ describe("given the kit made for the layout's rowhomes", () => {
     expect(STOREY_COUNTS.filter((storeys) => frontages.some((frontage) => frontage.storeys === storeys)).length, "storey counts with houses").toBeGreaterThanOrEqual(MIN_DISTINCT_STOREYS);
   });
 
-  // mutation: sed -i 's/up: homeHeightOf(frontage) - HOME_HEIGHT/up: 0/' src/game/present/facade-bays.ts
   it("when each house's cornice is read, then it stands at its own roofline: raised or lowered from the three-storey one by the difference in the houses' heights", () => {
     const matrix = new THREE.Matrix4();
     let worst = 0;
@@ -331,13 +319,11 @@ describe("given the kit made for the layout's rowhomes", () => {
     expect(worst, "furthest a cornice stands from its roofline (m)").toBeLessThan(EPSILON * 10);
   });
 
-  // mutation: sed -i 's/const CORNICE_BRACKETS = 5;/const CORNICE_BRACKETS = 500;/' src/game/present/facade-bay-parts.ts
   it("when the kit's triangles are counted for the layout, then a house costs no more than the budget", () => {
     expect(frontages.length, "houses").toBeGreaterThan(100);
     expect(kit.stats.triangles / frontages.length, "triangles per house").toBeLessThanOrEqual(TRIANGLES_PER_HOME_MAX);
   });
 
-  // mutation: sed -i 's/\[{ ...IN_PLACE, up: roofTopOf(frontage) }\]/[{ ...IN_PLACE, up: HOME_HEIGHT }]/' src/game/present/facade-bays.ts
   it("when each house's roof pieces are read, then they stand on its roof, raised by the parapet lift the facade shader gives that building", () => {
     const roof = kit.group.getObjectByName("facade-roof");
     if (!(roof instanceof THREE.InstancedMesh)) throw new Error("the kit has no roof mesh");
@@ -357,7 +343,6 @@ describe("given the kit made for the layout's rowhomes", () => {
     expect(worst, "furthest a roof piece stands off its roof (m)").toBeLessThan(EPSILON);
   });
 
-  // mutation: sed -i 's/const CONDENSER_SHARE = 45;/const CONDENSER_SHARE = 100;/' src/game/present/facade-bays.ts
   it("when the roofs are counted, then some houses have a condenser and some a deck, and neither is on every house", () => {
     for (const name of ["facade-condenser", "facade-deck"]) {
       const mesh = kit.group.getObjectByName(name);
@@ -372,7 +357,6 @@ describe("given the fittings of the kit made for the layout", () => {
   const kit = new FacadeBays(frontages);
   afterAll(() => kit.dispose());
 
-  // mutation: sed -i 's/shuttersFor(frontage.style, frontage.storeys).map(/shuttersFor(frontage.style, frontage.storeys).slice(1).map(/' src/game/present/facade-bays.ts
   it("when the shutters are counted, then there is one for each shutter the table gives each house's style", () => {
     const mesh = kit.group.getObjectByName("facade-shutter");
     const expected = frontages.reduce((sum, frontage) => sum + shuttersOf(frontage.style, frontage.storeys).length, 0);
@@ -380,7 +364,6 @@ describe("given the fittings of the kit made for the layout", () => {
     expect(mesh instanceof THREE.InstancedMesh ? mesh.count : -1, "shutter instances").toBe(expected);
   });
 
-  // mutation: sed -i 's/local.compose(position.set(-placement.across, placement.up, 0)/local.compose(position.set(placement.across, placement.up, 0)/' src/game/present/facade-bays.ts
   it("when each shutter instance is read back, then it stands at its table entry's place on its house's facade, the same height up and as wide and tall", () => {
     const mesh = kit.group.getObjectByName("facade-shutter");
     if (!(mesh instanceof THREE.InstancedMesh)) throw new Error("the kit has no shutter mesh");
@@ -405,7 +388,6 @@ describe("given the fittings of the kit made for the layout", () => {
     expect(worst, "furthest a shutter instance is from its table entry (m)").toBeLessThan(EPSILON * 10);
   });
 
-  // mutation: sed -i 's/const AIRCON_SHARE = 40;/const AIRCON_SHARE = 100;/' src/game/present/facade-bays.ts
   it("when the air-conditioners are counted, then some houses have one in a window and not every house does", () => {
     const mesh = kit.group.getObjectByName("facade-aircon");
     const count = mesh instanceof THREE.InstancedMesh ? mesh.count : -1;
@@ -419,7 +401,6 @@ describe("given the Federal door", () => {
   const kit = new FacadeBays(frontages);
   afterAll(() => kit.dispose());
 
-  // mutation: sed -i 's/const ARCHED_DOOR_STYLES: readonly string\[\] = \["rowbrick"\];/const ARCHED_DOOR_STYLES: readonly string[] = [];/' src/game/present/facade-bays.ts
   it("when the doors are counted, then every house has a surround or a fanlight, the fanlight on the brick houses and the flat surround on the rest", () => {
     const count = (name: string): number => {
       const mesh = kit.group.getObjectByName(name);
@@ -432,7 +413,6 @@ describe("given the Federal door", () => {
     expect(count("facade-surround"), "flat surround instances").toBe(frontages.length - brick);
   });
 
-  // mutation: sed -i 's/fanGlass(builder, DOOR.halfWidth);/fanGlass(builder, DOOR.halfWidth * 2);/' src/game/present/facade-bay-parts.ts
   it("when the fan of glass is read, then it springs from the door's head, as wide as the hole and as high as it is wide over two", () => {
     const position = fanlight.getAttribute("position");
     const uv = fanlight.getAttribute("uv");
@@ -453,7 +433,6 @@ describe("given the Federal door", () => {
     expect((fan.maxX + fan.minX) / 2, "the fan's middle off the door's (kit x, m)").toBeCloseTo(DOOR_HOLE_X, 6);
   });
 
-  // mutation: sed -i 's/const ARCH_CAP_HEIGHT = 0.1;/const ARCH_CAP_HEIGHT = 1;/' src/game/present/facade-bay-parts.ts
   it("when the Federal door's top is read against the upper windows, then it ends well under the lowest of them and never leaves the door's column", () => {
     const position = fanlight.getAttribute("position");
     let top = -Infinity;
@@ -465,7 +444,6 @@ describe("given the Federal door", () => {
     expect(lowestSill - top, "gap from the door's cap to the upper windows' sills (m)").toBeGreaterThanOrEqual(DOOR_TO_WINDOW_GAP_MIN);
   });
 
-  // mutation: sed -i 's/builder.quad(\[left, top, far\], \[right, top, far\], \[right, top, near\], \[left, top, near\], KIT_CELL.marble, TREAD_SHADE, ACCENT);/builder.quad([left, top, far], [right, top, far], [right, top, near], [left, top, near], KIT_CELL.stone, TREAD_SHADE, ACCENT);/' src/game/present/facade-bay-parts.ts
   it("when the stoop's upward faces are read, then every tread reads the marble", () => {
     const geometry = buildStoopGeometry();
     const normal = geometry.getAttribute("normal");
@@ -481,7 +459,6 @@ describe("given the Federal door", () => {
 });
 
 describe("given the roof pieces", () => {
-  // mutation: sed -i 's/const CHIMNEY_BACK = 9.5;/const CHIMNEY_BACK = 15.5;/' src/game/present/facade-bay-parts.ts
   it("when their vertices are read, then every one stands on or over the roof and within it: behind the facade, before the back wall, inside the lot but for the chimney astride the party wall", () => {
     const roofDepth = 2 * drawnHalf(HOUSE_DEPTH);
     const outside: string[] = [];
@@ -507,7 +484,6 @@ describe("given the panes of the bay windows and the list of built buildings", (
   const kit = new FacadeBays(frontages);
   afterAll(() => kit.dispose());
 
-  // mutation: sed -i 's/^const GLASS_ALPHA = 128;/const GLASS_ALPHA = 255;/' src/game/present/facade-kit-atlas.ts
   it("when the window cell is sampled, then its panes are under the cut threshold and its frame is not", () => {
     const painted = paintKit().albedo;
     const alphaAt = (across: number, up: number): number => {
@@ -520,7 +496,6 @@ describe("given the panes of the bay windows and the list of built buildings", (
     expect(alphaAt(FRAME_ACROSS, FRAME_UP), "the frame's alpha").toBeGreaterThan(GLASS_ALPHA_BELOW);
   });
 
-  // mutation: sed -i 's/ \&\& facadeCuts(vKitOpen)) discard;/) discard;/' src/game/present/facade-bays.ts (a pane pops at once, not by the openness); sed -i 's/    shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;//' src/game/present/facade-bays.ts
   it("when the kit's material is compiled, then each instance is told whether its house has its rooms built against the shared list, and a pane is cut on that", () => {
     const material = (kit.group.getObjectByName("facade-stoop") as THREE.InstancedMesh).material as THREE.MeshStandardMaterial;
     const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
@@ -531,7 +506,6 @@ describe("given the panes of the bay windows and the list of built buildings", (
     expect(shader.fragmentShader, "the fragment shader's cut").toContain(`vKitOpen > 0.0 && diffuseColor.a < ${GLASS_ALPHA_BELOW} && facadeCuts(vKitOpen)) discard;`);
   });
 
-  // mutation: sed -i 's/step(fract(vKitSeed \* 7.3), kitShare) \* step(0.0001, kitShare)/step(fract(vKitSeed * 7.3), 0.60)/' src/game/present/facade-bays.ts
   it("when the kit's material is compiled, then the bay's windows light by the home's own share read at the building's centre, and none where the share is none", () => {
     const material = (kit.group.getObjectByName("facade-stoop") as THREE.InstancedMesh).material as THREE.MeshStandardMaterial;
     const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
@@ -543,7 +517,6 @@ describe("given the panes of the bay windows and the list of built buildings", (
     expect(shader.fragmentShader, "the house's lit share").toContain("step(fract(vKitSeed * 7.3), kitShare) * step(0.0001, kitShare)");
   });
 
-  // mutation: sed -i 's/^export const KIT_HOUSE_BACK = drawnHalf(LAYOUT.houseDepth);/export const KIT_HOUSE_BACK = drawnHalf(LAYOUT.houseDepth) + 0.5;/' src/game/present/facade-bays.ts
   it("when each kit instance is taken back along its out axis, then it lands on the place its building stands at, the position the list names", () => {
     const cornice = kit.group.getObjectByName("facade-cornice") as THREE.InstancedMesh;
     const matrix = new THREE.Matrix4();
@@ -561,7 +534,6 @@ describe("given the panes of the bay windows and the list of built buildings", (
 });
 
 describe("given the kit's shared pieces", () => {
-  // mutation: sed -i 's/const MARBLE_VEIN_SHADE = 0.8;/const MARBLE_VEIN_SHADE = 1;/' src/game/present/facade-kit-atlas.ts
   it("when the marble cell is read, then it is near white with grey veins through a share of it", () => {
     const painted = paintKit().albedo;
     const cell = KIT_CELL.marble;
@@ -581,7 +553,6 @@ describe("given the kit's shared pieces", () => {
     expect(veins / total, "the share of the marble that is vein").toBeLessThan(MARBLE_VEIN_SHARE_MAX);
   });
 
-  // mutation: sed -i 's/const FAN_RING_AT = 0.55;/const FAN_RING_AT = 0.8;/' src/game/present/facade-kit-atlas.ts
   it("when the fanlight cell is sampled up its middle, then its glass lights at night, the ring between its two panes is white and unlit, and the pane at the rim is darker than at the centre", () => {
     const painted = paintKit();
     const middle = 0.5;
@@ -599,7 +570,6 @@ describe("given the kit's shared pieces", () => {
     return data[(y * ATLAS_SIZE + x) * 4]!;
   }
 
-  // mutation: sed -i 's/const FRAME_TEXELS = 7;/const FRAME_TEXELS = 60;/' src/game/present/facade-kit-atlas.ts
   it("when the window's panes and frame are sampled, then a pane is dark glass that lights at night and the frame is pale and never lights", () => {
     const painted = paintKit();
     expect(texelAt(painted.albedo, KIT_CELL.window, 0.25, 0.25), "pane's red").toBeLessThan(150);
@@ -608,7 +578,6 @@ describe("given the kit's shared pieces", () => {
     expect(texelAt(painted.glow, KIT_CELL.window, 0.03, 0.5), "frame's glow").toBe(0);
   });
 
-  // mutation: sed -i 's/const LOUVRE_GAP_SHADE = 0.5;/const LOUVRE_GAP_SHADE = 1;/' src/game/present/facade-kit-atlas.ts
   it("when the louvre cell is sampled up its height, then its slats are lit and a dark gap lies under each", () => {
     const painted = paintKit().albedo;
     const columnAt = 0.5;
@@ -617,7 +586,6 @@ describe("given the kit's shared pieces", () => {
     expect(lit, "a slat's red").toBeGreaterThan(gap + LOUVRE_CONTRAST_MIN);
   });
 
-  // mutation: sed -i 's/const RAIL_BAR_FROM = 13;/const RAIL_BAR_FROM = 25;/' src/game/present/facade-kit-atlas.ts
   it("when the railing strip is sampled, then a bar and the rails are iron and the gaps between bars are open", () => {
     const rail = paintKit().rail;
     const alpha = (column: number, row: number): number => rail[(row * 32 + column) * 4 + 3]!;
@@ -627,12 +595,10 @@ describe("given the kit's shared pieces", () => {
     expect(alpha(2, 2), "alpha on the bottom rail").toBe(255);
   });
 
-  // mutation: sed -i 's/const BLOCK_FACE_HALF = 5.9;/const BLOCK_FACE_HALF = 5.8;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the kit's wall plane is read, then it is the building mesh's own front face", () => {
     expect(BLOCK_FACE_HALF, "the face the kit stands on (m)").toBe(HALF);
   });
 
-  // mutation: sed -i 's/vColor.rgb \*= mix(vec3(1.0), instanceColor.rgb, ${TINT_ATTRIBUTE});/vColor.rgb *= instanceColor.rgb;/' src/game/present/facade-bays.ts
   it("when the colour chunk is patched, then the instance colour is weighted by each vertex's tint share", () => {
     expect(tintedColorVertex(), "patched chunk").toContain("mix(vec3(1.0), instanceColor.rgb, tintShare)");
   });

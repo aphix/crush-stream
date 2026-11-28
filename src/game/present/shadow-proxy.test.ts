@@ -72,7 +72,6 @@ function held(proxy: ShadowProxy): Set<string> {
 }
 
 describe("given a city's worth of big boxes in one shadow-casting instanced mesh", () => {
-  // mutation: sed -i 's/      const slack = scale \* reach + SLACK;/      const slack = SLACK;/' src/game/present/shadow-proxy.ts
   it("when the sun's box is asked about, then the proxy holds every instance that touches it, and well under all of them", () => {
     const source = cityMesh();
     const proxy = new ShadowProxy(source);
@@ -85,7 +84,6 @@ describe("given a city's worth of big boxes in one shadow-casting instanced mesh
     expect(proxy.mesh.count, "instances the shadow pass draws").toBeLessThan(INSTANCES / 2);
   });
 
-  // mutation: sed -i 's/^  return a.x \* b.x + a.y.*$/  return true;/' src/game/present/shadow-proxy.ts
   it("when the eye's frustum is asked about, then the source is drawn and the proxy is not; for the sun's it is the other way round", () => {
     const source = cityMesh();
     const proxy = new ShadowProxy(source);
@@ -95,7 +93,6 @@ describe("given a city's worth of big boxes in one shadow-casting instanced mesh
     expect(source.intersectsFrustum(sunFrustum(0, 0)), "the sun never draws the source").toBe(false);
   });
 
-  // mutation: sed -i 's/      if (drift > NORMAL_DRIFT || Math.abs(plane.constant - this.planes\[at + 3\]!) > SLACK \/ 2) return true;/      if (drift > NORMAL_DRIFT) return true;/' src/game/present/shadow-proxy.ts
   it("when the box moves 3 m, then nothing is rebuilt; when it moves 40 m, then the proxy holds what touches the new box", () => {
     const source = cityMesh();
     const proxy = new ShadowProxy(source);
@@ -110,7 +107,6 @@ describe("given a city's worth of big boxes in one shadow-casting instanced mesh
     for (const key of touching(source, far)) expect(kept.has(key), `instance at ${key}`).toBe(true);
   });
 
-  // mutation: sed -i 's/ || this.source.instanceMatrix.version !== this.version//' src/game/present/shadow-proxy.ts
   it("when an instance is moved into the box, then the next shadow pass draws it with its colour", () => {
     const source = cityMesh();
     const proxy = new ShadowProxy(source);
@@ -141,7 +137,6 @@ describe("given the sun turning at a fixed box centre, and instances added", () 
     return new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   }
 
-  // mutation: sed -i 's/      if (drift > NORMAL_DRIFT || /      if (/' src/game/present/shadow-proxy.ts
   it("when the light turns by more than the drift, then the proxy is rebuilt", () => {
     const proxy = new ShadowProxy(cityMesh());
     proxy.mesh.intersectsFrustum(turnedSun(0));
@@ -152,7 +147,6 @@ describe("given the sun turning at a fixed box centre, and instances added", () 
     expect(proxy.mesh.instanceMatrix.version, "a real turn is").toBeGreaterThan(version);
   });
 
-  // mutation: sed -i 's/ || this.source.count !== this.sourceCount//' src/game/present/shadow-proxy.ts
   it("when the source draws more instances with the same matrices, then the proxy is rebuilt", () => {
     const source = cityMesh();
     source.count = 100;
@@ -167,7 +161,6 @@ describe("given the sun turning at a fixed box centre, and instances added", () 
 });
 
 describe("given the National Mall's art", () => {
-  // mutation: sed -i 's/ \&\& mesh.count >= PROXY_MIN_INSTANCES) this.group.add(new ShadowProxy(mesh).mesh);/) void 0;/' src/game/present/track-art.ts
   it("when it is built, then every large casting instanced mesh has a shadow proxy beside it in the group", () => {
     stubBrowser();
     const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);

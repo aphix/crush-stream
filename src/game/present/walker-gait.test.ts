@@ -68,7 +68,6 @@ describe("given a gait over flat ground", () => {
     for (let f = 0; f < 2; f++) expect(range(frames.map((frame) => frame.feet[f * 3 + 2]!)), `foot ${f} travelled with him`).toBeGreaterThan(3 * RUN_SPEED * 0.8);
   });
 
-  // mutation: sed -i 's/const CADENCE = \[0.6, /const CADENCE = [1.05, /' src/game/present/walker-gait.ts
   it("when he walks at 0.8 m/s, then a step is at least 0.45 m long", () => {
     const loco = new Locomotion();
     const gait = new Gait();
@@ -81,7 +80,6 @@ describe("given a gait over flat ground", () => {
     expect(loco.speed / (2 * gait["cadence"]), "metres a step").toBeGreaterThanOrEqual(0.45);
   });
 
-  // mutation: sed -i 's/const CADENCE = \[0.6, /const CADENCE = [0.3, /' src/game/present/walker-gait.ts
   it("when he walks at 0.8 m/s, then his cadence is 0.84 cycles a second, between the stand's 0.6 and the walk's 1.05", () => {
     const loco = new Locomotion();
     const gait = new Gait();
@@ -261,7 +259,6 @@ describe("given a gait at a run", () => {
 });
 
 describe("given a gait whose root speed jumps", () => {
-  // mutation: sed -i 's/dt \* CADENCE_EASE/dt * 1000/' src/game/present/walker-gait.ts
   it("when the speed goes from 0 to 3 m/s in one frame, then the cadence moves by at most CADENCE_EASE * dt of the gap", () => {
     const loco = new Locomotion();
     const gait = new Gait();
@@ -296,7 +293,6 @@ describe("given a gait standing still whose eyes are drawn to his side (a crowd 
     return [gait.targets[GAIT.NECK_TURN]!, gait.targets[GAIT.NECK_NOD]!];
   }
 
-  // mutation: sed -i 's/ + Math.max(-NECK_LOOK_TURN, Math.min(NECK_LOOK_TURN, this.lookTurn));/;/' src/game/present/walker-gait.ts
   it("when he is asked to look 0.5 rad to his +x and 0.3 down, then his neck turns and nods that much over a standing gait's, and a look past its reach stops at the neck's 0.85 rad", () => {
     const [turn, nod] = neck(0, 0);
     const [lookedTurn, lookedNod] = neck(0.5, 0.3);

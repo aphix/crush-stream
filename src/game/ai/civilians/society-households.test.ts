@@ -57,9 +57,6 @@ describe("given the open world's homes, each with a household and few with a sim
     { it: "when it is half past six in the morning, then most homes have someone up", hour: 6.5, atLeast: 0.6, atMost: 1 },
     { it: "when it is noon, then nobody is home awake", hour: 12, atLeast: 0, atMost: 0 },
   ] as const;
-  // mutation: sed -i 's/^const BEDTIME_HOURS = .*$/const BEDTIME_HOURS = [30, 30, 30, 30, 30, 30, 30, 30] as const;/' src/game/ai/civilians/society-households.ts
-  // mutation: sed -i 's/^const BEDTIME_HOURS = .*$/const BEDTIME_HOURS = [17, 17, 17, 17, 17, 17, 17, 17] as const;/' src/game/ai/civilians/society-households.ts
-  // mutation: sed -i 's/^const WAKE_FROM_HOUR = 5;/const WAKE_FROM_HOUR = 20;/' src/game/ai/civilians/society-households.ts
   for (const testCase of dayTable) {
     it(testCase.it, () => {
       const share = litShareAt(testCase.hour);
@@ -68,14 +65,12 @@ describe("given the open world's homes, each with a household and few with a sim
     });
   }
 
-  // mutation: sed -i 's/this.bed\[at\] = bedtimeAt(draw());/this.bed[at] = 24 + 0 * draw();/' src/game/ai/civilians/society-households.ts
   it("when the night goes on from nine to two, then the homes with someone awake thin out every hour, as their bedtimes are spread", () => {
     const shares = [21, 22, 23, 24, 25, 26].map(litShareAt);
     for (let at = 1; at < shares.length; at++) expect(shares[at]!, `share at hour ${21 + at} under the hour before`).toBeLessThan(shares[at - 1]!);
     expect(shares[0], "the evening was lit to begin with").toBeGreaterThan(0.6);
   });
 
-  // mutation: sed -i 's/^const HOUSEHOLD_SIZE_CUMULATIVE = .*$/const HOUSEHOLD_SIZE_CUMULATIVE = [1, 1, 1, 1] as const;/' src/game/ai/civilians/society-households.ts
   it("when the evening is at its fullest, then homes have one, two, three and four people awake, and none five", () => {
     const counts = new Set<number>();
     for (const hour of [19.5, 20, 20.5]) for (const awake of awakeAt(hour)) counts.add(awake);
@@ -83,7 +78,6 @@ describe("given the open world's homes, each with a household and few with a sim
     expect(counts.has(5), "homes with five awake").toBe(false);
   });
 
-  // mutation: sed -i 's/this.size\[place\] = 1 + /this.size[place] = state.occupants[place] > 0 ? 0 : 1 + /' src/game/ai/civilians/society-households.ts
   it("when a home has a simulated resident who is out at eight in the evening, then its household still lights it, as it does a home with no resident", () => {
     const occupied = homes.filter((place) => city.state.occupants[place]! > 0);
     const out = awakeAt(20);
@@ -92,7 +86,6 @@ describe("given the open world's homes, each with a household and few with a sim
     expect(occupied.filter((place) => out[place]! > 0).length / occupied.length, "share of homes with a resident that have the household awake").toBeGreaterThanOrEqual(0.85);
   });
 
-  // mutation: sed -i 's/out\[place\] = Math.min(255, out\[place\]! + awake);/out[place] = awake;/' src/game/ai/civilians/society-households.ts
   it("when a resident is already awake at home, then the household's people are awake with them", () => {
     const household = awakeAt(20);
     const place = homes.find((candidate) => household[candidate]! > 0)!;
@@ -104,7 +97,6 @@ describe("given the open world's homes, each with a household and few with a sim
 });
 
 describe("given two draws of the households", () => {
-  // mutation: sed -i 's/state\.seed, place/0, place/g' src/game/ai/civilians/society-households.ts
   it("when the same seed is drawn twice, then the same homes have the same people awake, and another seed has other people awake", () => {
     const again = cityOf(SEED);
     const other = cityOf(OTHER_SEED);

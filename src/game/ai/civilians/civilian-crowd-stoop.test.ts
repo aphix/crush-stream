@@ -37,7 +37,6 @@ function heightAfter(crowd: CivilianCrowd, person: number, metres: number): numb
 }
 
 describe("given a resident who walks out of a rowhome's door along the way its stoop runs", () => {
-  // mutation: sed -i 's/^    this.liftWalkers();$/    void 0;/' src/game/ai/civilians/civilian-crowd.ts
   it("when she leaves, then she is at the sill's height at the door, on a tread's height on each step, and at the street's height past the bottom one", () => {
     const { crowd, person } = leaving(new Stoops([HOUSE], [EDGE.from]));
     expect(heightAfter(crowd, person, 0.1), "at the door").toBeCloseTo(STOOP.sill, 3);
@@ -46,7 +45,6 @@ describe("given a resident who walks out of a rowhome's door along the way its s
     expect(heightAfter(crowd, person, STOOP.run + STOOP.tread), "past it").toBe(0);
   });
 
-  // mutation: sed -i 's/leadsToDoor(pose.from, pose.to) ? 1 : 0/leadsToDoor(pose.from, pose.to) ? 0 : 0/' src/game/ai/civilians/civilian-crowd.ts
   it("when she walks a stoop door's spur the drawing is told (onSpur is 1), and on a walk that is not its spur it is 0", () => {
     const spur = leaving(new Stoops([HOUSE], [EDGE.from]));
     heightAfter(spur.crowd, spur.person, (STEP_3.near + STEP_3.far) / 2);
@@ -56,21 +54,18 @@ describe("given a resident who walks out of a rowhome's door along the way its s
     expect(lane.crowd.poses.onSpur[lane.person], "on the sidewalk lane").toBe(0);
   });
 
-  // mutation: sed -i 's/    if (stoops === null) return;/    if (stoops === null) { this.poses.feetY.fill(0.5); return; }/' src/game/ai/civilians/civilian-crowd.ts
   it("when there are no stoops, then she is at the street's height all the way", () => {
     const { crowd, person } = leaving(null);
     expect(heightAfter(crowd, person, 0.1)).toBe(0);
     expect(heightAfter(crowd, person, (STEP_3.near + STEP_3.far) / 2)).toBe(0);
   });
 
-  // mutation: sed -i 's/return this.doors\[from\] === 1 || this.doors\[to\] === 1;/return true;/' src/game/world/openworld/openworld-stoops.ts
   it("when she walks over a stoop's steps on a walk that is not its door's spur (the sidewalk's lane in front of it), then she stays at the street's height", () => {
     const { crowd, person } = leaving(new Stoops([HOUSE]));
     expect(heightAfter(crowd, person, 0.1), "at the door's spot").toBe(0);
     expect(heightAfter(crowd, person, (STEP_3.near + STEP_3.far) / 2), "over the third step").toBe(0);
   });
 
-  // mutation: sed -i 's/this.poses.onSpur\[resident\] = 0;/this.poses.onSpur[resident] = 1;/' src/game/ai/civilians/civilian-crowd.ts
   it("when the society stands her at a seat on the steps, then she is not lifted again: her seat's height is her own", () => {
     const { crowd, person } = leaving(new Stoops([HOUSE], [EDGE.from]));
     const onStep = (STEP_3.near + STEP_3.far) / 2;
@@ -91,7 +86,6 @@ describe("given a resident who walks out of a rowhome's door along the way its s
     expect(crowd.poses.surfaceY[person], "her seat is the step's top").toBeCloseTo(STEP_3.top, 5);
   });
 
-  // mutation: sed -i 's/^    this.liftWalkers();$/    void 0;/' src/game/ai/civilians/civilian-crowd.ts
   it("when she comes home, then she is at the street's height at the foot, on a tread's height on each step going up, and at the sill's height at the door", () => {
     const { crowd, person } = leaving(new Stoops([HOUSE], [EDGE.from]), true);
     const fromDoor = (metres: number): number => EDGE.length - metres;
@@ -103,7 +97,6 @@ describe("given a resident who walks out of a rowhome's door along the way its s
 });
 
 describe("given a rowhome whose stoop runs out across the sidewalk a resident walks", () => {
-  // mutation: sed -i '/^      if (this.laneWalking\[resident\] === 1 \&\& this.stoops !== null) this.stoops.keepOut(x, z, resident);/d' src/game/ai/civilians/civilian-crowd.ts
   it("when she walks past it on the side of the lane nearest the houses, then she is drawn at least the stoop's run and 0.6 m out from the facade while level with it", () => {
     const yaw = HOUSE_YAW + Math.PI / 2;
     const mid = EDGE.length / 2;
@@ -127,7 +120,6 @@ describe("given a rowhome whose stoop runs out across the sidewalk a resident wa
     expect(level, "steps at which she was level with the stoop").toBeGreaterThan(3);
   });
 
-  // mutation: sed -i 's/^      const need = STOOP.run + KEEP_CLEAR - Math.max(0, across - STOOP.width \/ 2);/      const need = 0;/' src/game/world/openworld/openworld-stoops.ts
   it("when a point on a stoop's middle is kept out, then it lands the stoop's run and 0.6 m out from the facade on the same line across; a point 3 m to the side is not moved", () => {
     const stoops = new Stoops([HOUSE]);
     const cos = detCos(HOUSE.yaw);
@@ -159,7 +151,6 @@ function outAfterOverlayOnStoop(stoops: Stoops | null, marked = false): { out: n
 }
 
 describe("given a resident the law's overlay draws at the middle of a rowhome's stoop", () => {
-  // mutation: sed -i '/^      this.keepOverlaidOut();/d' src/game/ai/civilians/civilian-crowd.ts
   it("when the crowd takes the overlay, then she is drawn the stoop's run and 0.6 m out from the facade", () => {
     expect(outAfterOverlayOnStoop(new Stoops([HOUSE])).out).toBeCloseTo(STOOP.run + 0.6, 3);
   });

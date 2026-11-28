@@ -81,8 +81,6 @@ describe("given a warmed crowd of 300 civilians among eight parked cars", () => 
     expect(untilQuiet(() => readKb(), BOUND_KB), "KB over the run").toBeLessThanOrEqual(BOUND_KB);
   });
 
-  // mutation: sed -i 's/const x = xs\[at\]!;/(globalThis as { kept?: unknown }).kept = new Float32Array(3); const x = xs[at]!;/' src/game/world/openworld/openworld-stoops.ts
-  // mutation: sed -i 's/onSpur\[resident\] === 1) stoops.liftFeet/onSpur[resident] === 2) stoops.liftFeet/' src/game/ai/civilians/civilian-crowd.ts
   it("when every street node is a stoop's door, then walkers cross the steps and the frames still allocate nothing", () => {
     const { nodeX, nodeZ } = buildFixtureMap(EXTRA_HOMES_PER_BLOCK).graph;
     const frontages = Array.from(nodeX, (x, node) => ({ x, z: nodeZ[node]!, yaw: 0, depth: 10, style: "federal" as const, storeys: 3, variant: 0 }));
@@ -105,7 +103,6 @@ describe("given a warmed crowd of 300 civilians among eight parked cars", () => 
     expect(readKb(() => Array.from({ length: CONTROL_VECTORS }, makeVectors)), "KB over the run").toBeGreaterThan(BOUND_KB);
   });
 
-  // mutation: sed -i 's/    this.authority = authority;/    this.authority = authority; for (let spin = 0; spin < 100000; spin++) this.seconds += 1e-30;/' src/game/ai/civilians/civilian-crowd.ts
   it(`when it steps, then a frame's step costs under ${BOUND_RATIO} yardsticks on average`, () => {
     untilQuiet(() => readKb(), BOUND_KB);
     startNextTick();
@@ -154,7 +151,6 @@ describe("given 300 civilians of the city's map in its bars, shops and coffee sh
     }
   });
 
-  // mutation: sed -i 's/^  const table = spotTable(state, place);/  const table = spotTable(state, place); (globalThis as { kept?: unknown }).kept = new Float32Array(3);/' src/game/ai/civilians/society-aisle.ts
   it("when everyone in a room is read every frame for 300 frames, walking, buying, sitting and leaving, then the reads allocate nothing (the profiler's own cost is under the bound)", () => {
     let walking = 0;
     const kb = untilQuiet(() => allocatedBytes(() => {

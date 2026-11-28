@@ -151,7 +151,6 @@ describe("given a prop on a course, solid (palm, wall, dumpster) or knockable (c
     describe(`given a ${prefab} (${PREFABS[prefab].body}) on the ${id} course and a sedan at 8 m/s with its front-right corner aimed at the prop's middle`, () => {
       const hit = (low: number, pitch = 0, fromFoot = false) => strike(course(id), prefab, low, pitch, fromFoot);
 
-      // mutation: sed -i 's/ || _span.low >= P\[o + PR_TOP\]!//' src/game/contact/prop-contact.ts  (a prop ignores height: the 0.5 m pass touches)
       it("when its lowest point is 0.5 m above the prop's top, then it passes over untouched, with no push and no lost speed", () => {
         const { car, v, touched } = hit(0.5);
         expect(touched, "no contact").toBe(false);
@@ -166,7 +165,6 @@ describe("given a prop on a course, solid (palm, wall, dumpster) or knockable (c
         expect(hit(0, 0, true).touched).toBe(true);
       });
 
-      // mutation: sed -i 's/  k.w.race.resetProps();//' src/game/engine/prop-height.test.ts  (the crate and cone stay knocked from the row before: the level car at the tilted car's height touches)
       it(`when it is nose down ${NOSE_DOWN_DEGREES}° with its centre ${CENTRE_OVER} m over the top, more than 0.2 m, but its front underside corner under it, then it hits the prop, while a level car at that centre height passes`, () => {
         const probe = hit(0, NOSE_DOWN);
         const reach = probe.car.group.position.y - probe.k.top(probe.c);
@@ -432,7 +430,6 @@ describe("given the race worlds built once for the file and used by every row ab
   const stateOf = (car: DeformableCar): number[] => [...car.velocity.toArray(), ...car.angular.toArray(), ...car.group.position.toArray(), ...car.group.quaternion.toArray(), ...car.cage.fields.pos];
   const SCENARIOS = [[0.5, 0, false], [-0.2, 0, false], [0, 0, true], [0, NOSE_DOWN, false]] as const;
 
-  // mutation: sed -i 's/  k.hits.length = 0;//' src/game/engine/prop-height.test.ts  (the hits of the rows before stay in the shared world's count)
   for (const [id, prefabs] of [["havana", ["palm", "wall", "dumpster"]], ["city", ["crate", "cone"]]] as const) {
     it(`when the ${id} world is built again, then the contacts and flights run on it give the same bits as on the shared one: the car's velocity, spin, pose and cage, the hit count and the knocks`, () => {
       const fresh = load(id);

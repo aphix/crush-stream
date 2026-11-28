@@ -172,7 +172,6 @@ describe("given two customers standing in a crowded room, one shuffling straight
   /** She shuffles at this pace (m/s) with no velocity of her own (as a customer edging in a queue): they are pushed straight apart, along a line that turns as she passes. */
   const SHUFFLE = 0.1;
 
-  // mutation: sed -i 's/^export const OFFSET_SPEED = 1.4;/export const OFFSET_SPEED = 1e9;/' src/game/ai/civilians/civilian-crowd-constants.ts
   it("when each frame is resolved with the crowd's clock, then neither is drawn moving more than a walk step a frame off her own spot as the one passes the other's middle, and they never overlap", () => {
     const separation = new CrowdSeparation(2);
     let most = 0;

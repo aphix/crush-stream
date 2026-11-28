@@ -37,7 +37,6 @@ function loggedPairs(crowd: CivilianCrowd): string[] {
 }
 
 describe("given a host crowd with the bodega's dog", () => {
-  // mutation: sed -i 's/        placeAnimal(state, resident, seconds, pose, this.poses, this.separation);//' src/game/ai/civilians/civilian-crowd.ts
   it("when it rests at its place, then it is shown at the bodega's door, a dog by its look word", () => {
     const { crowd } = hostCrowd();
     const dog = shownResident(crowd, SPECIES.dog);
@@ -48,8 +47,6 @@ describe("given a host crowd with the bodega's dog", () => {
     expect(crowd.isAnimal(dog), "an animal").toBe(true);
   });
 
-  // mutation: sed -i 's/        if (near \&\& runsDown(car, spotX, spotZ, spotY))/        if (!animal \&\& near \&\& runsDown(car, spotX, spotZ, spotY))/' src/game/ai/civilians/civilian-crowd.ts
-  // mutation: sed -i 's/this.isAnimal(resident) ? Infinity : seconds + AMBULANCE_DELAY_SECONDS/seconds + AMBULANCE_DELAY_SECONDS/' src/game/ai/civilians/civilian-crowd.ts
   it("when a car drives into it, then it is knocked down by the host's hit rule, hidden, its knock in the log, and nobody calls it an ambulance", () => {
     const start = hostCrowd();
     const crowd = start.crowd;
@@ -73,8 +70,6 @@ describe("given a host crowd with the bodega's dog", () => {
     expect(loggedPairs(crowd), "no ambulance").not.toContain(`${EVENT_KIND.ambulance}:${dog}`);
   });
 
-  // mutation: sed -i 's/    const toY = poses.feetY\[resident\]! + (poses.look\[resident\]! >>> LOOK.speciesShift === SPECIES.person ? CHEST_HEIGHT : ANIMAL_CHEST_HEIGHT) - ray.eyeY;/    const toY = poses.feetY[resident]! + CHEST_HEIGHT - ray.eyeY;/' src/game/ai/civilians/civilian-look.ts
-  // mutation: sed -i 's/    const py = poses.feetY\[figure\]! + (poses.look\[figure\]! >>> LOOK.speciesShift === SPECIES.person ? CHEST_HEIGHT : ANIMAL_CHEST_HEIGHT) - ray.eyeY;/    const py = poses.feetY[figure]! + CHEST_HEIGHT - ray.eyeY;/' src/game/ai/civilians/civilian-look.ts
   it("when the eye looks level through its body from the street, then the look panel names it and a bullet's ray meets it; a ray 1.1 m above does neither", () => {
     const { crowd } = hostCrowd();
     const dog = shownResident(crowd, SPECIES.dog);

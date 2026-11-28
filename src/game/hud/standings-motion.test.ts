@@ -79,12 +79,10 @@ describe("given the rows a standings list was measured with", () => {
     expect(rowsUnmoved(stood, [a, b])).toBe(true);
   });
 
-  // mutation: sed -i 's/before\[i\]!.el !== now\[i\] || //' src/game/hud/standings-motion.ts
   it("when two rows pass each other, then they are measured again", () => {
     expect(rowsUnmoved(stood, [b, a])).toBe(false);
   });
 
-  // mutation: sed -i 's/ || before\[i\]!.cls !== now\[i\]!.className//' src/game/hud/standings-motion.ts
   it("when a row's classes change (a phone row hidden), then they are measured again", () => {
     const c = li("y");
     const before = [{ el: a, cls: "x" }, { el: c, cls: "y" }];
@@ -92,7 +90,6 @@ describe("given the rows a standings list was measured with", () => {
     expect(rowsUnmoved(before, [a, c])).toBe(false);
   });
 
-  // mutation: sed -i 's/before.length !== now.length/false/' src/game/hud/standings-motion.ts
   it("when a row arrives or leaves, then they are measured again", () => {
     expect(rowsUnmoved(stood, [a])).toBe(false);
     expect(rowsUnmoved(stood, [a, b, li("z")])).toBe(false);

@@ -28,7 +28,6 @@ beforeEach(() => {
 afterAll(() => rig.dispose());
 
 describe("given the real engine in the open world, its player on foot", () => {
-  // mutation: sed -i 's/, Digit0: "hook"//' src/game/engine/engine-onfoot-arms.ts
   it("when 0 is pressed on foot in the open world, then the weapon in hand is the hook, the HUD names it and the tether is on offer; at the wheel it is not", () => {
     rig.getOut();
     rig.press("Digit0");
@@ -41,7 +40,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(rig.engine.tether.hud(), "at the wheel").toBe(null);
   });
 
-  // mutation: sed -i '/^      this.host.hook();/d' src/game/engine/engine-onfoot-arms.ts
   it("when fire is pressed with the hook in hand, then the tether takes one fire; with the pistol in hand it takes none", () => {
     rig.getOut();
     const fired = vi.spyOn(rig.engine.tether, "fire");
@@ -56,7 +54,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     fired.mockRestore();
   });
 
-  // mutation: sed -i '/^    if (!this.host.afoot()) this.cutFor(local);/d' src/game/engine/engine-tether.ts
   it("when he gets back into his car with a cable out, then no cable is left", () => {
     rig.getOut();
     const tethers = rig.engine["world"].tethers;
@@ -73,7 +70,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(tethers.count, "at the wheel").toBe(0);
   });
 
-  // mutation: sed -i 's/    if (doll === undefined || !doll.live) return false;/    if (doll === undefined || !doll.live || doll.driven) return false;/' src/game/present/ragdoll-ropes.ts
   it("when he hooks a man standing 4 m ahead and then the ground 6 m to his side, then the cable's end stays on the man, and reeling drags him at least 2 m", () => {
     rig.getOut();
     rig.press("Digit0");

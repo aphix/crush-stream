@@ -535,7 +535,6 @@ describe("given a terrain material patched with the mottle shader", () => {
   });
 
   it("when a road or run-off strip of the same natural surface is patched, then it takes the same wide-scale tint as the ground beside it, and a paved strip takes none", () => {
-    // mutation: sed -i 's/  if (PAVED_MATERIALS.includes(material.userData.materialClass as MaterialId)) return;/  return;/' src/game/present/track-mesh.ts  (no strip takes the tint)
     const strip = (surface: keyof typeof SURFACES) => {
       const material = tagMaterial(new THREE.MeshStandardMaterial(), SURFACES[surface].ribbon);
       applyMacro(material);
@@ -560,7 +559,6 @@ describe("given the National Mall, whose lawns are painted on a concrete terrain
     { name: "far", mesher: t.chunks.coarse },
   ] as const;
   for (const { name, mesher } of meshes) {
-    // mutation: sed -i '/^    oneClassATriangle(m, fineAt\[c \* 2 + 1\]!, terrainClass);/d' src/game/present/track-ground.ts
     it(`when its ${name} mesh is built, then a triangle coloured grass at every corner takes the grass patch's id, one coloured concrete at every corner the concrete terrain's, and one on a lawn's edge the lawn's, so the lawn takes no concrete's shine or detail`, () => {
       expect(mesher.cls?.length, "an id per vertex").toBe(mesher.pos.length / 3);
       const grass = SURFACE_IDS.indexOf("grass");
@@ -593,7 +591,6 @@ describe("given the National Mall, whose lawns are painted on a concrete terrain
 });
 
 describe("given the open world, whose park paths and lawns are painted on one terrain mesh", () => {
-  // mutation: sed -i 's/(id === terrainClass ? 0 : MATERIALS\[id\]!\[1\] === MAT.SOIL ? 1 : 2) \* 1000 + id/id/' src/game/present/track-ground.ts
   it("when its near and far meshes are built, then every triangle's three corners carry one material id, and the triangles at the park path's vertex (20, 0) are shaded as the path's cobble", () => {
     const t = terrainOf("openworld");
     const cobble = cellMaterial(SURFACE_IDS.indexOf("cobble"), t.terrainSurface);
@@ -649,7 +646,6 @@ describe("given a classed mesher cut into draw cells", () => {
 });
 
 describe("given a course's terrain built once for the file and read by every row above", () => {
-  // mutation: sed -i 's/      near.computeBoundingBox();/      near.computeBoundingBox();\n      m.pos[0] += 1;/' src/game/present/track-ground.ts  (the camera row's batch moves the shared mesh)
   for (const course of ["four-count", "national-mall"]) {
     it(`when ${course}'s terrain is built again from a fresh Track, then both have the same meshes, chunks and ground, and every reading the rows above take of them is the same, bit for bit`, () => {
       const shared = terrainOf(course);

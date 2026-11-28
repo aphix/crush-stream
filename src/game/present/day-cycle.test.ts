@@ -23,7 +23,6 @@ const channels = (grade: DayGrade): number[] => [grade.night, grade.warm, grade.
 const tipAt = (height: number, elevation: number): number => height / Math.tan(elevation);
 
 describe("given the day's grade by the game hour", () => {
-  // mutation: sed -i 's/const DUSK = { from: 17.5, to: 20 } as const;/const DUSK = { from: 17.5, to: 17.6 } as const;/' src/game/present/day-cycle.ts
   it("when the grade is read every game minute round the clock, then no channel moves more than a fade's step and each stays between 0 and 1", () => {
     const grade = makeDayGrade();
     let before = channels(dayGradeAt(0, grade));
@@ -39,7 +38,6 @@ describe("given the day's grade by the game hour", () => {
     expect(worst, "the largest change of any channel in one game minute").toBeLessThanOrEqual(STEP_MAX);
   });
 
-  // mutation: sed -i 's/const SUN_UP = { rise: 6, set: 18 } as const;/const SUN_UP = { rise: 6, set: 6.5 } as const;/' src/game/present/day-cycle.ts
   it("when noon, dusk and midnight are read, then noon is bright and plain, dusk warm and half dark with the lamps coming on, midnight dark with the lamps full", () => {
     const grade = makeDayGrade();
     const noon = { ...dayGradeAt(12, grade) };
@@ -59,7 +57,6 @@ describe("given the day's grade by the game hour", () => {
     expect(midnight.sunHeight, "midnight's sun").toBe(0);
   });
 
-  // mutation: sed -i 's/  const h = wrapHour(hour);/  const h = hour;/' src/game/present/day-cycle.ts
   it("when an hour past the day's end or before its start is read, then it is the same hour of another day", () => {
     const grade = makeDayGrade();
     for (const hour of [0.5, 6.25, 12, 18.75, 23.9]) {
@@ -70,7 +67,6 @@ describe("given the day's grade by the game hour", () => {
     expect(wrapHour(25.5), "an hour past the day").toBe(1.5);
   });
 
-  // mutation: sed -i 's/const LAMPS_ON = { from: 0.35, to: 0.85 } as const;/const LAMPS_ON = { from: 0.05, to: 0.1 } as const;/' src/game/present/day-cycle.ts
   it("when the evening is read, then the lamps come on after the light has begun to go and are full before the night is", () => {
     const grade = makeDayGrade();
     const first = (test: (g: DayGrade) => boolean): number => {
@@ -91,7 +87,6 @@ describe("given the light's hops", () => {
   /** The elevation of the light at an hour as the stage has it: the sun's arc and the moon, the day's 58.6 degrees, the evening's lowest 12. */
   const elevationAt = (hour: number, grade: DayGrade): number => lightElevation(dayGradeAt(hour, grade), LOWEST, HIGHEST, MOON);
 
-  // mutation: sed -i 's/export const SUN_HOP_METRES = 0.3;/export const SUN_HOP_METRES = 0.001;/' src/game/present/day-cycle.ts
   it("when a game day is run minute by minute, then the light hops a few hundred times, never farther than its tolerance, and never leaves the tip within a hop of the truth", () => {
     const grade = makeDayGrade();
     let applied = elevationAt(0, grade);

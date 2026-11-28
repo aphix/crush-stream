@@ -40,7 +40,6 @@ async function shoulderEye(boxes: readonly FloorBox[]): Promise<THREE.Vector3> {
 }
 
 describe("given the walker standing with a wall streamed in beside his right shoulder", () => {
-  // mutation: sed -i 's/return hit === null ? length : Math.min(length, hit.time_of_impact);/return length;/' src/game/present/ragdoll-throw.ts
   it("when the shoulder camera is placed, then its eye stands out of the wall by its ball, where with no wall it would stand inside it", async () => {
     const open = await shoulderEye([]);
     expect(open.x, `with no wall the eye is out at the shoulder: x ${open.x.toFixed(2)}`).toBeLessThan(WALL_FACE_X);

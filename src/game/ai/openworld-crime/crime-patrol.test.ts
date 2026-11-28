@@ -38,7 +38,6 @@ const CAREFUL_SEED = seedWhere((seed) => crimeDraw(seed, CRIME_STREAM.hothead, 0
 const HOTHEAD_SEED = seedWhere((seed) => crimeDraw(seed, CRIME_STREAM.hothead, 0, 0), HOTHEAD_RUN_SHARE, true);
 
 describe("patrol cars mostly drive like city police", () => {
-  // mutation: in src/game/ai/openworld-crime/crime-constants.ts, change `HOTHEAD_RUN_SHARE = 0.2` to `HOTHEAD_RUN_SHARE = 1`
   it("make a hothead's run straight at the scene about one time in five, seeded, and hand every other run to the traffic's trip along the streets", () => {
     const street = new FakeStreet();
     const patrol = new PatrolCars(street, NO_HOOKS, null, 12, CAREFUL_SEED);
@@ -59,7 +58,6 @@ describe("patrol cars mostly drive like city police", () => {
     expect(hotheads, "not all").toBeLessThan(RUNS);
   });
 
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts stepToScene(), change `this.ports.arrived(this.handle[slot]!) ||` to `false &&`
   it("on a careful run, drive the traffic's trip to the kerb nearest the scene, and the cop steps out there", () => {
     const run = harness([0, 0, 0], { withCars: true, seed: CAREFUL_SEED });
     run.street!.leaseAt = { x: 20, z: -40, yaw: 0 };
@@ -95,7 +93,6 @@ describe("closing on a car it chases", () => {
     return fastestClose;
   }
 
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts driveSlot(), change `const cap = this.hothead[slot] === 0 ? Math.sqrt(CAREFUL_PURSUIT_SPEED * CAREFUL_PURSUIT_SPEED + 2 * CAR_STOP_DECEL * beyond) : Infinity;` to `const cap = Infinity;`
   it("a careful car takes the wheel at a street's pace for the last metres, a hothead is at it at full speed", () => {
     expect(closeChase(CAREFUL_SEED), "careful").toBeLessThanOrEqual(CAREFUL_PURSUIT_SPEED + BRAKE_LATCH);
     expect(closeChase(HOTHEAD_SEED), "hothead").toBeGreaterThan(CAREFUL_PURSUIT_SPEED + BRAKE_LATCH);
@@ -113,7 +110,6 @@ describe("a careful chase follows the streets", () => {
     return { run, street, runner };
   }
 
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts followStreets(), delete the line `if (seconds < this.redirectAt[slot]! && !this.ports.arrived(handle)) return;`
   it("re-aims its street trip every few seconds at the kerb nearest where the offender will be", () => {
     const { run, street } = chase();
     expect(street.drivers[PATROL_CAR_INDEX], "the traffic drives it").toBeNull();
@@ -129,7 +125,6 @@ describe("a careful chase follows the streets", () => {
     expect(street.drivers[PATROL_CAR_INDEX], "still the traffic's trip").toBeNull();
   });
 
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts followStreets(), change `if (arrived && gap <= CLOSE_PURSUIT_DISTANCE && gap > BUST.near) {` to `if (arrived && gap <= 0) {`
   it("takes the wheel for the last metres once its street trip has stopped short of an offender that left the road, and hands it back to the traffic once the offender is far off again", () => {
     const { run, street, runner } = chase();
     street.kerbOffset = OFF_ROAD_GAP;
@@ -142,7 +137,6 @@ describe("a careful chase follows the streets", () => {
     expect(street.drivers[PATROL_CAR_INDEX], "the traffic drives the trip again").toBeNull();
   });
 
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts followStreets(), delete the line `if (arrived && gap <= BUST.near) return;`
   it("stays parked at its kerb while it is within bust range of the offender, the hold running, and does not take the wheel", () => {
     const { run, street } = chase();
     runFor(run, 25);
@@ -152,7 +146,6 @@ describe("a careful chase follows the streets", () => {
 });
 
 describe("a chased traffic car runs from the patrol car", () => {
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts stepPursuit(), delete the line `if (this.yieldState[slot] === YIELD.none) this.ports.evade(this.targetCar[slot]!, this.handle[slot]!);`
   it("is told which patrol car chases it from the start of the chase", () => {
     const run = harness([40, 0, 0], { withCars: true, seed: CAREFUL_SEED });
     const street = run.street!;
@@ -163,7 +156,6 @@ describe("a chased traffic car runs from the patrol car", () => {
     expect(street.evading[runner], "chased by the patrol car").toBe(PATROL_CAR_INDEX);
   });
 
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts linger(), delete the line `if (this.targetCar[slot]! >= 0) this.ports.endEvade(this.targetCar[slot]!);`
   it("is let go to drive as traffic when the chase is given up", () => {
     const run = harness([40, 0, 0], { withCars: true, seed: CAREFUL_SEED });
     const street = run.street!;
@@ -180,7 +172,6 @@ describe("a chased traffic car runs from the patrol car", () => {
 });
 
 describe("a patrol car brakes for a car in its way", () => {
-  // mutation: in src/game/ai/openworld-crime/pursuit-driver.ts drive(), change `Math.min(turnSpeed, stopSpeed, maxSpeed, this.carLimit(self, others, targetId))` to `Math.min(turnSpeed, stopSpeed, maxSpeed)`
   it("stops short of a car standing on its line instead of driving into it", () => {
     const run = harness([0, 0, 0], { withCars: true, seed: HOTHEAD_SEED });
     const street = run.street!;
@@ -211,7 +202,6 @@ describe("the pursuit strip counts what chases the player's car", () => {
   }
   const BUST_HOLD_SECONDS = 12;
 
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts chaseOf(), change `cops++;` to `cops += 0;`
   it("says nothing while no patrol car chases it and counts the cars once one does", () => {
     const { run, player } = playerChase();
     const strip = { cops: 0, hold: 0, left: 0 };
@@ -222,7 +212,6 @@ describe("the pursuit strip counts what chases the player's car", () => {
     expect(strip.left, "all of Survival's hold ahead").toBe(BUST_HOLD_SECONDS);
   });
 
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts holdSlow(), change `slow && gap <= BUST.near ? this.heldFor[slot]! + dt : 0` to `slow && gap <= BUST.near ? this.heldFor[slot]! + dt : this.heldFor[slot]!`
   it("fills the hold while a patrol car has it held slow beside it, and drains it the moment it drives off", () => {
     const { run, street, player } = playerChase();
     const strip = { cops: 0, hold: 0, left: 0 };
@@ -237,7 +226,6 @@ describe("the pursuit strip counts what chases the player's car", () => {
     expect(strip.left, "and starts again from all of it").toBe(BUST_HOLD_SECONDS);
   });
 
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts bust(), delete the line `this.linger(slot, seconds, IMPOUND_SECONDS);`
   it("ends with the bust: no strip once the player is busted, and the engine was told", () => {
     const { run, player } = playerChase();
     const strip = { cops: 0, hold: 0, left: 0 };
@@ -252,7 +240,6 @@ describe("given a hothead's patrol car at 19 m/s with a street tree 12 m down it
   const TREE: PropCollider = { index: 0, prefab: "tree", body: "solid", x: 0, z: 12, yaw: 0, kind: "circle", r: 0.13, hx: 0.13, hz: 0.13, mass: 0, base: 0, top: 0.77, ends: 3 };
   const SPEED = 19;
 
-  // mutation: sed -i 's/, this.solidLimit(self, speed));/);/' src/game/ai/openworld-crime/pursuit-driver.ts
   it("when it drives at the scene, then it brakes for the tree while it turns: a hothead's run met a tree at 19 m/s and threw its driver", () => {
     const driver = new PursuitDriver(new Obstacles([TREE]));
     const self = { ...blankAiCar(0), vz: SPEED };

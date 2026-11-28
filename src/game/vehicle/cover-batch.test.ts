@@ -162,7 +162,6 @@ describe("given a far car whose parts a shared batch draws in two lanes (paint a
 });
 
 describe("given a shared batch that has covered two far cars and one of them comes back near", () => {
-  // mutation: sed -i '/^    if (stale) this.pack();/d' src/game/vehicle/cover-batch.ts
   test("when it draws, then its index run holds the car left far and no other: its vertices only, and the seed", () => {
     const { batch, car, draw } = stage();
     const left = car(FAR);

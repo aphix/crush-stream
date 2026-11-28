@@ -122,7 +122,6 @@ function run(w: World, traffic: OpenWorldTraffic, step: (clock: number) => void,
 }
 
 describe("given a patrol car sent across a block of the open world's course", () => {
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts begin(), change `this.ports.setDriver(handle, this.wheel[slot] === 1 ? this.drivers[slot]! : null);` to `this.ports.setDriver(handle, this.drivers[slot]!);`
   it("when it drives, then it follows the streets to the kerb nearest the scene without touching a solid prop, within the urgent pace, and its cop steps out there", () => {
     const { w, traffic, colliders } = openWorldLobby(2, 1);
     let leased: DrivenCar | null = null;
@@ -154,7 +153,6 @@ describe("given a patrol car sent across a block of the open world's course", ()
     expect(fastest, "its fastest pace").toBeLessThan(URGENT_SPEED + URGENT_SLACK);
   });
 
-  // mutation: in src/game/ai/openworld-traffic/traffic-driver.ts think(), delete the line `target = Math.min(target, this.turnLimit(route, arc));`
   it("when its trip turns a corner, then its speed through the curve stays within the street's turn limit", () => {
     const { w, traffic } = openWorldLobby(2, 1);
     const handle = traffic.spawnDrivenCar(-1, turnFromSpot, turnToSpot, { urgent: true });

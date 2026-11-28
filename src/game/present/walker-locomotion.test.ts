@@ -56,7 +56,6 @@ describe("given a walker standing still", () => {
     });
   }
 
-  // mutation: sed -i 's/^const JERK = 175;/const JERK = 1e9;/' src/game/present/walker-locomotion.ts
   it("when he is asked to run from a stand, sampled at 240 Hz for a second, then his acceleration never changes faster than the jerk limit and starts from nothing", () => {
     const SUB = FRAME / 4;
     const loco = new Locomotion();
@@ -70,7 +69,6 @@ describe("given a walker standing still", () => {
     }
   });
 
-  // mutation: sed -i 's/^const ACCEL_TO_RUN = 12;/const ACCEL_TO_RUN = 6;/' src/game/present/walker-locomotion.ts
   it("when he is asked to run from a stand, sampled at 240 Hz for a second, then his acceleration peaks at the push rate of 12 m/s² and he is at 3.5 m/s", () => {
     const SUB = FRAME / 4;
     const loco = new Locomotion();
@@ -149,7 +147,6 @@ describe("given a walker sprinting along +z", () => {
 });
 
 describe("given a heading error that rises past the pivot threshold and falls back", () => {
-  // mutation: sed -i 's/^const SLOW_TURN_LOSS = 0.3;/const SLOW_TURN_LOSS = 0;/' src/game/present/walker-locomotion.ts
   it("when the error is held at 1.5 rad for a second and then at 1.2 rad for a second, then he runs at the speed 1.2 rad asks for, as when it only rose to 1.2: no band holds the pivot's", () => {
     const hold = (legs: readonly (readonly [error: number, frames: number])[]): number => {
       const loco = atSpeed(RUN_SPEED);
@@ -175,11 +172,9 @@ describe("given a walker at each speed", () => {
 describe("given the target speed against the heading error", () => {
   /** The target speed at heading error `e` for a sprint. */
   const target = (e: number) => new Locomotion()["targetSpeed"](SPRINT_SPEED, e);
-  // mutation: sed -i 's/const turning = curve + (pivot - curve) \* Math.max(0, Math.min(1, (aError - PIVOT_IN) \/ PIVOT_RAMP));/const turning = aError > PIVOT_IN ? pivot : curve;/' src/game/present/walker-locomotion.ts
   it("when the error crosses the pivot edge, then the target moves by under 0.05 m/s", () => {
     expect(Math.abs(target(1.301) - target(1.299)), "jump at the pivot edge").toBeLessThan(0.05);
   });
-  // mutation: sed -i 's/return turning \* Math.max(0, Math.min(1, 1 - (aError - STOP_IN) \/ STOP_FADE));/return aError > STOP_IN ? 0 : turning;/' src/game/present/walker-locomotion.ts
   it("when the error crosses the stop edge and the fade's end, then the target moves by under 0.05 m/s and is 0 beyond", () => {
     expect(Math.abs(target(2.101) - target(2.099)), "jump at the stop edge").toBeLessThan(0.05);
     expect(Math.abs(target(2.401) - target(2.399)), "jump where the fade ends").toBeLessThan(0.05);

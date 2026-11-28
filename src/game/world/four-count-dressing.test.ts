@@ -32,7 +32,6 @@ const WOODS_EDGE_REACH = 15;
 const WOODS_DRAWN_TREES_MIN = 60;
 
 describe("given Four-Count's four zones", () => {
-  // mutation: sed -i 's/"biome": "city"/"biome": "park"/' src/game/world/tracks/four-count.json
   it("when a point inside each zone is read, then its biome is the zone's: circuit bowl, city blocks, desert canyon, park woods", () => {
     const biome = biomeLookup(track);
     expect(biome(-280, 520), "the bowl's infield").toBe("circuit");
@@ -43,7 +42,6 @@ describe("given Four-Count's four zones", () => {
     expect(biome(-300, 200), "the woods in the west infield").toBe("park");
   });
 
-  // mutation: sed -i 's/"prefab": "building"/"prefab": "crate"/' src/game/world/tracks/four-count.json
   it("when the props are placed, then the city holds a lot grid of buildings and each facade stands back from every road past its sidewalk", () => {
     const buildings = placed.filter((p) => p.prefab === PREFAB.building && within(p, CITY));
     expect(buildings.length, "buildings in the city box").toBeGreaterThanOrEqual(250);
@@ -55,7 +53,6 @@ describe("given Four-Count's four zones", () => {
     }
   });
 
-  // mutation: sed -i 's/"verge": 3/"verge": 1/' src/game/world/tracks/four-count.json
   it("when the woods are placed, then the few authored trees and rocks stand on a road's open edge and the zone's forest is the scenery service's drawn trees", () => {
     const edge = propRows.filter((p) => (p.prefab === PREFAB.tree || p.prefab === PREFAB.rock) && WOODS.some((b) => within(p, b)));
     expect(edge.length, "authored solid trees and rocks in the woods").toBeGreaterThanOrEqual(WOODS_EDGE_MIN);
@@ -65,18 +62,15 @@ describe("given Four-Count's four zones", () => {
     expect(drawnTrees.length, "trees the scenery service draws in the woods").toBeGreaterThanOrEqual(WOODS_DRAWN_TREES_MIN);
   });
 
-  // mutation: sed -i 's/"prefab": "grandstand"/"prefab": "crate"/' src/game/world/tracks/four-count.json
   it("when the props are placed, then the bowl has a ring of stands round its infield", () => {
     expect(countIn(PREFAB.grandstand, [BOWL]), "stands in the bowl").toBeGreaterThanOrEqual(12);
   });
 
-  // mutation: sed -i 's/"off": \["trackside"\]/"off": []/' src/game/world/tracks/four-count.json
   it("when the scenery is drawn, then no parked cars stand behind the bowl's stands (each is a multi-part draw the budget has no room for)", () => {
     const parked = new Set<string>(PARKED_CARS.map((c) => c.prefab));
     expect(course.drawn.filter((p) => parked.has(p.prefab)).length, "parked cars drawn").toBe(0);
   });
 
-  // mutation: sed -i '/"halfX": /s/"height": [0-9]*/"height": 1/' src/game/world/tracks/four-count.json
   it("when the canyon's ground is read, then each mesa stands at its height, its foot keeps off every road, and boulders stand in the gaps", () => {
     const { plateaus } = track.json.environment;
     expect(plateaus.length, "mesas").toBeGreaterThanOrEqual(8);

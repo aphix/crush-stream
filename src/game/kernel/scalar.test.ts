@@ -9,7 +9,6 @@ describe("given an object built with several kinds of field and one read-only fi
     return o;
   };
 
-  // mutation: sed -i '/^    fields\[key\] = value;/d' src/game/kernel/scalar.ts
   it("when its fields are generalized, then every value is as it was, the same object stays the same object, and the read-only field is untouched", () => {
     const o = build();
     const list = o.list;
@@ -23,7 +22,6 @@ describe("given an object built with several kinds of field and one read-only fi
     expect(o.fixed, "fixed").toBe(7);
   });
 
-  // mutation: sed -i 's/^    if (own === undefined || !("value" in own) || own.writable !== true) continue;/    if (own === undefined) continue;/' src/game/kernel/scalar.ts
   it("when a getter-backed own field is met, then it is not written as a plain field", () => {
     const writes: unknown[] = [];
     const o = {};
@@ -40,7 +38,6 @@ describe("given an object with a number field that a loop later writes fractions
     for (let i = 0; i < STORES; i++) o.speed = i * 0.37 + 0.1;
   };
 
-  // mutation: sed -i 's/? 0.5 : undefined;/? undefined : undefined;/' src/game/kernel/scalar.ts
   it("when its fields are generalized, then storing fractions in the number field allocates nothing: it is still a raw double, not a tagged field that boxes every store", () => {
     const o = { speed: 0 };
     generalizeFields(o);

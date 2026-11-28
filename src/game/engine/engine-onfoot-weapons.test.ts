@@ -56,7 +56,6 @@ beforeEach(() => {
 afterAll(() => rig.dispose());
 
 describe("given the real engine in the open world, its player on foot", () => {
-  // mutation: sed -i 's/^  pistol: { name: "Pistol", speed: 6,/  pistol: { name: "Pistol", speed: 0,/' src/game/engine/engine-onfoot-arms.ts
   it("when the pistol's ray meets a standing dummy 8 m off, then his torso leaves at 4 m/s or more along the shot and he is limp", () => {
     rig.getOut();
     const torso = rig.torso();
@@ -79,7 +78,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(doll.vel[0]! * dirX + doll.vel[2]! * dirZ, "his torso's speed along the shot (m/s)").toBeGreaterThanOrEqual(4);
   });
 
-  // mutation: sed -i '/^      car.hitGlass(pick.pane);/d' src/game/engine/engine-openworld.ts
   it("when the shotgun's rays meet a kerb car's side window 6 m off, then the car is moving along the shot and that pane is cracked or shattered", () => {
     rig.getOut();
     const torso = rig.torso();
@@ -103,7 +101,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(pane.state, `pane ${pane.name}`).not.toBe("intact");
   });
 
-  // mutation: sed -i 's/^    _carHit.find(this.raycaster, _carGroups);/    _carHit.find(this.raycaster, cars.map((car) => car.group));/' src/game/engine/engine.ts
   it("when two shots are picked against the cars, then the nearest-hit search is handed one list of every live car's group, the same list both times, and the pick names the car and the pane hit", () => {
     rig.getOut();
     const torso = rig.torso();
@@ -137,7 +134,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(out.pane, "the pane picked").toBe(pane.name);
   });
 
-  // mutation: sed -i '/^    this.resolver.shotFired();/d' src/game/engine/engine-openworld-acts.ts
   it("when he fires any gun, then the police chase opens, seen or not", () => {
     // 10 m on along the street from where the car stands: getting out where it stands is a walk on a crossing against the signal, a chase of its own.
     const car = rig.cars()[0]!.group.position;
@@ -152,7 +148,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(scene.footChaseOf({ cops: 0, hold: 0, left: 0 }), "the chase").toBe(true);
   });
 
-  // mutation: sed -i 's/every: 0.12, auto: true,/every: 0.12, auto: false,/' src/game/engine/engine-onfoot-arms.ts
   it("when he holds fire for a second with the rifle and aim held, then 8 or 9 shots are fired; with the pistol held the same way, one", () => {
     rig.getOut();
     const fired = vi.spyOn(rig.engine["openWorld"], "shotFired");
@@ -177,7 +172,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     }
   });
 
-  // mutation: sed -i 's/^      arms: this.arms.hud(),/      arms: null,/' src/game/engine/engine-onfoot.ts
   it("when 2 is pressed on foot in the open world, then the HUD's weapon reads Pistol; LB steps back to Fists and RB on to Shotgun", () => {
     rig.getOut();
     const onFoot = rig.engine["onFoot"];
@@ -190,7 +184,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(onFoot.hud()!.arms, "after RB twice").toEqual({ slot: 2, name: "Shotgun" });
   });
 
-  // mutation: sed -i 's/^    if (this.armed() \&\& this.arms.key(e.code)) return true;/    if (this.arms.key(e.code)) return true;/' src/game/engine/engine-onfoot.ts
   it("when a digit is pressed at the wheel, then no weapon is taken: the weapon in hand stays fists", () => {
     rig.sit(0);
     rig.press("Digit3");

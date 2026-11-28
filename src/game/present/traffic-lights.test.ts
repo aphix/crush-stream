@@ -39,7 +39,6 @@ describe("given the open world's signal poles", () => {
   }
 
   it("when they are drawn, then every head has a SPEED LIMIT and a NO TURN ON RED plate facing the traffic it faces, both over a walker's head", () => {
-    // mutation: sed -i 's/const plateTurn = Math.atan2(faceX, faceZ);/const plateTurn = Math.atan2(-faceX, -faceZ);/' src/game/present/traffic-lights.ts
     const art = new TrafficLightArt(network);
     expect(art.speedSigns.count).toBe(art.heads);
     expect(art.noTurnSigns.count).toBe(art.heads);
@@ -58,7 +57,6 @@ describe("given the open world's signal poles", () => {
   });
 
   it("when the plates are painted, then one reads SPEED LIMIT 25 and the other NO TURN ON RED", () => {
-    // mutation: sed -i 's/export const SPEED_LIMIT_MPH = 25;/export const SPEED_LIMIT_MPH = 35;/' src/game/present/traffic-lights.ts
     painted.length = 0;
     paintRegulatorySigns(context as CanvasRenderingContext2D);
     expect(painted.join(" ")).toBe(`SPEED LIMIT ${SPEED_LIMIT_MPH} NO TURN ON RED`);

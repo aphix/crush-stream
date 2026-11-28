@@ -106,7 +106,6 @@ const halfSteer: readonly { it: string; thumbs: Thumbs }[] = [
 ];
 
 describe("given each touch scheme's steering at half its travel", () => {
-  // mutation: sed -i 's/^  if (Math.abs(t.x) > Math.abs(out.lx)) out.lx = t.x;/  if (Math.abs(t.x) > Math.abs(out.lx)) out.lx = t.x * stickScale(t.x, t.y);/' src/game/vehicle/gamepad.ts
   for (const testCase of halfSteer) {
     it(testCase.it, () => {
       const { intent } = driveFor(testCase.thumbs);

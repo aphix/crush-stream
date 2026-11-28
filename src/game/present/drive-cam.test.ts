@@ -58,7 +58,6 @@ describe("given the chase camera behind a car, once at rest and once at full for
     return { turn: cam.look, fov: camera.fov };
   }
 
-  // mutation: sed -i 's/^    this.lensShare = camera.fov \/ CHASE.fov;$/    this.lensShare = 1;/' src/game/present/drive-cam.ts
   it("when the mouse drags the look by the same pixels, then at speed it turns more by the widened lens's share of the resting one, so the picture moves as far a pixel", () => {
     const rest = dragAt(0);
     const fast = dragAt(DRIVE.maxFwd);

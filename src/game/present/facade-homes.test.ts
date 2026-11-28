@@ -17,7 +17,6 @@ const ON_A_HOME_M = 1;
 const awakeEverywhere = (people: number): Uint8Array => new Uint8Array(map.places.length).fill(people);
 
 describe("given the open world's homes on the texel grid", () => {
-  // mutation: sed -i 's/export const HOME_CELL_METRES = 4;/export const HOME_CELL_METRES = 12;/' src/game/present/facade-homes.ts
   it("when every home of the map is put on the grid, then each has a texel of its own and no building that is no home shares one", () => {
     expect(homes.length, "homes in the map").toBeGreaterThan(HOMES_MIN);
     const lights = new HomeLights(homes);
@@ -37,7 +36,6 @@ describe("given the open world's homes on the texel grid", () => {
     lights.dispose();
   });
 
-  // mutation: sed -i 's/  return { column: Math.floor(f32(f32(f32(x) - f32(originX)) \* f32(perMetre))), row/  return { column: Math.round(f32(f32(f32(x) - f32(originX)) * f32(perMetre))), row/' src/game/present/facade-homes.ts
   it("when a home's texel is looked up the way the shader does, then it is the one written: the grid's origin, the cell width and the 32-bit translation agree", () => {
     const lights = new HomeLights(homes);
     const f32 = Math.fround;
@@ -50,7 +48,6 @@ describe("given the open world's homes on the texel grid", () => {
     lights.dispose();
   });
 
-  // mutation: sed -i 's/=> 1 + Math.round(share \* SHARE_STEPS)/=> 0 + Math.round(share * SHARE_STEPS)/' src/game/present/facade-homes.ts
   it("when the first step is taken with nobody awake, then every home's texel is the dark one, not the empty one, so the shader does not fall back to the fixed share", () => {
     const lights = new HomeLights(homes);
     lights.step(awakeEverywhere(0));
@@ -63,7 +60,6 @@ describe("given the open world's homes on the texel grid", () => {
 });
 
 describe("given the people awake in homes changing", () => {
-  // mutation: sed -i 's/const HOME_SHARE_BY_AWAKE = \[0, 0.35, 0.6, 0.75, 0.85\] as const;/const HOME_SHARE_BY_AWAKE = [0, 0.35, 0.35, 0.35, 0.35] as const;/' src/game/present/facade-homes.ts
   it("when homes have none, one, two, three and many people awake, then the first step sets each to a larger share of its windows", () => {
     const shares = HOME_SHARE_BY_AWAKE.map((_, people) => {
       const lights = new HomeLights(homes);
@@ -81,7 +77,6 @@ describe("given the people awake in homes changing", () => {
     lights.dispose();
   });
 
-  // mutation: sed -i 's/Math.max(-HOME_FADE_PER_MINUTE, Math.min(HOME_FADE_PER_MINUTE, target - level))/(target - level)/' src/game/present/facade-homes.ts
   it("when someone wakes in a dark home and later goes to bed, then its share rises and falls a step a minute, never more than the fade, and reaches the share at last", () => {
     const lights = new HomeLights(homes);
     lights.step(awakeEverywhere(0));
@@ -114,7 +109,6 @@ describe("given the people awake in homes changing", () => {
     lights.dispose();
   });
 
-  // mutation: sed -i 's/const next = this.placed && !settles ? /const next = this.placed ? /' src/game/present/facade-homes.ts
   it("when the clock is skipped and the step settles, then a dark home goes straight to its share and a lit home straight to dark, not a fade step each", () => {
     const lights = new HomeLights(homes);
     const awake = awakeEverywhere(0);
@@ -127,7 +121,6 @@ describe("given the people awake in homes changing", () => {
     lights.dispose();
   });
 
-  // mutation: sed -i 's/    if (changed) this.texture.needsUpdate = true;/    this.texture.needsUpdate = true;/' src/game/present/facade-homes.ts
   it("when a minute changes nothing, then the texture is not sent again, and when it changes a home, it is", () => {
     const lights = new HomeLights(homes);
     const awake = awakeEverywhere(1);
@@ -142,7 +135,6 @@ describe("given the people awake in homes changing", () => {
     lights.dispose();
   });
 
-  // mutation: sed -i 's/    if (FACADE_HOMES.value === this.texture) {/    if (false) {/' src/game/present/facade-homes.ts
   it("when the homes' lights are let go, then the shaders read the empty texture again, and a style falls back to its fixed share", () => {
     const lights = new HomeLights(homes);
     lights.step(awakeEverywhere(2));

@@ -86,7 +86,6 @@ describe("given the committed breaker-yard dressing program", () => {
 });
 
 describe("given the committed four-count dressing program", () => {
-  // mutation: sed -i 's/"x": 346, "z": 112/"x": 347, "z": 112/' src/game/world/tracks/four-count.json
   it("when it is run against the committed course JSON, then the JSON is already its output and the four hand props lead", () => {
     const base = baseOf(readFileSync(new URL("../src/game/world/tracks/four-count.dressing.mjs", import.meta.url), "utf8"));
     const result = dress("four-count", base, fourCountDressing);

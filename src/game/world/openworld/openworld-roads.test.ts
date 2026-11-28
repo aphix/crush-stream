@@ -15,7 +15,6 @@ function facing(spot: number): { x: number; z: number } {
 }
 
 describe("given the open world's streets as a graph", () => {
-  // mutation: sed -i 's/nextRow < 0 || nextRow >= junctionRows/nextRow < -1 || nextRow >= junctionRows/' src/game/world/openworld/openworld-roads.ts
   it("when the junctions are counted, then every street crossing of the 3 x 3 blocks is one and its neighbours are the next crossings along each street", () => {
     expect(network.junctionCount).toBe((LAYOUT.columns + 1) * (LAYOUT.rows + 1));
     const interior = junctionIndex(network, 1, 1);
@@ -29,14 +28,12 @@ describe("given the open world's streets as a graph", () => {
 });
 
 describe("given the kerb spaces laid along the streets", () => {
-  // mutation: sed -i 's/const PARKING_SPACE = 6;/const PARKING_SPACE = 3;/' src/game/world/openworld/openworld-parking.ts
   it("when two spaces are compared, then no two stand closer than a car's length and a gap (they never overlap)", () => {
     for (let a = 0; a < spots.count; a++) {
       for (let b = a + 1; b < spots.count; b++) expect(hypot2(spots.x[a]! - spots.x[b]!, spots.z[a]! - spots.z[b]!), `spaces ${a} and ${b}`).toBeGreaterThanOrEqual(5.99);
     }
   });
 
-  // mutation: sed -i 's/if (heading === HEADING.west) return row > 0;/if (heading === HEADING.west) return true;/' src/game/world/openworld/openworld-roads.ts
   it("when every space is looked at, then a block stands on the kerb side of it, the car faces with the traffic and it is clear of the junction's box", () => {
     const west = geometry.streetX[0]!;
     const east = geometry.streetX[geometry.streetX.length - 1]!;
@@ -58,7 +55,6 @@ describe("given the kerb spaces laid along the streets", () => {
     }
   });
 
-  // mutation: sed -i 's/parkingOffset: boxHalf - geometry.parkingLane \/ 2,/parkingOffset: boxHalf,/' src/game/world/openworld/openworld-roads.ts
   it("when a space's car is read, then it stands where a travel lane's right-hand parking lane is (the lane it faces along, offset by the parking lane)", () => {
     for (let spot = 0; spot < spots.count; spot += 7) {
       const junction = spots.junction[spot]!;
@@ -74,7 +70,6 @@ describe("given the kerb spaces laid along the streets", () => {
 describe("given a car in the open world's streets", () => {
   const MIDDLE_SPOT = 40;
 
-  // mutation: sed -i 's/Math.abs(wrapPi(yaw - spots.yaw\[spot\]!)) <= SPOT_YAW_REACH) return spot;/true) return spot;/' src/game/world/openworld/openworld-parking.ts
   it("when it stands in a space's middle facing the lane's way, then it is in that space; turned across it, or in the travel lane, then in none", () => {
     const spot = MIDDLE_SPOT;
     expect(spotAt(spots, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!), "in its space").toBe(spot);
@@ -86,7 +81,6 @@ describe("given a car in the open world's streets", () => {
     expect(spotAt(spots, spots.x[spot]! + leftX * toLane, spots.z[spot]! + leftZ * toLane, spots.yaw[spot]!), "in the travel lane beside it").toBe(-1);
   });
 
-  // mutation: sed -i 's/    if (spots.stays\[spot\] === 1) continue;/    if (false) continue;/' src/game/world/openworld/openworld-parking.ts
   it("when the nearest empty spaces to a door are asked, then they are the four nearest, nearest first, none of them a space a car stands in for good", () => {
     const out = new Int32Array(KERB_CANDIDATES);
     const near = kerbSpotsNear(spots, 0, -45, out);
@@ -104,7 +98,6 @@ describe("given a car in the open world's streets", () => {
     }
   });
 
-  // mutation: sed -i 's/  return count === 0 ? -1 : residentNearest\[resident % count\]!;/  return count === 0 ? -1 : residentNearest[0]!;/' src/game/world/openworld/openworld-parking.ts
   it("when two residents of one place are asked for their space, then each gets the one of the nearest four that he is by number, pure in the layout", () => {
     const out = new Int32Array(KERB_CANDIDATES);
     const count = kerbSpotsNear(spots, 0, -45, out);
@@ -112,7 +105,6 @@ describe("given a car in the open world's streets", () => {
     expect(residentSpotAt(spots, 0, -45, 1), "residents 1 and 2 differ").not.toBe(residentSpotAt(spots, 0, -45, 2));
   });
 
-  // mutation: sed -i 's/spots.x\[spot\]! - rightX(heading) \* DRIVER_DOOR_SIDE/spots.x[spot]! + rightX(heading) * DRIVER_DOOR_SIDE/' src/game/world/openworld/openworld-parking.ts
   it("when the driver's door of a parked car is asked, then it is out from the car on the street side (left of its way), a car's half width and a hand off the body", () => {
     const door = { x: 0, z: 0 };
     for (let spot = 0; spot < spots.count; spot += 11) {

@@ -21,7 +21,6 @@ const TRANSOM_OFF_DOOR_MAX = 0.2;
 const rowbrickWindows = (storeys: number): number => 2 + 2 * (storeys - 1);
 
 describe("given the windows of the packed pictures on the street face of a house of each storey count", () => {
-  // mutation: sed -i 's/{ y0: block(lines\[1\]!), y1: corniceFoot, layer: BAND_LAYER.floor, v0: 0, v1: storeys - 1 }/{ y0: block(lines[1]!) * 0.8, y1: corniceFoot, layer: BAND_LAYER.floor, v0: 0, v1: storeys - 1 }/' src/game/world/openworld/facade-windows.ts
   it("when the windows the bay leaves visible are read against the interior's floors, then every sill stands well over its storey's floor and every head under the floor above", () => {
     for (const storeys of STOREY_COUNTS) {
       const { floors, topCeiling } = levelsOf("rowhome", storeys);
@@ -38,7 +37,6 @@ describe("given the windows of the packed pictures on the street face of a house
     }
   });
 
-  // mutation: sed -i 's/const BAY_ACROSS = -0.9;/const BAY_ACROSS = 0.9;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the windows are split by the bay stack, then it hides exactly the ones on its half of the picture and the door's half is whole", () => {
     const key = (window: { across: number; storey: number }): string => `${window.storey}@${window.across.toFixed(4)}`;
     for (const storeys of STOREY_COUNTS) {
@@ -52,7 +50,6 @@ describe("given the windows of the packed pictures on the street face of a house
     }
   });
 
-  // mutation: sed -i 's/const high = (0.5 - u0) \* faceWidth;/const high = (0.5 - u0) * faceWidth + 2;/' src/game/present/facade-fittings.ts
   it("when the windows are laid on the face, then each is inside it and the door's transom stands in the door's column, its head over the door's", () => {
     const half = drawnHalf(LOT_WIDTH);
     for (const storeys of STOREY_COUNTS) {
@@ -72,7 +69,6 @@ describe("given the windows of the packed pictures on the street face of a house
 });
 
 describe("given the shutters and air-conditioners hung from the table", () => {
-  // mutation: sed -i 's/const low = window.across - window.width \/ 2;/const low = window.across - window.width;/' src/game/present/facade-fittings.ts
   it("when each shutter is read against the windows, then it stands beside an upper window at its sill and height, clear of the bay and the face's edge, no narrower than a shutter", () => {
     const bayEdge = BAY.across + BAY.width / 2;
     const faceEdge = drawnHalf(LOT_WIDTH);
@@ -96,7 +92,6 @@ describe("given the shutters and air-conditioners hung from the table", () => {
     }
   });
 
-  // mutation: sed -i 's/return visibleWindowsOf(style, storeys).filter((window) => window.storey > 0);/return visibleWindowsOf(style, storeys);/' src/game/present/facade-fittings.ts
   it("when the windows an air-conditioner may sit in are read, then they are the upper windows the bay does not cover, one a storey above the ground", () => {
     for (const storeys of STOREY_COUNTS) {
       const candidates = airconWindowsOf("rowbrick", storeys);
@@ -115,7 +110,6 @@ describe("given the windows the rooms look out of, from the same table", () => {
   const lots = layOutLots();
   const home = lots.places.slice(0, lots.backdropStart).find((place) => place.kind === PLACE_KIND.home)!;
 
-  // mutation: sed -i 's/return { across: (low + high) \/ 2, width: high - low, sill: bottom + v0 \* tall, head: bottom + v1 \* tall, storey };/return { across: (low + high) \/ 2, width: high - low, sill: bottom + v0 * tall + 0.05, head: bottom + v1 * tall, storey };/' src/game/present/facade-fittings.ts
   it("when a rowhome's upper windows are compared with the street windows its room looks out of, then each is the same window: the same middle, sill and head, at every storey count", () => {
     for (const storeys of STOREY_COUNTS) {
       for (const style of HOME_STYLES) {

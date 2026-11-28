@@ -38,7 +38,6 @@ function sources(cached: Uint8Array<ArrayBuffer> | null, served: Uint8Array<Arra
 }
 
 describe("given the Needle weights and their known hash", () => {
-  // mutation: sed -i 's/    if (hex(await sources.digest(bytes)) === sha256) return bytes;/    if (hex(await sources.digest(bytes)) === "") return bytes;/' src/game/present/minds/needle-weights.ts
   it("when a good copy is cached, then it is used and nothing is fetched", async () => {
     const { given, counts } = sources(GOOD, GOOD);
     const got = await loadWeights(given, "bucket", URL, await sha256(GOOD));
@@ -46,7 +45,6 @@ describe("given the Needle weights and their known hash", () => {
     expect(counts.fetches, "fetches").toBe(0);
   });
 
-  // mutation: sed -i '/^    await cache.delete(url);/d' src/game/present/minds/needle-weights.ts
   it("when the cached copy does not hash right, then it is dropped, fetched again and the good copy kept", async () => {
     const { given, counts, kept } = sources(BAD, GOOD);
     const got = await loadWeights(given, "bucket", URL, await sha256(GOOD));
@@ -54,7 +52,6 @@ describe("given the Needle weights and their known hash", () => {
     expect(kept.get(URL)?.length, "the kept copy").toBe(GOOD.length);
   });
 
-  // mutation: sed -i 's/  if (got !== sha256) throw new Error/  if (got === "") throw new Error/' src/game/present/minds/needle-weights.ts
   it("when the download does not hash right, then loading fails and nothing is cached", async () => {
     const { given, counts } = sources(null, BAD);
     await expect(loadWeights(given, "bucket", URL, await sha256(GOOD))).rejects.toThrow(/hashed to/);

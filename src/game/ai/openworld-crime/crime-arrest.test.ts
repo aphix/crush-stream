@@ -18,7 +18,6 @@ function arrestRun(options: HarnessOptions = {}) {
 }
 
 describe("an arrest is acted", () => {
-  // mutation: in src/game/ai/openworld-crime/arrests.ts grip(), delete the lines `walkers.place(cop, walkers.x[walker]! - detSin(yaw) * ARREST.cuffBehind, ...);` and `walkers.yaw[cop] = yaw;`
   it("while the cuffs go on, the suspect has her back to the cop, who stands behind her facing her way, both acting it", () => {
     const run = arrestRun();
     runFor(run, 1);
@@ -33,7 +32,6 @@ describe("an arrest is acted", () => {
     expect(cops.z[cop], "behind her across z").toBeCloseTo(run.poses.z[CRIMINAL]! - detCos(yaw) * ARREST.cuffBehind, 3);
   });
 
-  // mutation: in src/game/ai/openworld-crime/crime-poses.ts writeArrestActivity(), change `activity === ACTIVITY.none ? 0 :` to `!gripping ? 0 :` (the clock check); or in src/game/ai/openworld-crime/foot-law.ts completeBust(), delete the block `if (this.table.tookDown[slot] === 0) { this.arrests.escort(caseIndex, slot, this.seconds); return; }`
   it("once cuffed, she is led away walking at the cop's right, then is gone from the street and the case closes", () => {
     const run = arrestRun();
     runFor(run, 3);
@@ -71,7 +69,6 @@ describe("the hook takes a cop making an arrest, and then the suspect he held", 
     return slot >= 0 && isHeldMode(table.mode[slot]!);
   }
 
-  // mutation: sed -i 's/    this.downCop(cop, stood(-1, cop,/    this.copStrikes.push(stood(-1, cop,/' src/game/ai/openworld-crime/crime-scene.ts
   it("when the hook takes the cop, then he is down where he stood with no speed, every peer hears it, and the suspect he held is let go", () => {
     const { run, cop } = cuffing();
     const spot = { x: run.scene.copPoses.x[cop]!, z: run.scene.copPoses.z[cop]! };
@@ -93,7 +90,6 @@ describe("the hook takes a cop making an arrest, and then the suspect he held", 
     expect(inHands(run), "nor a second later: the cop who held her is down").toBe(false);
   });
 
-  // mutation: sed -i '/^  hookCop(cop: number, seconds: number): boolean {/,/^  }/{/fightKnown/d}' src/game/ai/openworld-crime/crime-scene.ts
   it("when the hook takes a cop who is only walking his beat, then the player has fought the law: a chase of him opens", () => {
     const run = harness([59]);
     run.scene.setFoot(true, 58, 0, 1, 0, 0);
@@ -103,7 +99,6 @@ describe("the hook takes a cop making an arrest, and then the suspect he held", 
     expect(run.scene.footChaseOf({ cops: 0, hold: 0, left: 0 }), "the chase is open").toBe(true);
   });
 
-  // mutation: sed -i 's/^    if (!this.authority || poses.shown\[cop\] === 0) return false;/    if (poses.shown[cop] === 0) return false;/' src/game/ai/openworld-crime/crime-scene.ts
   it("when a client's scene is asked to hook a cop, then nothing happens", () => {
     const run = harness([59], { authority: false });
     runFor(run, 1);

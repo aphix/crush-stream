@@ -42,7 +42,6 @@ function biggestFrameMove(): { metres: number; who: string; corners: number } {
 }
 
 describe("given everyone who sets out in the city's first game hour on a walk that turns corners, each walking as far to one side of the way as anyone does", () => {
-  // mutation: sed -i 's/^  cornerMiter();/  MITER[4] = dirZ; MITER[5] = -dirX;/' src/game/ai/civilians/civilian-leg.ts (the offset turns with each segment at a corner: 1.47 m in a frame)
   it("when each walk is drawn at 60 frames a second, then nobody moves more than a few walk steps between two frames: the side they keep carries through every corner", () => {
     const { metres, who, corners } = biggestFrameMove();
     expect(corners, "control: walks with a corner").toBeGreaterThan(10);

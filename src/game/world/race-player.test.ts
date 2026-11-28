@@ -38,7 +38,6 @@ describe(`given a ${LAPS}-lap race on the oval with the player's car driven thro
     w.race.exit();
     setGround(null);
   });
-  // mutation: sed -i 's/^      if (c.armed) {$/      if (false) {/' src/game/match/session.ts  (a shortcut is never entered, so its lap is lost: red on the grass line, "expected 1 to be 2")
   for (const [name, line] of Object.entries(LINES)) {
     it(`when the player's line is ${name}, then he is home on the full distance, and the HUD's lap and place match the rules' count`, (t) => {
       const o = playerRace(w, track, line, LAPS, 3, 220);

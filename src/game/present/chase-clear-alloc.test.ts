@@ -69,15 +69,10 @@ function windowPerFrame(within: Within): number {
 
 describe("given the chase camera on a car circling in front of an open-world building, other cars parked round it", () => {
   const parts = [
-    // mutation: sed -i 's/^  let kept = 0;$/  _near.length = 0;\n  let kept = 0;/' src/game/present/spectate-cam.ts
     { it: "gathering the solids near the eye's line", within: { fn: "gatherIn", file: "spectate-cam.ts" } },
-    // mutation: sed -i 's/^    this.carClear = reach;$/    this.carClear = reach;\n    Object.assign(this, { asked: [reach] });/' src/game/present/eye-clear.ts
     { it: "testing the other cars' boxes on the eye's line", within: { fn: "carReach", file: "eye-clear.ts" } },
-    // mutation: sed -i 's/^  const pad = PROBE\[PROBE_PAD\]!;$/  const pad = PROBE[PROBE_PAD]!;\n  Object.assign(PROBE, { asked: [pad] });/' src/game/present/spectate-cam.ts
     { it: "testing a point of the eye's line against the ground, the road's walls and the solids", within: { fn: "solidAt", file: "spectate-cam.ts" } },
-    // mutation: sed -i 's/^    this.len = len;$/    this.len = len;\n    Object.assign(this, { asked: [len] });/' src/game/present/eye-clear.ts
     { it: "keeping the eye's line clear (the pivot, the lift, the pull and the swing)", within: { fn: "apply", file: "eye-clear.ts" } },
-    // mutation: sed -i 's/^    this.lensShare = camera.fov \/ CHASE.fov;$/    this.lensShare = camera.fov \/ CHASE.fov;\n    Object.assign(this, { asked: [dt] });/' src/game/present/drive-cam.ts
     { it: "the whole chase camera (its springs, its floor, its clearance and its lens)", within: { fn: "update", file: "drive-cam.ts" } },
   ] as const;
   for (const part of parts) {

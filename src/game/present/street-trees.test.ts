@@ -160,7 +160,6 @@ describe("given the street trees' drawings", () => {
 });
 
 describe("given a street tree's crown", () => {
-  // mutation: sed -i 's/outward.multiplyScalar(0.8).addScaledVector(normal, 0.2 \* facing).normalize();/outward.multiplyScalar(-0.8).addScaledVector(normal, 0.2 * facing).normalize();/' src/game/present/street-trees.ts
   it("when it is built, then it is drawn on the leaf material, and a lump made into leaf cards is two triangles a card, each reading one atlas cell of its species, every corner's normal pointing out from the lump's middle", () => {
     const leaves = new THREE.MeshBasicMaterial();
     const mats = { ...plainMaterials(new THREE.MeshBasicMaterial()), leaves };
@@ -182,7 +181,6 @@ describe("given a street tree's crown", () => {
     }
   });
 
-  // mutation: sed -i 's/plane: { count: 120, edge: 2.4, species/plane: { count: 400, edge: 2.4, species/' src/game/present/street-trees.ts
   it("when each kind's tree is built, then it is at most 450 triangles and at least 20 of its pieces are leaf cards", () => {
     const triangles = (pieces: Piece[]): number => pieces.reduce((n, [g]) => n + (g.index ? g.index.count : g.getAttribute("position").count) / 3, 0);
     for (const skin of skins) {

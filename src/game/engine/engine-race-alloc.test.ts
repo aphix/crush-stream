@@ -22,7 +22,6 @@ describe("given the figure-8 race with 21 rivals on the real engine, warmed up",
     runSeconds(engine, WARM_SECONDS);
   }, 120_000);
 
-  // mutation: /usr/bin/sed -i 's/^  staticTopBox(s, cellsOnly);/  staticTopBox(s, cellsOnly);\n  sink = [xMin, xMax, zMin, zMax];/; s/^const PLAN_BOX = new Float64Array(5);/&\nlet sink: unknown;/' src/game/world/surfaces.ts
   it(`when a window of frames is stepped, then a frame allocates at most ${BOUND_KB} KB (the cage points ask the surfaces about boxes by the thousand a frame)`, () => {
     const kb = untilQuiet(() => allocatedBytes(() => runSeconds(engine, READ_SECONDS)) / (READ_SECONDS * FRAME_HZ) / 1024, BOUND_KB);
     expect(kb, `${kb.toFixed(0)} KB a frame > ${BOUND_KB} in every window for ${COMPILE_WAIT_S} s: a per-point read allocates again`).toBeLessThanOrEqual(BOUND_KB);

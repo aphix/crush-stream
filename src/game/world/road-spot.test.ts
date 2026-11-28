@@ -30,13 +30,11 @@ describe("given a point on a course's road", () => {
     expect(turnBetween(spot.yaw, heading), "facing along the road").toBeLessThan(0.05);
   });
 
-  // mutation: sed -i 's/const way = detSin(facing) \* _pt.tx + detCos(facing) \* _pt.tz >= 0 ? 1 : -1;/const way = 1;/' src/game/world/road-spot.ts
   it("when it is asked from the other way, then the spot faces back along the same road", () => {
     expect(roadSpotNear(track, point.x, point.z, heading + Math.PI, [], NOTHING, spot)).toBe(true);
     expect(turnBetween(spot.yaw, heading + Math.PI), "facing the way asked").toBeLessThan(0.05);
   });
 
-  // mutation: sed -i 's/    if (occupied(_pt.x, _pt.z) || solidNear(colliders, _pt.x, _pt.y, _pt.z, CAR_REACH)) continue;/    if (occupied(_pt.x, _pt.z)) continue;/' src/game/world/road-spot.ts
   it("when a solid stands on that point, then the spot is a car's length and a gap along the road and clear of it", () => {
     expect(roadSpotNear(track, point.x, point.z, heading, [OBSTACLE], NOTHING, spot)).toBe(true);
     const gap = hypot2(spot.x - point.x, spot.z - point.z);
@@ -44,7 +42,6 @@ describe("given a point on a course's road", () => {
     expect(gap, `by one step, not more: ${gap.toFixed(2)} m`).toBeLessThan(STEP_M + SLACK_M);
   });
 
-  // mutation: sed -i 's/    if (occupied(_pt.x, _pt.z) || solidNear/    if (false || solidNear/' src/game/world/road-spot.ts
   it("when a car stands on that point, then the spot is a step along the road from it", () => {
     const taken = (x: number, z: number): boolean => hypot2(x - point.x, z - point.z) < STEP_M / 2;
     expect(roadSpotNear(track, point.x, point.z, heading, [], taken, spot)).toBe(true);

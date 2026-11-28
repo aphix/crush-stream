@@ -28,7 +28,6 @@ const lanePaths = lots.paths.filter((path) => path.points.length === 2 && path.j
 const laneBlocks = plans.filter((plan) => !plan.park && !LANELESS_BLOCKS.some((block) => block.row === plan.row && block.column === plan.column));
 
 describe("given the lanes through the blocks", () => {
-  // mutation: sed -i 's/LANELESS_BLOCKS: readonly { row: number; column: number }\[\] = \[{ row: ROW.B, column: 2 }\];/LANELESS_BLOCKS: readonly { row: number; column: number }[] = [];/' src/game/world/openworld/openworld-programme.ts
   it("when the blocks are read, then every block but the park's and the garden's has one lane, from its alley to its south sidewalk, over a lot left bare of houses", () => {
     expect(laneBlocks.length, "blocks with a lane").toBe(plans.length - 2);
     expect(lanePaths.length, "lane paths").toBe(laneBlocks.length);
@@ -44,7 +43,6 @@ describe("given the lanes through the blocks", () => {
     }
   });
 
-  // mutation: sed -i '/^    layLane(layout, plan, blockIndex);$/d; s/^    layYards(layout, plan);$/    layYards(layout, plan);\n    layLane(layout, plan, blockIndex);/' src/game/world/openworld/openworld-lots.ts (the yards' grass laid first keeps the lane's yard-deep part)
   it("when the ground is painted from the layout's areas in order, then each lane is asphalt from the alley to the sidewalk and the yard beside it is grass", () => {
     const paint = lots.areas.map((area) => ({
       surface: area.surface,
@@ -71,7 +69,6 @@ describe("given the lanes through the blocks", () => {
     }
   });
 
-  // mutation: sed -i 's/joins: \[{ point: 1, side: lot.face }\] });/joins: [] });/' src/game/world/openworld/openworld-lots.ts
   it("when a person walks the lane, then its street end is a node with the sidewalk's path beside it, and its alley end the alley's", () => {
     const nodeNear = (x: number, z: number): number => {
       for (let node = 0; node < map.graph.nodeX.length; node++) if (Math.abs(map.graph.nodeX[node]! - x) < SAME && Math.abs(map.graph.nodeZ[node]! - z) < SAME) return node;
@@ -86,7 +83,6 @@ describe("given the lanes through the blocks", () => {
     }
   });
 
-  // mutation: sed -i 's/lots\[0\]!.index - 1 === lane/false/' src/game/world/openworld/openworld-lots.ts
   it("when the two places beside a lane are read, then each shows its side wall to it: the one on its west its east side, the one on its east its west", () => {
     for (const plan of laneBlocks) {
       const lot = plan.lots.find((candidate) => candidate.face === LANE.face && candidate.index === LANE.at)!;
@@ -105,7 +101,6 @@ describe("given the rear ells", () => {
   /** The home an ell stands behind: the one whose lot it is in, and whose back wall it butts. */
   const houseOf = (ell: (typeof annexes)[number]) => homes.find((home) => Math.abs(ell.x - home.x) <= home.width / 2 && Math.abs(Math.abs(ell.z - home.z) - (home.depth / 2 + ell.depth / 2)) < 1);
 
-  // mutation: sed -i 's/shareOfHundred: 45/shareOfHundred: 0/' src/game/world/openworld/openworld-lots.ts
   it("when the buildings are counted, then about two in five houses have an ell, and every ell belongs to a house", () => {
     const share = annexes.length / homes.length;
     expect(share, "ells per house").toBeGreaterThan(ELL_SHARE_RANGE[0]);
@@ -113,7 +108,6 @@ describe("given the rear ells", () => {
     for (const ell of annexes) expect(houseOf(ell), `a house in front of the ell at ${ell.x.toFixed(1)}, ${ell.z.toFixed(1)}`).toBeDefined();
   });
 
-  // mutation: sed -i 's/height: buildingHeight(Math.max(MIN_STOREYS, storeys - 1), false),/height: buildingHeight(storeys, false),/' src/game/world/openworld/openworld-lots.ts
   it("when each ell is measured against its house, then it is lower than a house of three or more, within its lot's width, in its house's style, and leaves the yard its width before the alley", () => {
     for (const ell of annexes) {
       const house = houseOf(ell)!;
@@ -127,7 +121,6 @@ describe("given the rear ells", () => {
     }
   });
 
-  // mutation: sed -i 's/return !yard \&\& mix < ELL.shareOfHundred;/return mix < ELL.shareOfHundred;/' src/game/world/openworld/openworld-lots.ts
   it("when the lots behind which a yard place stands are read, then no ell is built there", () => {
     for (const side of SIDE_PLACES.filter((place) => place.where === "yard")) {
       const plan = plans.find((candidate) => candidate.row === side.row && candidate.column === side.column)!;
@@ -144,7 +137,6 @@ describe("given the landmarks", () => {
   const church = playable.find((place) => place.name === "St. Brendan's Church");
   const infill = playable.find((place) => place.name === "Moore Street Lofts");
 
-  // mutation: sed -i 's/  { row: ROW.A, column: 0, face: "north", at: 6, venue: CHURCH },//' src/game/world/openworld/openworld-programme.ts
   it("when the programme is read, then a stone church three lots wide stands among the houses, a place to gather with hours and no interior", () => {
     expect(church, "the church").toBeDefined();
     expect(church!.style, "style").toBe("church");
@@ -156,7 +148,6 @@ describe("given the landmarks", () => {
     expect(lots.buildings.some((building) => building.style === "church" && building.enterable !== true), "a solid building of the church's style").toBe(true);
   });
 
-  // mutation: sed -i 's/  { row: ROW.C, column: 1, face: "south", at: 12, venue: INFILL },//' src/game/world/openworld/openworld-programme.ts
   it("when the programme is read, then a modern four-storey infill two lots wide stands among the houses as a home with no interior", () => {
     expect(infill, "the infill").toBeDefined();
     expect(infill!.style, "style").toBe("infill");

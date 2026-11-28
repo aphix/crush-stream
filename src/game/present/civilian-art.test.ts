@@ -67,7 +67,6 @@ describe("given a dummy's civilian who is then hidden", () => {
 });
 
 describe("given civilians a physical body stands for", () => {
-  // mutation: sed -i 's/ || (held !== null \&\& held\[civilian\] === 1) || dx \* dx/ || dx * dx/' src/game/present/civilian-art.ts
   it("when the caller names one held, then she is drawn neither as a dummy nor as a figure, and the others are", () => {
     const art = new CivilianArt(1, 3);
     const poses = posesAlongStreet([5, 10, 60]);
@@ -191,7 +190,6 @@ describe("given far figures walking at half, at and at three times a walk's pace
   const gait = art.figures.geometry.getAttribute("gait");
   const instanceAt = (x: number): number => Array.from({ length: art.farDrawn }, (_, instance) => instance).find((instance) => figureX(art, instance) === x) ?? -1;
 
-  // mutation: sed -i 's|Math.min(FIGURE_MAX_GAIT, poses.speed\[civilian\]! / WALK_SPEED)|Math.min(FIGURE_MAX_GAIT, 1)|' src/game/present/civilian-art.ts
   it("when they are drawn, then each swings by her brain's pace over a walk's, never past 1.6", () => {
     expect(gait.getY(instanceAt(60)), "half a walk's pace").toBeCloseTo(0.5, 5);
     expect(gait.getY(instanceAt(61)), "three times the pace: the limit").toBeCloseTo(1.6, 5);
@@ -202,7 +200,6 @@ describe("given far figures walking at half, at and at three times a walk's pace
 describe("given a civilian in dummy range whose brain jumps a metre in one frame", () => {
   const torsoX = (art: CivilianArt): number => art.dummies[0]!.partPoint(0, 0, new THREE.Vector3(PARTS[0]!.c[0], PARTS[0]!.c[1], PARTS[0]!.c[2]), new THREE.Vector3()).x;
 
-  // mutation: sed -i 's/^  smoothing.walk(civilian, pose);$/  void 0;/' src/game/present/civilian-pose.ts
   it("when the second frame is drawn, then her dummy has moved only part of the way: the drawn walk closes on the brain's", () => {
     const poses = emptyPoses(1);
     poses.x[0] = 5;
@@ -235,7 +232,6 @@ describe("given a civilian on a stoop's door spur standing on its third tread, a
     return art.dummies[0]!.partPoint(0, SHIN, new THREE.Vector3(shin.c[0], shin.c[1] - shin.h[1], shin.c[2]), new THREE.Vector3());
   };
 
-  // mutation: sed -i 's/poses, civilian, this.smoothing, this.stoops);/poses, civilian, this.smoothing, null);/' src/game/present/civilian-art.ts
   it("when she is drawn, then her ankle stands a tread's height above the street's", () => {
     const flat = ankleOf(null);
     const planted = ankleOf(stoops);
@@ -325,13 +321,11 @@ describe("given a civilian walking and a guard walking the same stride at the sa
 describe("given the street body", () => {
   const trianglesOf = (geometry: THREE.BufferGeometry): number => geometry.index!.count / 3;
 
-  // mutation: sed -i 's/STREET_BODY_VERTICES = 1200/STREET_BODY_VERTICES = 4000/' src/game/present/dummy-skin.ts
   it("when it is built, then it has at most 6000 triangles", () => {
     expect(trianglesOf(streetGeometry()), "street body triangles").toBeLessThanOrEqual(STREET_TRIANGLES);
     expect(trianglesOf(streetGeometry()), "street body triangles").toBeLessThan(trianglesOf(dummyGeometry()));
   });
 
-  // mutation: sed -i 's/  const whole = shell.frontPower !== undefined || shell.fine === true;/  const whole = shell.frontPower !== undefined;/' src/game/present/dummy-loft.ts
   it("when a suit's shirt cuffs are read on it, then they keep their proud rings: collar-white at six heights below the chest (the two suited builds' three kept rings each; the coarse loft alone keeps four)", () => {
     const street = streetGeometry();
     const position = street.getAttribute("position");
@@ -343,7 +337,6 @@ describe("given the street body", () => {
     expect(heights.size, "distinct heights of collar-white at a suited man's cuffs").toBeGreaterThanOrEqual(6);
   });
 
-  // mutation: sed -i 's/), nearOnly: true };/) };/' src/game/present/dummy-uniform.ts
   it("when a suit's hip pocket flaps are looked for on the street body and on the near body, then the near body has their rings (y 0.965 and 0.93) and the street body has none: a coarse hexagon of them stands out of the jacket as two white squares at the waist", () => {
     const suitedRingsAt = (geometry: THREE.BufferGeometry, y: number): number => {
       const position = geometry.getAttribute("position");
@@ -358,7 +351,6 @@ describe("given the street body", () => {
     }
   });
 
-  // mutation: sed -i 's/^    if (shell.nearOnly !== true) for (let k = 0; k < sides; k += step) mesh.coarse.push(/    for (let k = 0; k < sides; k += step) mesh.coarse.push(/' src/game/present/dummy-loft.ts
   it("when a capped garment drawn on the near body only is lofted, then the street body gets none of it, its end caps included, and the same garment drawn on both gets its caps", () => {
     const lofted = (nearOnly: boolean): Lofted => {
       const mesh: Lofted = { position: [], bones: [], roleKind: [], print: [], index: [], coarse: [] };
@@ -370,7 +362,6 @@ describe("given the street body", () => {
     expect(lofted(false).coarse.length, "control: drawn on both, the street body has its caps").toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's/setAttribute(name, attribute);/setAttribute(name, attribute.clone());/' src/game/present/dummy-skin.ts
   it("when it is built, then its attributes are the full body's own objects", () => {
     const names = Object.keys(dummyGeometry().attributes);
     expect(names.length, "attributes").toBeGreaterThan(0);
@@ -382,7 +373,6 @@ describe("given a crowd of 150 scattered within 30 m of the eye, over the dummy 
   const drawnTriangles = (art: CivilianArt): number => art.dummies.reduce((sum, mesh) => sum + mesh.count * (mesh.geometry.index!.count / 3), 0);
   const fullTriangles = dummyGeometry().index!.count / 3;
 
-  // mutation: sed -i 's/this.detailSlots = Math.min(detailSlots, nearSlots)/this.detailSlots = nearSlots/' src/game/present/civilian-art.ts
   it("when the desktop tier draws them, then twelve are full bodies and the rest street bodies", () => {
     const art = new CivilianArt(NEAR_SLOTS.desktop, 300, DETAIL_SLOTS.desktop);
     art.update(posesScattered(150, 30, 7), 0, 0, IN_SIGHT, FRAME_SECONDS);
@@ -390,7 +380,6 @@ describe("given a crowd of 150 scattered within 30 m of the eye, over the dummy 
     expect(drawnTriangles(art), "drawn dummy triangles").toBeLessThanOrEqual(DETAIL_SLOTS.desktop * fullTriangles + (NEAR_SLOTS.desktop - DETAIL_SLOTS.desktop) * STREET_TRIANGLES);
   });
 
-  // mutation: sed -i 's/this.detailSlots = Math.min(detailSlots, nearSlots)/this.detailSlots = nearSlots/' src/game/present/civilian-art.ts
   it("when the phone tier draws them, then four are full bodies and the rest street bodies", () => {
     const art = new CivilianArt(NEAR_SLOTS.phone, 300, DETAIL_SLOTS.phone);
     art.update(posesScattered(150, 30, 7), 0, 0, IN_SIGHT, FRAME_SECONDS);
@@ -406,7 +395,6 @@ describe("given one civilian walking toward the eye on a tier with one full-body
     art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
   };
 
-  // mutation: sed -i 's/ || (held !== NO_SLOT \&\& held < this.detailSlots \&\& squared < DETAIL_KEEP_SQUARED)//' src/game/present/civilian-art.ts
   it("when she walks from 20 m to 5 m, then she changes to the full body once and keeps it at 13 m", () => {
     const art = new CivilianArt(3, 1, 1);
     const poses = emptyPoses(1);
@@ -425,7 +413,6 @@ describe("given one civilian walking toward the eye on a tier with one full-body
     expect(inDetail(art), "street body past the keep line").toBe(false);
   });
 
-  // mutation: sed -i 's/squared < DETAIL_NEAR_SQUARED ||/squared < 0 ||/' src/game/present/civilian-art.ts
   it("when thirteen civilians are within 12 m of a twelve-slot tier, then twelve hold full-body slots and one a street slot", () => {
     const art = new CivilianArt(20, 13, 12);
     art.update(posesAlongStreet(Array.from({ length: 13 }, (_, civilian) => 1 + civilian * 0.5)), 0, 0, IN_SIGHT, FRAME_SECONDS);

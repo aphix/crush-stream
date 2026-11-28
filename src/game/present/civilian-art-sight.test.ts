@@ -64,7 +64,6 @@ describe("given a crowd no one has seen yet", () => {
     expect([art.nearDrawn, art.farDrawn], "dummies and figures seen").toEqual([1, 1]);
   });
 
-  // mutation: sed -i '/^    for (let chunk = 0; chunk < this.dummies.length; chunk++) this.dummies\[chunk\]!.visible = /d' src/game/present/civilian-art.ts
   it("when nobody near it is drawn, then no dummy mesh is left for the sun's shadow pass or the view to draw empty, and once one is seen its mesh is drawn", () => {
     const art = new CivilianArt(2, 2);
     const poses = posesAlongStreet([5, 80]);

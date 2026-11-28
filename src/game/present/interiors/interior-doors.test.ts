@@ -13,7 +13,6 @@ const PEOPLE = 90;
 const leafAt = (x: number, z: number): DoorLeaf => ({ hingeX: x, hingeZ: z, floorY: 0, closedX: 1, closedZ: 0, openX: 0, openZ: 1, width: 1, height: 2, x, z, face: DOOR_FACE.street, boxX: x, boxZ: z, vestibule: null });
 
 describe("given doors over a city, and people, figures and a walker standing about it", () => {
-  // mutation: sed -i 's/(hypot2(xs\[at\]! - leaf.x, zs\[at\]! - leaf.z) <= DOOR_REACH)/(hypot2(xs[at]! - leaf.x, zs[at]! - leaf.z) <= 2 * DOOR_REACH)/' src/game/present/interiors/interior-doors.ts
   it("when the doors swing for a whole swing's time, then exactly the doors in range with someone within reach of them stand open", () => {
     const random = mulberry32(5);
     const leaves = Array.from({ length: LEAVES }, () => leafAt((random() - 0.5) * SPAN, (random() - 0.5) * SPAN));

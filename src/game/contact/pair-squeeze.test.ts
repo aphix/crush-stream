@@ -67,7 +67,6 @@ function strike(sides: readonly (1 | -1 | 2)[]): Hit {
   return { middle, squeezed };
 }
 
-// mutation: sed -i 's/^      this.deform.bidirectional = true;/      this.deform.bidirectional = false;/' src/game/vehicle/car.ts  (the sandwich is never squeezed: its row goes red)
 describe("given a parked car with a car driving into each of its nose and tail at 20 km/h", () => {
   it("when the two hits land within the squeeze window, then the car is squeezed (both ends crumple zones) and its tail crushes where a nose-only hit leaves it shut", () => {
     const both = strike([1, -1]);
@@ -85,7 +84,6 @@ describe("given a parked car with a car driving into each of its nose and tail a
   });
 });
 
-// mutation: sed -i 's/^      this.deform.bidirectional = true;/      this.deform.bidirectional = false;/' src/game/vehicle/car.ts  (no car is squeezed in the pile: both pile rows go red)
 describe("given 16 cars driving across the derby arena into a pile", () => {
   for (const seed of DERBY_SEEDS) {
     it(`when the pile runs ${DERBY_SECONDS} s (seed ${seed}) and cars are squeezed in it, then no car's centroid moves past its zip bound (3 x speed x step + 5 cm) in any step`, () => {

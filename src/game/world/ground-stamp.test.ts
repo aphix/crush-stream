@@ -26,7 +26,6 @@ function distanceToSegment(px: number, pz: number, ax: number, az: number, bx: n
 }
 
 describe("given a street segment painted into the ground's rows of cells", () => {
-  // mutation: sed -i 's/hi = Math.max(hi, cx + w);/hi = Math.max(hi, cx + w - 1);/' src/game/world/ground-stamp.ts  (a point at a disc's far end falls outside the stretch painted)
   it("when a row crosses the street's reach, then every point on it within the reach lies inside the stretch painted, and a row out of reach is painted not at all", () => {
     const random = seededRandom(7);
     const run = new Float64Array(2);

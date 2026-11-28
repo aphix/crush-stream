@@ -73,14 +73,12 @@ for (const wallCase of WALL_CASES) {
       }
     }
 
-    // mutation: sed -i 's/^    builder.edge(door, stopOn(builder, rings\[link.block\]!, link.side, along), false);/    void along;/' src/game/world/openworld/openworld-map.ts
     it("when a person walks from the first node, then every node can be reached", () => {
       const reached = reachableFrom(0).reduce((sum, seen) => sum + seen, 0);
       expect(nodeCount, "nodes in the graph").toBeGreaterThan(200);
       expect(reached, "nodes reached from node 0").toBe(nodeCount);
     });
 
-    // mutation: sed -i 's/^    builder.edge(nodes\[join.point\]!, stopOn(builder, ring, join.side, along), false);/    void along;/' src/game/world/openworld/openworld-map.ts
     it("when a person walks from each portal, then the door of every place inside the walls can be reached", () => {
       expect(map.portals.length, "portals").toBeGreaterThan(8);
       const unreachable: string[] = [];
@@ -92,7 +90,6 @@ for (const wallCase of WALL_CASES) {
       expect(unreachable.slice(0, 3).join("; "), "doors not reachable from a portal").toBe("");
     });
 
-    // mutation: sed -i 's/const entrances = geometry.outerPath ? layOuterPath(builder, geometry) : edgeNodes(rings, lots.blocks, geometry);/const entrances = [0];/' src/game/world/openworld/openworld-map.ts
     it("when the portals are read, then each is a sidewalk node on the grid's outer edge or a bus stop's door", () => {
       const stopDoor = map.places.find((place) => place.kind === PLACE_KIND.transit)!.doorNode;
       const edgeX = wallCase.outerPath ? geometry.outerX : ((geometry.columns - 1) / 2) * geometry.pitchX + geometry.blockLength / 2 + geometry.ringOffset;
@@ -104,7 +101,6 @@ for (const wallCase of WALL_CASES) {
       expect([...map.portals].filter(onEdge).length, "portals on the edge").toBeGreaterThanOrEqual(8);
     });
 
-    // mutation: sed -i 's/const doorNodes = lots.places.map(() => -1);/const doorNodes = lots.places.map(() => 0);/' src/game/world/openworld/openworld-map.ts
     it("when the places are read, then each lies inside the walls with a door node or beyond them with none", () => {
       const wrong = map.places.filter((place) => (place.doorNode >= 0 ? !inside(place.x, place.z) : inside(place.x, place.z)));
       expect(wrong.slice(0, 3).map((place) => place.name).join("; "), "places on the wrong side of the walls").toBe("");
@@ -113,7 +109,6 @@ for (const wallCase of WALL_CASES) {
       expect(map.halfZ, "half the play area along z").toBe(geometry.halfZ);
     });
 
-    // mutation: sed -i 's/^  if (row > 0) cross(/  if (row > 99) cross(/' src/game/world/openworld/openworld-map.ts
     it("when every street arm inside the walls is crossed on foot, then a zebra crossing joins the two sidewalk points either side of it", () => {
       const missing: string[] = [];
       for (const leg of legs) {
@@ -126,7 +121,6 @@ for (const wallCase of WALL_CASES) {
       expect(missing.slice(0, 3).join("; "), "arms without a crossing").toBe("");
     });
 
-    // mutation: sed -i 's/outerPath: pathFromStreet < dimensions.wallReach,/outerPath: true,/' src/game/world/openworld/openworld-layout.ts
     it("when the outer sidewalk is looked for, then it is there exactly when the walls stand beyond it", () => {
       const outerNode = nodeNear(-geometry.outerX, -geometry.outerZ);
       expect(geometry.outerPath, "outer sidewalk inside the walls").toBe(wallCase.outerPath);
@@ -134,7 +128,6 @@ for (const wallCase of WALL_CASES) {
       expect(map.portals.length, "portals").toBeGreaterThan(0);
     });
 
-    // mutation: sed -i 's/builder.nodeAt(toX, toZ), true)/builder.nodeAt(toX, toZ), false)/' src/game/world/openworld/openworld-map.ts
     it("when a person walks anywhere that is not a zebra crossing, then they never step onto a carriageway", () => {
       const onStreet: string[] = [];
       let crossingsOnStreet = 0;
@@ -152,7 +145,6 @@ for (const wallCase of WALL_CASES) {
       expect(onStreet.slice(0, 3).join("; "), "plain edges on a carriageway").toBe("");
     });
 
-    // mutation: sed -i 's/this.edgeCrossing.push(crossing ? 1 : 0, crossing ? 1 : 0);/this.edgeCrossing.push(crossing ? 1 : 0, 0);/' src/game/world/openworld/openworld-map.ts
     it("when every edge is read back, then it has a twin with the same crossing flag and each length is its nodes' distance", () => {
       const bad: string[] = [];
       for (let node = 0; node < nodeCount; node++) {
@@ -169,7 +161,6 @@ for (const wallCase of WALL_CASES) {
       expect(bad.slice(0, 3).join("; "), "edges out of step with the arrays").toBe("");
     });
 
-    // mutation: sed -i 's/edgeStart\[node + 1\]! += edgeStart\[node\]!;/edgeStart[node + 1]! += 0;/' src/game/world/openworld/openworld-map.ts
     it("when the edge starts are read, then they rise node by node and end at the edge count", () => {
       let falls = 0;
       for (let node = 0; node < nodeCount; node++) if (graph.edgeStart[node + 1]! < graph.edgeStart[node]!) falls++;
@@ -181,7 +172,6 @@ for (const wallCase of WALL_CASES) {
       expect(graph.edgeCrossing.length, "crossing flags").toBe(graph.edgeTo.length);
     });
 
-    // mutation: sed -i 's/stopOn(builder, rings\[link.block\]!, link.side, along)/stopOn(builder, rings[link.block]!, "north", along)/' src/game/world/openworld/openworld-map.ts
     it("when each building's front door is measured against the other path nodes, then one is within 3 m", () => {
       const far: string[] = [];
       const withBuilding = playable.filter((place) => place.style !== "");

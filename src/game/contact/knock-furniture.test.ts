@@ -44,8 +44,6 @@ describe("given street furniture a car knocks over, lying across its way", () =>
   afterEach(() => armSolids(null));
 
   for (const { prefab, knockSpeed } of KNOCKABLES) {
-    // mutation: sed -i 's/    knockSpeed: HOOP_FENCE.knockSpeed,//' src/game/world/catalog.ts
-    // mutation: sed -i 's/  return { body: "knock", collider: colliders, foot: reach, size: \[size\[0\], size\[1\], size\[2\]\], mass: massKg, knockSpeed, material };/  return { body: "knock", collider: colliders, foot: reach, size: [size[0], size[1], size[2]], mass: massKg, material };/' src/game/world/catalog.ts
     it(`when the car closes on the ${prefab} MARGIN under its knock speed, then it stands and the car does not pass it`, () => {
       const { knocks, z, met } = drive(prefab, knockSpeed - MARGIN);
       expect(met, `the car met the ${prefab} as a solid`).toBeGreaterThan(0);
@@ -53,8 +51,6 @@ describe("given street furniture a car knocks over, lying across its way", () =>
       expect(z, `the car's origin passed the ${prefab} (z ${z.toFixed(2)} m)`).toBeLessThan(TARGET_Z);
     });
 
-    // mutation: sed -i 's/    knockSpeed: HOOP_FENCE.knockSpeed,/    knockSpeed: 10 * HOOP_FENCE.knockSpeed,/' src/game/world/catalog.ts
-    // mutation: sed -i 's/mass: massKg, knockSpeed, material };/mass: massKg, knockSpeed: 10 * knockSpeed, material };/' src/game/world/catalog.ts
     it(`when the car closes on the ${prefab} MARGIN over its knock speed, then it breaks loose, once`, () => {
       const { knocks } = drive(prefab, knockSpeed + MARGIN);
       expect(knocks.length, `${prefab}s knocked loose by a hard hit`).toBe(1);

@@ -55,7 +55,6 @@ function sleeping(): Field {
 }
 
 describe("given a car parked on flat ground, its brake held, in a world that lets cars rest", () => {
-  // mutation: sed -i 's/^export const INTACT_REST_S = 1;/export const INTACT_REST_S = 1e9;/' src/game/vehicle/car-rest.ts
   it("when it has stood for 3 s, then it is asleep, and over the next second it moves not a bit and its springs, which the sleeping car skips, are not stepped", () => {
     const f = field(true, [[0, 0, 0, 0, 0]]);
     const car = f.cars[0]!;
@@ -89,7 +88,6 @@ describe("given a car parked on flat ground, its brake held, in a world that let
     expect(INTACT_REST_S).toBe(WRECK_REST_S);
   });
 
-  // mutation: sed -i 's/car.drove = throttle !== 0 || command !== 0 ||/car.drove = throttle !== 0 ||/' src/game/vehicle/car-drive.ts
   it("when it has slept and its steering wheel is turned, then it is awake after one step", () => {
     const f = sleeping();
     const car = f.cars[0]!;
@@ -106,7 +104,6 @@ describe("given a car parked on flat ground, its brake held, in a world that let
     car.dispose();
   });
 
-  // mutation: sed -i '/^    this.wake();$/d' src/game/vehicle/car.ts
   it("when it has slept and the traffic stands it on a new spot, then it is awake at once", () => {
     const f = sleeping();
     const car = f.cars[0]!;
@@ -118,7 +115,6 @@ describe("given a car parked on flat ground, its brake held, in a world that let
 });
 
 describe("given a parked car asleep and another car 20 m behind it", () => {
-  // mutation: sed -i 's/car.sleepZ, REACH,/car.sleepZ, 0,/' src/game/vehicle/car-rest.ts
   it("when the other drives past it at 8 m/s 3 m to its side, never touching, then the sleeper is woken as it passes (a mover's top within reach)", () => {
     const f = field(true, [[0, 0, 0, 0, 0], [3, -2000, 0, 0, 0]]);
     const sleeper = f.cars[0]!;
@@ -151,7 +147,6 @@ describe("given a parked car asleep and another car 20 m behind it", () => {
     rammer.dispose();
   });
 
-  // mutation: sed -i 's/car.velocity.lengthSq() === 0 && car.angular.lengthSq() === 0 && !stirNear/!stirNear/' src/game/vehicle/car-rest.ts
   it("when a shot or a punch gives the sleeper a speed of 1 m/s, then it is awake and rolls on", () => {
     const f = sleeping();
     const car = f.cars[0]!;
@@ -184,7 +179,6 @@ describe("given the same hit on a parked car that never slept and on one that di
 });
 
 describe("given a parked car asleep with a cable tied to another car", () => {
-  // mutation: sed -i 's/car.velocity.lengthSq() === 0 && car.angular.lengthSq() === 0 && !stirNear/!stirNear/' src/game/vehicle/car-rest.ts && sed -i '/^  if (car.asleep) car.wake();/d' src/game/contact/tether.ts (with `if (!a.moving && !b.moving) return;` of `wakePair` in src/game/engine/world-step.ts also made `return;`)
   it("when that car drives away and the cable draws taut, then the hooked parked car is pulled after it", () => {
     const f = field(true, [[0, 0, Math.PI / 2, 0, 0], [8, 0, Math.PI / 2, 0, 0]]);
     run(f, SETTLE_S, [PARKED, PARKED]);
@@ -208,7 +202,6 @@ describe("given a parked car asleep with a cable tied to another car", () => {
 describe("given a car with weight borne on its roof by a car above it", () => {
   const NO_CHANGE = new THREE.Vector3();
 
-  // mutation: sed -i '/^    if (under !== undefined && under.asleep && !under.deform.massActive) under.wake();/d' src/game/vehicle/car-surfaces.ts
   it("when the car is asleep and the car above bears weight on it, then it wakes at once: its skipped step would never take that weight", () => {
     const f = field(true, [[0, 0, 0, 0, 0]]);
     const car = f.cars[0]!;

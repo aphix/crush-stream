@@ -81,7 +81,6 @@ describe("the patrol cars' cars come from the traffic's pool", () => {
     expect(ports.lease(0, 0), "the slot is free again").toBe(0);
   });
 
-  // mutation: in src/game/ai/openworld-crime/traffic-patrol-ports.ts redirect(), change `this.traffic.redirect(this.leased[handle]!, to)` to `false`
   it("re-aims a leased car at the kerb space nearest a point, and says when the traffic cannot", () => {
     const { traffic, calls, sirens } = fakeTraffic();
     const ports = new TrafficPatrolPorts(traffic, sirens);
@@ -94,7 +93,6 @@ describe("the patrol cars' cars come from the traffic's pool", () => {
     expect(ports.redirect(slot, 50, 0), "no space near the point").toBe(false);
   });
 
-  // mutation: sed -i 's/    return this.leased\[handle\]!.index;/    return handle;/' src/game/ai/openworld-crime/traffic-patrol-ports.ts
   it("names a leased car by its place in the engine's list, not by its handle", () => {
     const { traffic, sirens } = fakeTraffic();
     const ports = new TrafficPatrolPorts(traffic, sirens);
@@ -116,7 +114,6 @@ describe("the patrol cars' cars come from the traffic's pool", () => {
 });
 
 describe("the patrol cars tell the traffic whom they chase", () => {
-  // mutation: in src/game/ai/openworld-crime/traffic-patrol-ports.ts evade(), change `this.leased[chaserHandle]!.index` to `chaserHandle`
   it("names the chasing car by its engine index, and ends the evasion by the chased car's", () => {
     const { traffic, calls, sirens } = fakeTraffic();
     const ports = new TrafficPatrolPorts(traffic, sirens);

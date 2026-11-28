@@ -106,8 +106,6 @@ describe("given the open world in play on the real engine", () => {
     expect(hud.get().lookAt, "back to nothing").toBe(null);
   });
 
-  // mutation: sed -i '/^    this.openWorld.mindsSetting = this.minds;/d' src/game/engine/engine.ts
-  // mutation: sed -i 's/      return this.minds === null ? gazed : this.minds.describe(gazed);/      return gazed;/' src/game/engine/engine-openworld.ts
   it("when the eye rests on a resident with Minds off, then her panel ends with her thought and no worker is made; with Minds on, another's panel does too and one worker is made", () => {
     let made = 0;
     vi.stubGlobal(
@@ -164,7 +162,6 @@ describe("given the open world in play on the real engine", () => {
     expect(engine.net["game"].crowdLink()?.seed, "the link's key: this device's tier above the seed").toBe(POPULATION_TIER.desktop * CROWD_TIER_SCALE + LINK_SEED);
   });
 
-  // mutation: sed -i 's/^  if (device !== undefined) Object.defineProperty(engine, "deviceClass", { value: device });/  void device;/' src/game/engine/engine-headless.test-util.ts
   it("when it is booted as a desktop, then it runs the desktop's city: 150 people or more, 5 patrol cruisers and 6 bodies, not the phone's", () => {
     const world = engine["openWorld"];
     const { ints, capacity } = world["crowd"]!.state;
@@ -175,7 +172,6 @@ describe("given the open world in play on the real engine", () => {
     expect(world["bodies"]!["size"], "bodies").toBe(6);
   });
 
-  // mutation: sed -i 's/^      gameMinute: this.gameMinuteText(),/      gameMinute: null,/' src/game/engine/engine-hud.ts
   it("when the open world runs, then the HUD carries its clock as a whole game minute of the day, and no other scene has one", () => {
     runSeconds(engine, 1);
     const minute = hud.get().gameMinute;
@@ -192,7 +188,6 @@ describe("given the open world in play on the real engine", () => {
     }
   });
 
-  // mutation: sed -i 's/^      gameMinute: this.gameMinuteText(),/      gameMinute: null,/' src/game/engine/engine-hud.ts
   it("when the hour is set to 13 and then to 21, then the HUD's clock reads that hour", () => {
     const clockAt = (hour: number): number | null => {
       engine["openWorld"].setHour(hour);
@@ -241,7 +236,6 @@ describe("given the number pad's plus and minus in the open world", () => {
   const NUMPAD_MINUS = "NumpadSubtract";
   const KEY_H = "KeyH";
 
-  // mutation: sed -i 's/  dayForward: "NumpadAdd",/  dayForward: "NumpadMultiply",/' src/game/engine/engine-keys.ts
   it("when plus is pressed in solo, then the stage's light and the crowd's clock stand on the next whole game hour at once; minus is the hour before, a day on; and H still opens the race view and leaves the hour alone", () => {
     runSeconds(engine, 1.5);
     const before = lightHour();
@@ -265,7 +259,6 @@ describe("given the number pad's plus and minus in the open world", () => {
     expect(engine["race"].fullUi, "H again").toBe(full);
   });
 
-  // mutation: sed -i 's/      inRoom: () => this.net.role !== "off",/      inRoom: () => false,/' src/game/engine/engine.ts
   it("when the engine is in a room, then plus and minus move neither the light nor the crowd's clock", () => {
     const light = lightHour();
     const seconds = crowdSeconds();
@@ -282,7 +275,6 @@ describe("given the number pad's plus and minus in the open world", () => {
 });
 
 describe("given the open world up on Auto, with no match running", () => {
-  // mutation: sed -i 's/const matching = this.showOpenWorld || (/const matching = (/' src/game/engine/engine-input.ts
   it("when a frame reaches the render-scale and detail governors, then both are told a match is running, so a phone's pixel ratio can step down", () => {
     expect(engine["showOpenWorld"], "control: the city is up").toBe(true);
     expect(engine["autoFx"].auto, "control: Auto is on").toBe(true);

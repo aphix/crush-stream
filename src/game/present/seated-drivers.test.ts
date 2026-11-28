@@ -247,7 +247,6 @@ describe("given the seated drivers' batch and one car", () => {
 });
 
 describe("given the seated drivers' batch and cars the open world says are parked", () => {
-  // mutation: sed -i 's/ || (empty !== null \&\& empty(c, car))) continue;/) continue;/' src/game/present/seated-drivers.ts
   test("when the caller names a car empty, then no driver is drawn in it and the other cars' are", () => {
     const cars = [0, 5].map((x) => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");

@@ -71,7 +71,6 @@ function openWorldLobby(movers: number, patrol = 0): { w: World; traffic: OpenWo
 }
 
 describe("given the lobby's cars no human drives", () => {
-  // mutation: sed -i 's/ && !this.seats.has(i) ? (this.freeDrivers/ ? (this.freeDrivers/' src/game/engine/engine-race.ts
   it("when the free drivers are asked for inputs, then they are asked for the unseated cars only: never the local player's own, never a peer's seat", () => {
     const w = makeWorld();
     w.race.enter(false, true);
@@ -93,7 +92,6 @@ describe("given the lobby's cars no human drives", () => {
     expect(asked).toEqual([2, 3]);
   });
 
-  // mutation: sed -i 's/ ? (this.freeDrivers?.inputOf(i, dt) ?? null) : null;/ ? null : null;/' src/game/engine/engine-race.ts
   it("when a free driver gives a car an input, then the lobby applies it where it would have held the car on its brakes", () => {
     const w = makeWorld();
     w.race.enter(false, true);
@@ -154,7 +152,6 @@ describe("given the open world's traffic running in the lobby, its pool parked i
     }
   }
 
-  // mutation: sed -i 's/    if (!car || !this.track || this.freeDrivers?.owns(id)) return;/    if (!car || !this.track) return;/' src/game/engine/engine-race-field.ts
   it("when the lobby resets every car to its spawn and a pool car's id is asked back to its spawn, then no pool car is moved onto the spawn or woken", () => {
     const { w, pool, before } = settled();
     w.race.reset();
@@ -163,7 +160,6 @@ describe("given the open world's traffic running in the lobby, its pool parked i
     expectUnmoved(w, pool, before, "after each pool car was sent back to its spawn");
   });
 
-  // mutation: sed -i 's/        if (!this.freeDrivers?.owns(i)) cars\[i\]!.stored = false;/        cars[i]!.stored = false;/' src/game/engine/engine-race.ts
   it("when a slice runs outside the lobby's free branch (no session yet), then the pool cars traffic put away stay put away", () => {
     const { w, pool, before } = settled();
     w.race.free = false;
@@ -195,7 +191,6 @@ describe("given a real car leased to drive across a signalled junction of the op
     return { w, traffic, index: car!.index, arrived: () => car!.arrived };
   }
 
-  // mutation: sed -i 's/if (!urgent) target = Math.min(target, this.signalLimit/if (urgent) target = Math.min(target, this.signalLimit/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when the light stays red, then the car stops with its nose short of the stop bar", () => {
     const { w, traffic, index } = leased();
     run(w, traffic, timeShowing(LIGHT.red), WAIT_SECONDS);
@@ -205,7 +200,6 @@ describe("given a real car leased to drive across a signalled junction of the op
     expect(barX - car.group.position.x, "it came up to the bar").toBeLessThan(NOSE_OVERHANG + 8);
   });
 
-  // mutation: sed -i 's/const lateral = network.laneOffset + (network.parkingOffset - network.laneOffset) \* smoothStep(step \/ SWING_STEPS);/const lateral = network.laneOffset;/' src/game/ai/openworld-traffic/trip-route.ts
   it("when the light turns green, then the car that waited goes through and parks in its space", () => {
     const { w, traffic, index, arrived } = leased();
     run(w, traffic, timeShowing(LIGHT.red), WAIT_SECONDS);

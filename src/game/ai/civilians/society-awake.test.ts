@@ -44,7 +44,6 @@ function restAt(state: CityState, ids: readonly number[], place: number, home = 
 }
 
 describe("given the society's rest weight by the hour", () => {
-  // mutation: sed -i 's/  return now + (next - now) \* (into \/ TICKS_PER_GAME_HOUR);/  return now;/' src/game/ai/civilians/society-awake.ts
   it("when the weight is read on the hour and half past, then the hour is the table's and the half hour the mean of it and the next", () => {
     const state = emptyState();
     const rest = HOUR_WEIGHTS[NEED.rest];
@@ -54,7 +53,6 @@ describe("given the society's rest weight by the hour", () => {
     }
   });
 
-  // mutation: sed -i 's/  return restWeight >= bedtimeOf(resident);/  return restWeight >= 0.75;/' src/game/ai/civilians/society-awake.ts
   it("when bedtimes are read over many residents, then none sleeps below the range, all do above it, and in between they go to bed at their own pace", () => {
     const asleepShare = (weight: number): number => {
       let asleep = 0;
@@ -71,7 +69,6 @@ describe("given the society's rest weight by the hour", () => {
 });
 
 describe("given people at homes at night and in the evening", () => {
-  // mutation: sed -i 's/    if (resting \&\& sleepsAt(rest, resident)) continue;/    if (resting) continue;/' src/game/ai/civilians/society-awake.ts
   it("when residents rest at their own home, then in the evening they are awake, and at three in the night none is", () => {
     const state = emptyState();
     restAt(state, [0, 1, 2], homes[0]!);
@@ -81,7 +78,6 @@ describe("given people at homes at night and in the evening", () => {
     expect(awakeAt(state, homes[0]!, 23), "eleven at night").toBe(0);
   });
 
-  // mutation: sed -i 's/    if (out\[place\]! < 255) out\[place\]!++;/    if (out[place]! < 255) out[place]! += 0;/' src/game/ai/civilians/society-awake.ts
   it("when the evening thins, then the people awake at home fall from all to none between eight and ten, a bedtime at a time", () => {
     const state = emptyState();
     const ids = Array.from({ length: RESIDENTS }, (_, at) => at);
@@ -94,7 +90,6 @@ describe("given people at homes at night and in the evening", () => {
     expect(counts[3], "ten").toBe(0);
   });
 
-  // mutation: sed -i 's/    const resting = ints\[base + RESIDENT_INT.home\] === place \&\& ints\[base + RESIDENT_INT.legPurpose\] === NEED.rest;/    const resting = ints[base + RESIDENT_INT.legPurpose] === NEED.rest;/' src/game/ai/civilians/society-awake.ts
   it("when a guest, or someone at home for another purpose, is there at night, then they are awake", () => {
     const state = emptyState();
     restAt(state, [0], homes[0]!, homes[1]!);
@@ -102,7 +97,6 @@ describe("given people at homes at night and in the evening", () => {
     expect(awakeAt(state, homes[0]!, 3), "a guest on rest and one there for company").toBe(2);
   });
 
-  // mutation: sed -i 's/    if (place === NO_PLACE || tick < ints\[base + RESIDENT_INT.arriveTick\]! || state.index.kindOf\[place\] !== PLACE_KIND.home) continue;/    if (place === NO_PLACE || state.index.kindOf[place] !== PLACE_KIND.home) continue;/' src/game/ai/civilians/society-awake.ts
   it("when a resident is still walking home, or is no person, or is gone, or is somewhere that is no home, then they light nothing", () => {
     const state = emptyState();
     restAt(state, [0, 1, 2, 3], homes[0]!, homes[0]!, NEED.social);

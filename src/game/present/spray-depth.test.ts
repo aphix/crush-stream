@@ -175,7 +175,6 @@ describe("given a driver's spray, a box projection every surface facing the same
 });
 
 describe("given the dummy's spray depth surface", () => {
-  // mutation: sed -i 's/^  const topCode = depthCode(outermost);/  const topCode = depthCode(nearest);/' src/game/present/spray-depth.ts
   it("when it is made, then its bytes are the ones the unhoisted code made", () => {
     const fnv = (bytes: ArrayLike<number>): number => {
       let h = 2166136261;

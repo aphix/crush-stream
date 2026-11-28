@@ -500,8 +500,6 @@ describe("given a run that hitched as often as the table holds, over every A/B s
 });
 
 describe("given an extended card with the time-of-day A/B", () => {
-  // mutation: sed -i 's/      ...(r.abTime ? timeArmLines(r.abTime) : \[\]),//' src/game/engine/engine-bench-report.ts  (the card prints no time-of-day arms)
-  // mutation: sed -i 's/const title = "A\/B time of day pinned: ";/const title = "A\/B time: ";/' src/game/engine/engine-bench-report.ts  (reds the title)
   test("when it is described, then the day, sunset and night arms print in that order under one title, after the shadows A/B; a quick or Lab card has none", () => {
     const abTime = { day: { ...B(54, null), calls: 160 }, sunset: { ...B(52, null), calls: 161 }, night: { ...B(47, null), calls: 190 } };
     const lines = describeBench({ ...RESULT, abShadow: { auto: B(53, null), max: B(49, null) }, abTime });

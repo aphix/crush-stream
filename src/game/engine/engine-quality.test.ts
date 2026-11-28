@@ -89,7 +89,6 @@ describe("given the real engine on a page whose URL says ?draw=max&scale=1.5&sha
     expect(sunShadow(), "auto, Ultra on").toBe("2048 24");
     stage.setUltraShadow(0);
     expect(sunShadow(), "auto, Ultra off").toBe("1024 24");
-    // mutation: sed -i 's/this.phone && this.shadowLevel === SHADOW_LEVELS.auto/false \&\& this.shadowLevel === SHADOW_LEVELS.auto/' src/game/present/engine-world.ts
     stage.phone = true;
     engine.setShadows("auto");
     stage.setUltraShadow(2048);

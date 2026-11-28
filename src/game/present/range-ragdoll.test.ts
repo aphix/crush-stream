@@ -162,7 +162,6 @@ describe("given the ejection range at its defaults at 60 Hz jittered with stalls
   const sedan = DRIVER_CARS[0]!;
   const [display, frames] = DISPLAYS[2]!;
   // The runs above leave the car's skin undrawn after the throw (`Control.skin`): this row holds that the dummy's run is the same either way.
-  // mutation: sed -i 's/if (!control.skin) car.updateSkin = skipSkin;/if (!control.skin) car.updateSkin = skipSkin; else sys["world"]!.gravity.y -= 0.5;/' src/game/present/range-run.test-util.ts  (the drawn run differs from the undrawn one, as a skin that fed the sim would make it: this row)
   it("when the sedan crashes at the range, then the dummy's every frame is the same as with the skin left undrawn", async () => {
     const drawn = await rangeThrow(sedan, { skin: true }, frames());
     const undrawn = (await runOf(sedan, display, frames)).run;

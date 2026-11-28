@@ -268,7 +268,7 @@ A car has two doors and up to four seats (`car-seats.ts`: a front row on every s
   drawn), `drive-keys.test.ts`, and the lane's rows: `onfoot-flow`, `engine-walk-input`, `ragdoll-walker`, `ragdoll-walker-getup`, `ragdoll-hit`,
   `ragdoll-mesh-pick`, `showcase-walks`.
 - Unmoved by it, and run before and after: `whole-digest`, `replay-fidelity`, the race and derby result rows, the net codec and wire rows.
-- The speed lane's rows, each shown red against a mutant (a 4 m/s² push, a pivot or stop that snaps on at a threshold of the heading error, a planted foot that rides with the root, an unsmoothed focus and no recenter delay):
+- The speed lane's rows (a 4 m/s² push, a pivot or stop that snaps on at a threshold of the heading error, a planted foot that rides with the root, an unsmoothed focus and no recenter delay):
   `walker-locomotion.test.ts` (time to speed, stops, 45 / 90 / 180° cuts at a sprint, the heading-error curve, lean and bank), `walker-gait.test.ts` (planted feet do not move
   by 1e-9 m, flight at a run, joint ranges, pelvis steps), `ragdoll-walker-pace.test.ts` (the physical walker: speed, time to 90 %, drawn-speed steadiness, planted-foot slide,
   stops, cuts), `ragdoll-walker-getup.test.ts` (time to stand from four lying poses, running again within 0.6 s, a car at 4.5 m/s), `walker-camera.test.ts`, `engine-walk-input.test.ts`.

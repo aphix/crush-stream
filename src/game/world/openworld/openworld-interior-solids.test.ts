@@ -42,7 +42,6 @@ describe("given the open world's course on the real programme", () => {
     materials = makePrefabMaterials(raceTextures());
   });
 
-  // mutation: sed -i 's/prefab: building.enterable === true ? PREFAB.buildingShell : PREFAB.building/prefab: PREFAB.building/' src/game/world/openworld/openworld-course.ts
   it("when its buildings are read, then every place with an interior stands in a drawn-only shell and every other building is the solid prop", () => {
     const shells = props.filter((prop) => prop.prefab === PREFAB.buildingShell);
     const solid = props.filter((prop) => prop.prefab === PREFAB.building);
@@ -60,7 +59,6 @@ describe("given the open world's course on the real programme", () => {
     expect(shell!.material, "material").toBe(building!.material);
   });
 
-  // mutation: sed -i 's/const doorways = { ...wall, ...across, openings: street ? wall.openings.filter((opening) => opening.sill === 0) : \[\] };/const doorways = { ...wall, ...across, openings: [] };/' src/game/world/openworld/interior-plan.ts
   it("when the street face of each interior is swept at body width, then it is walled everywhere but in the doorways, which are open for a walker", () => {
     for (const place of furnished) {
       const bays = Math.round(place.width / BAY_WIDTH);
@@ -77,7 +75,6 @@ describe("given the open world's course on the real programme", () => {
     }
   });
 
-  // mutation: sed -i 's/export const ENVELOPE_HEIGHT = buildingHeight(MAX_STOREYS, true);/export const ENVELOPE_HEIGHT = 12;/' src/game/world/openworld/openworld-interior-solids.ts (the envelope of a three-storey city)
   it("when the back and the sides of each interior are probed, then a car meets a wall, and every envelope piece stands taller than every building", () => {
     const tallest = Math.max(...lots.buildings.map((building) => building.height));
     expect(Math.min(...envelope.map((prop) => prop.size![1])), "shortest envelope piece").toBeGreaterThanOrEqual(tallest);
@@ -88,7 +85,6 @@ describe("given the open world's course on the real programme", () => {
     }
   });
 
-  // mutation: sed -i 's/return mergeAlong(mergeAlong(columns, true), false).map(/return columns.map(/' src/game/world/openworld/openworld-interior-solids.ts (every wall of every house its own piece)
   it("when the envelope of every interior is counted, then a house costs a few pieces (its street wall either side of the door and one shared wall), not one per wall", () => {
     expect(envelope.length, "envelope pieces").toBeLessThanOrEqual(furnished.length * PIECES_PER_PLACE);
   });

@@ -72,7 +72,6 @@ describe("given a warmed crowd of 300 walking back and forth across the near and
     expect(art.farDrawn, "figures drawn").toBeGreaterThan(0);
     expect(gaze.lookKind.some((kind) => kind !== STIMULUS.none), "someone looks at something").toBe(true);
     expect(perFrame, `${perFrame.toFixed(1)} B a frame > ${BOUND_B} in every window for ${COMPILE_WAIT_S} s: the civilians' gaze or drawing allocates`).toBeLessThanOrEqual(BOUND_B);
-    // mutation: sed -i 's/    this.pulses = refreshStimuli(this.stimuli, this.pulses, senses, this.scratch);/    this.pulses = refreshStimuli(this.stimuli, this.pulses, { ...senses }, this.scratch);/' src/game/present/civilian-gaze.ts
   });
 });
 

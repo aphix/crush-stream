@@ -74,7 +74,6 @@ describe("given the open world director in the open world", () => {
     harness.director.stop();
   });
 
-  // mutation: sed -i 's/out\[place\] = state.closedUntilTick\[place\]! > tick || /out[place] = /' src/game/ai/civilians/society-hours.ts
   it("when no place is wrecked, then the signage is handed some place as open, and wrecking that place flips exactly its byte", () => {
     const harness = new Harness();
     harness.director.frame(FRAME);
@@ -103,7 +102,6 @@ describe("given the open world director in the open world", () => {
     expect(harness.disposed).toBe(2);
   });
 
-  // mutation: sed -i 's/    this.signs?.setNight(dayGradeAt(hour, this.dayGrade).lamps);/    this.signs?.setNight(0);/' src/game/engine/engine-openworld.ts
   it("when the clock runs and is set to midnight and to noon, then the signs are told the night once a game minute, never a frame, full at midnight and none at noon", () => {
     const harness = new Harness();
     for (let at = 0; at < GAME_MINUTES_IN_RUN * FRAME_HZ; at++) {

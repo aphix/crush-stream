@@ -40,7 +40,6 @@ function lightOf(stage: WorldStage, scene: THREE.Scene): number[] {
 }
 
 describe("given the stage's time of day and night setting (no cycle)", () => {
-  // mutation: sed -i 's/    this.hemi.intensity = mixScalar(day.hemi\[1\], SUNSET.hemi\[1\], NIGHT.hemi\[1\], warm, k);/    this.hemi.intensity = mixScalar(day.hemi[1], SUNSET.hemi[1], NIGHT.hemi[1], warm, 0.5);/' src/game/present/engine-world.ts
   it("when the stage is lit by day and then by night, then its hemisphere, sun and fill are the day's and the night's darkened by the night depth, and the lamp heads and windows are lit at night only", () => {
     const { stage } = newStage();
     stage.setSkyTier("high");
@@ -61,7 +60,6 @@ describe("given the stage's time of day and night setting (no cycle)", () => {
 });
 
 describe("given the open world's cycle set by the game hour", () => {
-  // mutation: sed -i 's/    if (this.dayHour !== null) return this.nightDepth \* this.grade.night;/    if (this.dayHour !== null) return this.grade.night;/' src/game/present/engine-world.ts
   it("when the hour is the dead of night, then the light is exactly the night setting's, and at noon exactly the day's", () => {
     const night = newStage();
     night.stage.setNight(true);
@@ -78,7 +76,6 @@ describe("given the open world's cycle set by the game hour", () => {
     for (const [at, value] of bright.entries()) if (at < 4 || at > 6) expect(value, `day value ${at}`).toBeCloseTo(plain[at]!, 6);
   });
 
-  // mutation: sed -i '/^  private aimSun/,/^  }/s/^    this.fitShadow();/    this.sun.shadow.camera.far = this.sunOffset.length() + this.shadowLevel.reach;/' src/game/present/engine-world.ts
   it("when a phone on Auto shadows sees the sun turn from noon to evening, then the sun's shadow still reaches the phone level's 28 m past the box's centre, not Auto's", () => {
     const { stage } = newStage();
     stage.phone = true;
@@ -89,7 +86,6 @@ describe("given the open world's cycle set by the game hour", () => {
     }
   });
 
-  // mutation: sed -i 's/    lampPool.opacity = LAMP_POOL_OPACITY \* (cycling ? lamps : 1);/    lampPool.opacity = LAMP_POOL_OPACITY;/' src/game/present/engine-world.ts
   it("when the evening comes hour by hour, then the lamp heads, their pools and the windows come on together with it, ending where the night setting has them", () => {
     const { stage } = newStage();
     stage.setSkyTier("high");
@@ -114,7 +110,6 @@ describe("given the open world's cycle set by the game hour", () => {
     expect(FACADE_GLOW.value, "dusk windows part way").toBeLessThan(1);
   });
 
-  // mutation: sed -i 's/    if (this.dayHour === null \&\& this.night) return TIME_OF_DAY.night;/    if (this.night) return TIME_OF_DAY.night;/' src/game/present/engine-world.ts
   it("when a whole day is run, then the baked environment stays the day's, and the discrete night still bakes the night's", () => {
     const { stage } = newStage();
     const looks = new Set<string>();
@@ -132,7 +127,6 @@ describe("given the open world's cycle set by the game hour", () => {
     expect(discrete.stage.envLook, "the night setting's environment").toBe(TIME_OF_DAY.night);
   });
 
-  // mutation: sed -i 's/    if (this.dayHour !== null) return;\n    if (this.time !== null) {/    if (this.time !== null) {/' src/game/present/engine-world.ts
   it("when a night key or setting asks for night or day in the cycle, then nothing changes, and leaving the cycle gives the night setting back", () => {
     const { stage, scene } = newStage();
     stage.setDayHour(12);
@@ -150,7 +144,6 @@ describe("given the open world's cycle set by the game hour", () => {
     expect(stage.night, "night flag at midnight, setNight(false) ignored").toBe(true);
   });
 
-  // mutation: sed -i 's/    if (hour === null) {\n      if (this.dayHour === null) return;/    if (hour === null) {\n      return;/' src/game/present/engine-world.ts
   it("when the cycle is left, then the time of day's sun, sky and light are back as they were before it", () => {
     const { stage, scene } = newStage();
     stage.setTime(TIME_OF_DAY.sunset);
@@ -165,7 +158,6 @@ describe("given the open world's cycle set by the game hour", () => {
 });
 
 describe("given the cycle's sun", () => {
-  // mutation: sed -i 's/    } else if (sunNeedsHop(this.cycleElevation, target)) {/    } else if (true) {/' src/game/present/engine-world.ts
   it("when the hour passes minute by minute, then the light's direction and shadow axes change only at a hop, a few hundred times a day, and the grade changes every minute", () => {
     const { stage } = newStage();
     stage.setDayHour(0);
@@ -193,7 +185,6 @@ describe("given the cycle's sun", () => {
     expect(SUN_HOP_METRES, "the tolerance in force (m)").toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's/const LOW_SUN = THREE.MathUtils.degToRad(12);/const LOW_SUN = THREE.MathUtils.degToRad(2);/' src/game/present/engine-world.ts
   it("when the light is read round the clock, then it never stands lower than the sunset's 12 degrees, is the day's 58 degrees at noon and the moon's at night", () => {
     const { stage } = newStage();
     const floor = THREE.MathUtils.degToRad(12);
@@ -218,7 +209,6 @@ describe("given the sky in the cycle", () => {
     return { stars: material.uniforms.uStars!.value as number, horizon: (material.uniforms.horizonColor!.value as THREE.Color).clone() };
   }
 
-  // mutation: sed -i 's/    u.uStars!.value = night;/    u.uStars!.value = night > 0.5 ? 1 : 0;/' src/game/present/sky-dome.ts
   it("when the evening comes with a sky drawn, then the stars rise with the night and the horizon goes from the day's to the night's through the sunset's", () => {
     const { stage } = newStage();
     stage.setSkyTier("high");
@@ -242,7 +232,6 @@ describe("given the sky in the cycle", () => {
     expect(dead.horizon.r + dead.horizon.g + dead.horizon.b, "midnight's horizon is dark").toBeLessThan((day.horizon.r + day.horizon.g + day.horizon.b) / 4);
   });
 
-  // mutation: sed -i 's/  if (uStars > 0.0) {/  if (uStars > 0.5) {/' src/game/present/sky-procedural.ts
   it("when the stars' shader is read, then their brightness scales with the stars uniform rather than switching at one half", () => {
     const stage = newStage().stage;
     const fragment = (stage.sky.mesh.material as THREE.ShaderMaterial).fragmentShader;
@@ -254,7 +243,6 @@ describe("given the sky in the cycle", () => {
 describe("given the sun's shadow fit on a phone", () => {
   const edge = (stage: WorldStage): number => stage.sun.shadow.mapSize.x;
 
-  // mutation: sed -i 's/this.phone \&\& this.shadowLevel === SHADOW_LEVELS.auto/this.phone \&\& false/' src/game/present/engine-world.ts
   it("when the Shadows knob is Auto, then a phone's map is 512 and a desktop's 1024; when it is High, then a phone's is 2048", () => {
     const desktop = newStage().stage;
     const phone = newStage().stage;
@@ -276,7 +264,6 @@ describe("given a stage at night on a tier with no bloom", () => {
     return lampOf().pool.opacity;
   }
 
-  // mutation: sed -i 's/ \* (this.skyTier === "off" || this.skyTier === "minimal" ? NO_BLOOM_POOL_GAIN : 1)//' src/game/present/engine-world.ts
   it("when the pool is read at minimal and at high, then minimal's is 1.4 times higher, and never over 1", () => {
     const high = poolAt("high", 0);
     expect(poolAt("minimal", 0), "minimal").toBeCloseTo(Math.min(1, high * 1.4), 9);

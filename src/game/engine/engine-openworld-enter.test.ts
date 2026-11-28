@@ -53,7 +53,6 @@ describe("given the real engine in the open world, its player out of his car wit
   });
   afterAll(() => rig.dispose());
 
-  // mutation: sed -i 's/      if (index !== this.flow.car \&\& this.host.enterable(index) \&\& doorInReach(cars\[index\]!, _torso, this.speed)) return index;/      continue;/' src/game/engine/engine-onfoot.ts
   it("when he gets out, walks to an empty kerb car's driver door and presses Enter, then he is at its wheel: the seat and the lobby's own car are it", () => {
     const target = nearestEmptyCar();
     expect(target, "an empty car stands near").toBeGreaterThan(0);
@@ -67,7 +66,6 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(rig.engine["race"].self, "it is the car this browser drives").toBe(target);
   });
 
-  // mutation: sed -i 's/  isEmptyCar(id: number): boolean {/  isEmptyCar(id: number): boolean {\n    return true;/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when the car at the door has a driver on a trip of the traffic's, then Enter does nothing: he stays out and is told it is not his", () => {
     const target = nearestEmptyCar();
     const traffic = world()["traffic"]!;
@@ -86,7 +84,6 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(rig.engine["race"].self, "this browser still drives car 0").toBe(0);
   });
 
-  // mutation: sed -i 's/    if (id < 0 || id >= MAX_CARS || humans\[id\] === 1) return -1;/    if (id < 0 || id >= MAX_CARS) return -1;\n    if (id >= 0) return -1;/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when he has taken a kerb car, then it stays his for a minute (traffic does not put it away or stand it anew) and he drives it off", () => {
     const target = nearestEmptyCar();
     rig.getOut();
@@ -101,7 +98,6 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(hypot2(car.group.position.x - before.x, car.group.position.z - before.z), "he drove it off").toBeGreaterThan(DROVE_OFF_M);
   });
 
-  // mutation: sed -i 's/    if (adopted !== null && this.race?.free === true && this.race.self === adopted) return adopted;/    void adopted;/' src/game/engine/engine-core.ts
   it("when he has got into another car, then he is the same person in it: the driver drawn in it and the one thrown from it are his, not the seed's driver of that car", () => {
     const target = nearestEmptyCar();
     const ragdolls = rig.engine["ragdolls"];
@@ -121,7 +117,6 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(JSON.stringify(ragdolls.carDriverLook(target)), "and still his once he is out of it").toBe(own);
   });
 
-  // mutation: sed -i 's/    t.cop = this.uniformOn(e.car, e.cop);/    t.cop = e.cop;/' src/game/present/ragdoll-throw.ts
   it("when he is thrown from a car whose own driver wears the uniform, then the man thrown wears no uniform and is him", () => {
     const ragdolls = rig.engine["ragdolls"];
     const target = rig.engine["seat"].carIndex;
@@ -153,7 +148,6 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(JSON.stringify(dressed[0]!.look), "the man thrown is him").toBe(JSON.stringify(ownLook(rig.engine["looks"].mine.person)));
   });
 
-  // mutation: sed -i 's/    t.cop = this.uniformOn(e.car, e.cop);/    t.cop = false;/' src/game/present/ragdoll-throw.ts
   it("when a patrol car nobody took ejects its driver, then the man thrown wears the uniform", () => {
     const ragdolls = rig.engine["ragdolls"];
     const other = rig.engine["seat"].carIndex + 1;
@@ -181,7 +175,6 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(dressed[0], "the uniform on the man thrown").toBe(true);
   });
 
-  // mutation: sed -i 's/    const car = this.cars\[this.ownCar()\];/    const car = this.cars[this.drivenCar()];/' src/game/engine/engine-share.ts
   it("when he has got into a kerb car and his look is restyled, then that car keeps its own body and colour and his own car keeps his paint", () => {
     const target = nearestEmptyCar();
     const engine = rig.engine;
@@ -204,7 +197,6 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(own.lookMeshes().bodyPaint.color.getHex(), "his own car keeps his paint").toBe(picked);
   });
 
-  // mutation: sed -i 's/    if (id < this.first || this.context.humans\[id\] === 1 || car.driverOut !== null) return true;/    if (this.context.humans[id] === 1 || car.driverOut !== null) return true;/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when he has got into another car, then the one he left stands where it was, empty, and he can walk back and get into it again", () => {
     const target = nearestEmptyCar();
     const own = rig.cars()[0]!;
@@ -226,7 +218,6 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(world().canEnter(target), "the kerb car he left is empty again").toBe(true);
   });
 
-  // mutation: sed -i '/^    this.swingDoor(wallDt);/d' src/game/engine/engine-onfoot.ts
   it("when he gets out in the open world, then his driver's door swings open and shuts once he has walked off; when he gets back in, it opens and shuts behind him", () => {
     const car = rig.cars()[rig.engine["seat"].carIndex]!;
     const widestOver = (frames: number): number => {
@@ -251,7 +242,6 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(Math.abs(car.doorAngle(DRIVER_SIDE)), "shut behind him").toBeLessThan(0.02);
   });
 
-  // mutation: sed -i 's/followed: () => (ports.foot(this.lookFoot) ? null : ports.cull.followed()),/followed: () => ports.cull.followed(),/' src/game/engine/engine-openworld.ts
   it("when he is on foot beside his own car and looks at it, then the look panel names it his car", () => {
     rig.getOut();
     const car = rig.cars()[rig.engine["seat"].carIndex]!;

@@ -27,7 +27,6 @@ describe("given a flight of stairs placed as a prop, its top falling from the lo
   const placed = [flightProp(10, -4, YAW, true)];
   const flight = flightsOf(propColliders(placed), placed)[0]!;
 
-  // mutation: sed -i 's/Math.ceil(climbed \* flight.treads)/Math.floor(climbed * flight.treads)/' src/game/world/stairs.ts
   it("when each tread's middle is read, then its height is its riser times its number, the highest at the -x end", () => {
     for (let tread = 1; tread <= TREADS; tread++) {
       const point = at(10, -4, YAW, LENGTH / 2 - (tread - 0.5) * STAIR_TREAD, 0.3);
@@ -51,7 +50,6 @@ describe("given a flight of stairs placed as a prop, its top falling from the lo
 });
 
 describe("given flights standing across the grid's cell edges", () => {
-  // mutation: sed -i 's/for (let cx = cellOf(flight.x - reach); cx <= cellOf(flight.x + reach); cx++)/for (let cx = cellOf(flight.x); cx <= cellOf(flight.x); cx++)/' src/game/world/stairs.ts
   it("when each flight is read through the field at points on either side of an edge, then the field answers what the flight does", () => {
     const placed = [flightProp(7.9, 0, 0, true), flightProp(-0.3, 15.9, 1.1, true), flightProp(40, 40, 3, true)];
     const flights = flightsOf(propColliders(placed), placed);

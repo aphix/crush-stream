@@ -19,7 +19,6 @@ const playable = map.places.filter((place) => place.doorNode >= 0);
 const graph = map.graph;
 
 describe("given the open world loaded by its id", () => {
-  // mutation: sed -i 's/\[HAVANA, openWorldCourse(layOutLots())\]/[HAVANA]/' src/game/world/tracks/index.ts
   it("when the race loader is asked for openworld, then it loads that course and not the first on the menu", () => {
     const world = makeWorld();
     world.race.showLobby(OPENWORLD_ID);
@@ -29,7 +28,6 @@ describe("given the open world loaded by its id", () => {
 });
 
 describe("given the drafted programme's map", () => {
-  // mutation: sed -i 's/name: PLACE_NAMES.bodega/name: "Bodega"/' src/game/world/openworld/openworld-programme.ts
   it("when the cast's places are looked up by name, then each is on the map exactly once", () => {
     for (const name of Object.values(PLACE_NAMES)) expect(playable.filter((place) => place.name === name).length, `places named ${name}`).toBe(1);
   });
@@ -84,7 +82,6 @@ describe("given the programme's businesses on the map", () => {
   const businesses = playable.filter((place) => place.storeys > 0 && place.kind !== PLACE_KIND.home && place.name !== PLACE_NAMES.policeStation);
   const withInterior = (interior: string) => playable.filter((place) => place.interior === interior);
 
-  // mutation: sed -i 's/{ row: ROW.A, column: 0, face: "south", at: 9, venue: COFFEE_GRIND },//' src/game/world/openworld/openworld-programme.ts
   it("when the places are counted by kind of interior, then there are coffee shops, bars and an office, a store on each of several corners and one supermarket without an interior", () => {
     expect(withInterior("coffee").length, "coffee shops").toBeGreaterThanOrEqual(2);
     expect(withInterior("bar").length, "bars").toBeGreaterThanOrEqual(2);
@@ -95,7 +92,6 @@ describe("given the programme's businesses on the map", () => {
     expect(supermarkets[0]!.interior, "the supermarket's interior").toBeUndefined();
   });
 
-  // mutation: sed -i 's/{ row: ROW.C, column: 0, face: "south", at: 0, venue: MARTINEZ }/{ row: ROW.C, column: 0, face: "south", at: 6, venue: MARTINEZ }/' src/game/world/openworld/openworld-programme.ts
   it("when each corner store is placed on its block, then it touches the block's west or east end", () => {
     const reach = lots.geometry.blockLength / 2;
     for (const store of withInterior("store")) {
@@ -105,7 +101,6 @@ describe("given the programme's businesses on the map", () => {
     }
   });
 
-  // mutation: sed -i 's/hours: \[6, 15\], interior: "coffee"/interior: "coffee"/' src/game/world/openworld/openworld-programme.ts
   it("when the businesses are read, then each has opening hours of game hours, a sector and a facade style the pipeline has, and a type of business has its own style", () => {
     const styleOf = new Map<string, Set<string>>();
     for (const place of businesses) {
@@ -120,7 +115,6 @@ describe("given the programme's businesses on the map", () => {
     expect(Object.fromEntries([...styleOf].map(([interior, styles]) => [interior, [...styles]])), "style by kind of interior").toEqual({ bar: ["bar"], coffee: ["coffee"], office: ["office"], store: ["cornerstore"] });
   });
 
-  // mutation: sed -i 's/interior: "rowhome" }/}/' src/game/world/openworld/openworld-lots.ts
   it("when the homes inside the walls are read, then each is a one-lot building of its own with a rowhome interior and two stoop seats leading its seats, however many storeys it has", () => {
     const homes = playable.filter((place) => place.kind === PLACE_KIND.home && place.interior !== undefined);
     expect(homes.length, "homes inside the walls").toBeGreaterThan(100);
@@ -136,7 +130,6 @@ describe("given the programme's businesses on the map", () => {
 describe("given the police station on the map", () => {
   const station = playable.find((place) => place.name === PLACE_NAMES.policeStation);
 
-  // mutation: sed -i 's/sector: SECTOR.police, interior: "office"/sector: SECTOR.police/' src/game/world/openworld/openworld-programme.ts
   it("when the station is read, then it is a two-lot office building with an office interior and a door on the street, open at every hour", () => {
     must(station, "the station is on the map");
     expect(station.interior, "its interior").toBe("office");

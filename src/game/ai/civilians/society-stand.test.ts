@@ -116,7 +116,6 @@ describe("given more drinkers than the bar has seats and standing spots", () => 
     expect(new Set(held).size, "different spots held").toBe(held.length);
   });
 
-  // mutation: sed -i 's/^  const keeps = here \&\& state.ints\[base + RESIDENT_INT.work\] !== place .*$/  const keeps = false;/' src/game/ai/civilians/civilian-plan.ts
   it("when the lowest standing spot comes free and every other drinker with a standing spot stays for another round, then each keeps the spot she holds", () => {
     const tick = intAt(state, drinkers[0]!, RESIDENT_INT.arriveTick) + 4;
     const standers = drinkers.filter((resident) => intAt(state, resident, RESIDENT_INT.seat) >= state.venues.seatCount[BAR]!).sort((a, b) => intAt(state, a, RESIDENT_INT.seat) - intAt(state, b, RESIDENT_INT.seat));
@@ -296,7 +295,6 @@ function stayAndLeave(state: CityState, resident: number): ({ x: number; z: numb
 const longestStep = (frames: readonly ({ x: number; z: number } | null)[]): number => Math.max(...frames.slice(1).map((frame, at) => hypot2(frame!.x - frames[at]!.x, frame!.z - frames[at]!.z)));
 
 describe("given a customer at a seat or a standing spot in a bar, a coffee shop and a store of the city, each room with an aisle", () => {
-  // mutation: sed -i 's/^  if (atLane < 0) {/  if (false) {/' src/game/ai/civilians/society-activity.ts
   it("when she is drawn every frame of her stay and of her leaving, then she starts at the door, sits or stands at her spot, is at the door as her walk sets off, and never moves a metre in a frame", () => {
     for (const name of ["Kelly's Tap Room", "Daily Grind Coffee", "Bodega Supreme"]) {
       const place = placeIn(city, name);
@@ -318,7 +316,6 @@ describe("given a customer at a seat or a standing spot in a bar, a coffee shop 
     }
   });
 
-  // mutation: sed -i 's/^  const keeps = here \&\& state.ints\[base + RESIDENT_INT.work\] !== place .*$/  const keeps = false;/' src/game/ai/civilians/civilian-plan.ts
   it("when she stays at the bar for another round, then she keeps her seat and is drawn sitting on through the change of round, never walking", () => {
     const state = createCityState(5, city, 60);
     const resident = state.cast.length;
@@ -350,7 +347,6 @@ describe("given Kelly's Tap Room with every seat and standing spot by its counte
   }
   const late = next;
 
-  // mutation: sed -i 's/^    standCount\[place\] = counterSpots >= 1 ? STAND_SPOTS + (entry.standRoom?.length ?? 0) : 0;/    standCount[place] = counterSpots >= 1 ? STAND_SPOTS : 0;/' src/game/ai/civilians/society-venues.ts
   it("when more customers come in, then each takes a spot of her own in the room's standing room, drawn mid-stay standing loose on the customers' side, a metre from the next", () => {
     expect(roomers.length, "customers in the standing room").toBe(city.places[KELLYS]!.standRoom!.length);
     const spots = roomers.map((resident) => drawnThrough(state, resident)[(ROOM_STAY / DECISION_HZ / FRAME_SECONDS) >> 1]);
@@ -362,7 +358,6 @@ describe("given Kelly's Tap Room with every seat and standing spot by its counte
     expect(nearestPair(spots.map((spot) => spot!)), "metres between the two nearest").toBeGreaterThanOrEqual(0.99);
   });
 
-  // mutation: sed -i 's/(!withinHours(state, current, tick) || fullBesideHer(state, resident, current))/!withinHours(state, current, tick)/' src/game/ai/civilians/civilian-plan.ts
   it("when someone at the full bar who holds nothing there decides, wanting nothing but to stay, then she does not stay in it: she sets out home", () => {
     const resident = late + 1;
     const tick = ROOM_ARRIVE + ROOM_STAY;
@@ -373,7 +368,6 @@ describe("given Kelly's Tap Room with every seat and standing spot by its counte
     expect(intAt(state, resident, RESIDENT_INT.place), "where she is or heads after deciding").toBe(HOME_OF_ROOM);
   });
 
-  // mutation: sed -i '/^  state.ints\[base + RESIDENT_INT.nextDecisionTick\] = state.ints\[base + RESIDENT_INT.arriveTick\]! + walkIn + BUY_TICKS;/d' src/game/ai/civilians/civilian-plan.ts
   it("when one more comes in with the standing room full too, then she stays only to walk in and buy, drawn every frame of it, and walks out from the counter as she leaves", () => {
     stageResident(state, late, { place: HOME_OF_ROOM, tick: ROOM_ARRIVE, purpose: NEED.rest });
     state.floats[late * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = ROOM_PACE;
@@ -406,7 +400,6 @@ function seatIn(state: CityState, resident: number, place: number, seat: number)
 }
 
 describe("given Dee, a named resident, at the back of Kelly's Tap Room on the evening of her coffee at the bodega", () => {
-  // mutation: sed -i 's/^  return walk < 0 ? walk : walk + walkOutTicks(state, resident, from, leftSpotOf(state, resident, from, tick));/  return walk;/' src/game/ai/civilians/civilian-plan.ts
   it("when she lives her decisions up to it, then she sets off from her seat after walking out and still reaches the bodega by her appointment's tick", () => {
     const state = createCityState(5, city, 60);
     const dee = state.cast.findIndex((member) => member.member.key === "dee");
@@ -431,7 +424,6 @@ describe("given Dee, a named resident, at the back of Kelly's Tap Room on the ev
 });
 
 describe("given a customer walking out of Kelly's Tap Room toward home", () => {
-  // mutation: sed -i 's/^  const at = placeNow(state, resident, struck);/  const at = ints[base + RESIDENT_INT.place]!;/' src/game/ai/civilians/civilian-events.ts
   it("when she is knocked down before she reaches the door, then the knock is recorded at Kelly's door, not at her home's", () => {
     const state = createCityState(5, city, 60);
     const resident = state.cast.length;
@@ -462,7 +454,6 @@ describe("given a customer at the back of Kelly's Tap Room who has just set out,
     return leave + 2;
   }
 
-  // mutation: sed -i 's/^  const at = placeNow(state, resident, tick);$/  const at = intAt(state, resident, RESIDENT_INT.place);/' src/game/ai/civilians/society-reactions.ts
   it("when she is told to flee home, then she keeps walking out of the bar to its door and is not inside her home that tick", () => {
     const state = createCityState(5, city, 60);
     const resident = state.cast.length;
@@ -477,7 +468,6 @@ describe("given a customer at the back of Kelly's Tap Room who has just set out,
     expect(hypot2(reading.x - state.index.placeX[KELLYS]!, reading.z - state.index.placeZ[KELLYS]!), "metres from the bar's middle where she is drawn").toBeLessThan(10);
   });
 
-  // mutation: sed -i 's/here \&\& state.ints\[base + RESIDENT_INT.place\] === place \&\& /here \&\& /' src/game/ai/civilians/civilian-plan.ts
   it("when a stay at the bar replaces her leg to another bar, then she holds no seat of that other bar under this one", () => {
     const state = createCityState(5, city, 60);
     const resident = state.cast.length;
@@ -491,7 +481,6 @@ describe("given a customer at the back of Kelly's Tap Room who has just set out,
 });
 
 describe("given customers who leave Kelly's Tap Room at the end of a stay cut short", () => {
-  // mutation: sed -i 's/^  if (age < ROOM.walkIn + ROOM.buy + ROOM.walkOn \/ 2) {/  if (age < ROOM.walkIn + ROOM.buy + 9e9) {/' src/game/ai/civilians/civilian-plan.ts
   it("when one's stay is cut at closing to a few minutes and another's is 20 ticks in a seat at the back, then each walks out from her seat with no jump over a metre", () => {
     for (const stay of [8 * DECISION_HZ, 20]) {
       const state = createCityState(5, city, 60);
@@ -536,7 +525,6 @@ describe("given a customer who reaches a counter venue with only a few ticks lef
 });
 
 describe("given a customer seated at the back of Kelly's Tap Room who steps out to look on", () => {
-  // mutation: sed -i 's/^  const walkOut = here \&\& isOutdoorPurpose(purpose) \&\& purpose !== PURPOSE.fight ? (out >= 0 ? out - tick : walkOutTicks(state, resident, place, left)) : 0;/  const walkOut = 0;/' src/game/ai/civilians/civilian-plan.ts
   it("when she stands outside its door, then she first stands up and walks out to it, never moving a metre in a frame", () => {
     const state = createCityState(5, city, 60);
     const resident = state.cast.length;

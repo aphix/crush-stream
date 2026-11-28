@@ -138,7 +138,6 @@ describe("given the bench page with a stub document and window (the page's state
     expect(firstMismatch([PHASE_WARM, PHASE_WINDOW, PHASE_AB_PACE, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_SKY, PHASE_REPLAY].map((i) => PAGE_PHASES[i]), ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay"])).toBeUndefined();
   });
 
-  // mutation: sed -i 's/"ab-shadow", "ab-time"\]/"ab-time", "ab-shadow"]/' src/game/engine/engine-bench-report.ts  (the time-of-day A/B takes the shadows' index: posted cards read it wrong)
   test("when the phases are listed, then every index a posted card already names is unchanged and the time-of-day A/B is the one after the last", () => {
     expect(PAGE_PHASES.join(" ")).toBe("warm window ab-pace ab-detail ab-fx ab-sky replay sweep ab-draw ab-scale ab-shadow ab-time");
     expect(PAGE_PHASES[PHASE_AB_TIME]).toBe("ab-time");

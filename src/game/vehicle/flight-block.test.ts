@@ -145,8 +145,6 @@ function sleepSpot(car: DeformableCar): number[] {
 }
 
 describe("given a wreck that fell asleep and the game's respawn (`spawnFacing`: a race or derby respawn, the disc, the recover key) put back on the road", () => {
-  // mutation: sed -i 's/^    this.sleepX = 0;$/    \/\/ sleepX kept/' src/game/vehicle/car.ts  (the respawned car keeps the x it fell asleep at)
-  // mutation: sed -i 's/^    this.sleepZ = 0;$/    \/\/ sleepZ kept/' src/game/vehicle/car.ts  (the respawned car keeps the z it fell asleep at)
   it("when it is back, then its flight block holds no sleep spot, as a new car's placed there does", () => {
     const car = wreckUntil((c) => c.asleep, 3, -5);
     expect(sleepSpot(car).every((v) => Math.abs(v) > 1), "the wreck's sleep spot is away from zero (else the row proves nothing)").toBe(true);

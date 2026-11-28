@@ -46,7 +46,6 @@ const placementOf = (asset: number, x: number): Placed => {
 
 describe("given the family materials of one atlas size", () => {
   it("when a family is read twice and another once, then the two reads of the first are one material and the other is a different one", () => {
-    // mutation: sed -i 's/if (!material) own.push/own.push/' src/game/present/scenery-assets-art.ts
     const materials = makeAssetMaterials(false);
     const [first, second] = ASSET_FAMILIES;
     expect(materials[first] === materials[first], `${first} read twice`).toBe(true);
@@ -73,7 +72,6 @@ function sharedKindPair(): readonly [number, number] {
 
 describe("given the assets of two families drawn by one generic prefab, each in several draw cells", () => {
   it("when the placements are built, then there is one mesh per family and cell, each holding that family's placements of the cell", () => {
-    // mutation: sed -i 's/:${row.family}@/@/' src/game/world/scenery-assets/draw-group.ts  (the two-family row: families share one mesh, 3 against 6)
     const pair = sharedKindPair();
     const placed: Placed[] = [];
     for (const asset of pair) for (let column = 0; column < COLUMNS; column++) for (let k = 0; k < PER_COLUMN; k++) placed.push(placementOf(asset, column * COLUMN_SPACING + k * COLUMN_STEP));
@@ -100,7 +98,6 @@ function plainAndSolid(kind: (typeof SOLID_KINDS)[number]): readonly [number, nu
 describe("given a plain and a solid asset of one kind and family standing in one draw cell", () => {
   for (const kind of SOLID_KINDS) {
     it(`when the ${kind} placements are built, then one mesh holds both, each instance reading its own asset's atlas cell`, () => {
-      // mutation: sed -i 's/${row.kind}:${row.family}/${row.kind}${row.body}:${row.family}/' src/game/world/scenery-assets/draw-group.ts  (the card, cross and box rows: a plain and a solid asset take two meshes)
       const pair = plainAndSolid(kind);
       const meshes = tumbleOf(pair.map((asset, k) => placementOf(asset, k * COLUMN_STEP)));
       expect(meshes.length, "meshes").toBe(1);
@@ -115,7 +112,6 @@ describe("given a plain and a solid asset of one kind and family standing in one
 
 describe("given every kind of asset in two families, a plain and a solid one of each, in several draw cells", () => {
   it("when the placements are built, then there is one mesh per draw group the scenery service counts", () => {
-    // mutation: sed -i 's/: assetDrawGroupOf(pl.asset, pl.x, pl.z);/: `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}`;/' src/game/present/prop-tumble.ts  (the draw-group row: 18 meshes against 9 groups)
     const placed: Placed[] = [];
     for (const kind of SOLID_KINDS) for (const asset of plainAndSolid(kind)) for (let column = 0; column < COLUMNS; column++) placed.push(placementOf(asset, column * COLUMN_SPACING));
     const meshes = tumbleOf(placed);
@@ -128,7 +124,6 @@ describe("given placements of an asset in each family", () => {
   for (const family of ASSET_FAMILIES) {
     const asset = firstSprite(family);
     it(`when a ${family} sprite is built twice, then each instance reads the asset's atlas cell with v turned to run up the picture`, () => {
-      // mutation: sed -i 's/1 - top - height/top/' src/game/present/scenery-assets-art.ts
       must(asset >= 0, `${family} has a sprite asset`);
       const [mesh] = tumbleOf([placementOf(asset, 0), placementOf(asset, COLUMN_STEP)]);
       must(mesh, "one mesh");
@@ -152,9 +147,7 @@ const THICKNESS = 0.5;
 describe("given a solid cross asset whose collider is a fraction of its drawn width", () => {
   const asset = SCENERY_ASSETS.findIndex((row) => row.kind === "cross" && row.body === "solid" && row.core < 1);
   const testCases = [
-    // mutation: sed -i 's/p.prefab === PREFAB.assetStandee ||/false ||/' src/game/present/scenery-assets-art.ts
     { it: "when it stands as a standee, then its quad is drawn wider across the front by one over its core and not along it", prefab: PREFAB.assetStandee, drawnAlong: THICKNESS },
-    // mutation: sed -i 's/p.prefab === PREFAB.assetCrossSolid ? (p.sz/false ? (p.sz/' src/game/present/scenery-assets-art.ts
     { it: "when it stands as a solid cross, then both its quads are drawn as wide as the sprite, whatever the collider's depth", prefab: PREFAB.assetCrossSolid, drawnAlong: DRAWN_WIDTH },
   ] as const;
   for (const testCase of testCases) {
@@ -178,8 +171,6 @@ describe("given the standing quads of a card and a cross", () => {
   const prefabs = [PREFAB.assetCard, PREFAB.assetCross] as const;
   for (const prefab of prefabs) {
     it(`when the ${prefab} is built, then its normals lean up toward its top and out across it, so a lit quad shades in a gradient`, () => {
-      // mutation: sed -i 's/const NORMAL_LIFT = 3;/const NORMAL_LIFT = 0;/' src/game/present/scenery-assets-art.ts
-      // mutation: sed -i 's/const NORMAL_SPREAD = 3;/const NORMAL_SPREAD = 0;/' src/game/present/scenery-assets-art.ts
       const [part] = assetParts(prefab, ASSET_FAMILIES[0], MATS);
       must(part, "one part");
       const pos = part.geometry.getAttribute("position");
@@ -195,8 +186,6 @@ describe("given the standing quads of a card and a cross", () => {
 
 describe("given a family's sprite material, whose quads are drawn from both sides", () => {
   it("when its program is built, then a back face reflects the bent normal about the quad's plane before the tangent frame is made, not negates it whole", () => {
-    // mutation: sed -i 's/\.replace("#include <normal_fragment_begin>", SPRITE_NORMAL_BEGIN)//' src/game/present/scenery-assets-art.ts
-    // mutation: sed -i 's/reflect(normal, quadFacing)/-normal/' src/game/present/scenery-assets-art.ts
     const material = makeAssetMaterials(false)[ASSET_FAMILIES[0]];
     must(material instanceof THREE.MeshStandardMaterial, "a standard material");
     const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
@@ -234,7 +223,6 @@ describe("given each family's atlas and its asset rows", () => {
     const rows = rowsOf(family);
 
     it(`when the ${family} atlas is read, then its cells run parallel to the family's rows by index, a sprite's rect lies inside the atlas and a tile names a layer`, () => {
-      // mutation: sed -i 's/"rect":\[0.538086/"rect":[1.538086/' src/game/present/scenery-atlas/greenery.json
       expect(atlas.family, "the atlas's family").toBe(family);
       expect(atlas.cells.length, `${family} cells against rows`).toBe(rows.length);
       for (const [k, row] of rows.entries()) {
@@ -252,7 +240,6 @@ describe("given each family's atlas and its asset rows", () => {
     });
 
     it(`when the ${family} sprites' rects are compared two by two, then none overlaps another`, () => {
-      // mutation: sed -i 's/"rect":\[0.132813,0.515625/"rect":[0.007813,0.519531/' src/game/present/scenery-atlas/greenery.json
       const sprites = rows.flatMap((row, k) => (row.kind === "tile" ? [] : [{ id: row.id, rect: atlas.cells[k]!.rect }]));
       for (const [a, first] of sprites.entries()) {
         for (const second of sprites.slice(a + 1)) expect(overlap(first.rect, second.rect), `${first.id} over ${second.id}`).toBe(false);
@@ -272,7 +259,6 @@ const tilePlacements = (family: AssetFamily): Placed[] => tilesOf(family).map((a
 describe("given tile placements of each family that has tiles", () => {
   for (const family of tiledFamilies) {
     it(`when ${family} tiles are built, then one mesh wears the family's tile material, laid on the ground stack and not the sprites' material`, () => {
-      // mutation: sed -i 's/return groundMaterial(material, GROUND_LEVEL.decal);/return material;/' src/game/present/scenery-assets-art.ts
       const meshes = tumbleOf(tilePlacements(family), REAL);
       expect(meshes.length, "meshes").toBe(1);
       const tile = assetParts(PREFAB.assetTile, family, REAL)[0]?.material;
@@ -285,7 +271,6 @@ describe("given tile placements of each family that has tiles", () => {
 
 describe("given the families without tiles", () => {
   it("when their tile part is asked for, then there is none", () => {
-    // mutation: sed -i 's/ATLAS\[family\].tiles > 0/true/' src/game/present/scenery-assets-art.ts
     const bare = ASSET_FAMILIES.filter((family) => !tiledFamilies.includes(family));
     expect(bare.length, "families without tiles").toBeGreaterThan(0);
     for (const family of bare) expect(assetParts(PREFAB.assetTile, family, REAL), `${family} tile parts`).toEqual([]);
@@ -294,7 +279,6 @@ describe("given the families without tiles", () => {
 
 describe("given the tile patches of every tile asset", () => {
   it("when they are built, then each instance reads its tile's layer in the family's arrays", () => {
-    // mutation: sed -i 's/layer\[slot\] = cellLayer/layer[slot] = 0/' src/game/present/scenery-assets-art.ts
     for (const family of tiledFamilies) {
       const [mesh] = tumbleOf(tilePlacements(family), REAL);
       must(mesh, `${family} has a tile mesh`);
@@ -304,7 +288,6 @@ describe("given the tile patches of every tile asset", () => {
   });
 
   it("when they are built, then each instance repeats its tile by the patch's metres over the tile's along x and z", () => {
-    // mutation: sed -i 's/p.sx \/ width/p.sz \/ width/' src/game/present/scenery-assets-art.ts
     for (const family of tiledFamilies) {
       const placed = tilePlacements(family);
       const [mesh] = tumbleOf(placed, REAL);
@@ -321,7 +304,6 @@ describe("given the tile patches of every tile asset", () => {
 
 describe("given the strips a tile family's material fetches", () => {
   it("when their files are read, then the colour is the tile size across and one tile tall per layer, and the half tier and the normal are half that", () => {
-    // mutation: sed -i 's/"tiles-albedo-half"/"tiles-albedo"/' src/game/present/scenery-assets-art.ts
     expect(tiledFamilies.length, "families with tiles").toBeGreaterThan(0);
     for (const family of tiledFamilies) {
       const { tiles, tileSize } = ATLAS[family];
@@ -341,7 +323,6 @@ describe("given the strips a tile family's material fetches", () => {
 
 describe("given a tile family's material", () => {
   it("when it is compiled, then colour and normal are read by layer from array textures and the quad's own uv feathers its alpha", () => {
-    // mutation: sed -i 's/"#include <map_fragment>"/"#include <mapx_fragment>"/' src/game/present/scenery-assets-art.ts
     const family = tiledFamilies[0];
     must(family, "a family has tiles");
     const material = assetParts(PREFAB.assetTile, family, REAL)[0]?.material;
@@ -402,7 +383,6 @@ const families = ASSET_FAMILIES.filter((family) => ATLAS[family].cells.length > 
 
 describe("given the textures each family's atlas names", () => {
   it("when the families are listed, then some have atlases and every file each names is under public/scenery", () => {
-    // mutation: sed -i 's/"tiles": 0/"tiles": 2/' src/game/present/scenery-atlas/greenery.json
     expect(families.length, "families with an atlas").toBeGreaterThan(0);
     for (const family of families) {
       const files = filesOf(family);
@@ -415,7 +395,6 @@ describe("given the textures each family's atlas names", () => {
   });
 
   it("when each family's textures are totalled, then the full tier holds under its GPU cap and the half tier under its own, and both download under theirs", () => {
-    // mutation: sed -i 's/"width": 1024/"width": 8192/' src/game/present/scenery-atlas/greenery.json
     expect(families.length, "families with an atlas").toBeGreaterThan(0);
     for (const family of families) {
       const files = filesOf(family);

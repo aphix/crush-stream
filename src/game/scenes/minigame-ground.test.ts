@@ -396,7 +396,6 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
   const throwAtSpeed = (system: RagdollSystem, speed: number): ThrowResult =>
     throwDummy(system, seat, new THREE.Vector3(speed * Math.cos(RING_THROW_PITCH), speed * Math.sin(RING_THROW_PITCH), 0));
 
-  // mutation: sed -i 's|^\( *\)if (deltaX \* deltaX + deltaZ \* deltaZ <= zone.radius \* zone.radius) return zone.score;$|\1if (false) return zone.score;|' src/game/scenes/minigame-ring.ts  (no throw rests in any cup: this row goes red)
   it("when throws from 14 to 24 m/s are run, then each cup 10 to 50 holds a resting dummy at some speed", async (t) => {
     const system = await ragdollOn(readOnlyGround());
     const rows: string[] = [];
@@ -413,7 +412,6 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
     for (const cup of RING_CUPS) expect(cupsHeld.has(cup.score), `no throw rested in the ${cup.score} cup: ${[...cupsHeld].join(", ")}`).toBeTruthy();
   });
 
-  // mutation: sed -i 's|^    this.addHeightGrid(anchor.x + bounds.minX|    void (anchor.x + bounds.minX|' src/game/scenes/minigame-ground.ts  (the board is not in the height grid: he never reads as on the ground)
   it("when the dummy rests on the board, then he is on the ground (the board is in the height grid the settle reads, and without it he is not)", async () => {
     const result = throwAtSpeed(await ragdollOn(readOnlyGround()), LOW_DESIGN_SPEED);
     expect(result.torso.y, `his torso rests ${result.torso.y} m up: the pad alone could not tell he landed`).toBeGreaterThanOrEqual(GROUND_REACH);
@@ -448,7 +446,6 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
 });
 
 describe("given a dummy thrown far past the Ring Fling board", () => {
-  // mutation: sed -i 's|^    this.addRingBackstop();|    void 0;|' src/game/scenes/minigame-ground.ts  (no backstop: he gets past it)
   it("when he is thrown at 30 m/s, then the backstop stops him and he never gets past it (and without the backstop he does)", async () => {
     const anchor = STATION_ANCHORS.ringFling;
     const seat = new THREE.Vector3(anchor.x, lipHeight("ringFling") + SEAT_OVER_LIP, anchor.z);
@@ -468,7 +465,6 @@ describe("given a dummy thrown at the high jump's net", () => {
   const seat = new THREE.Vector3(anchor.x + NET.netX - NET_SHOT.distanceBefore, NET_SHOT.height, anchor.z);
   const velocity = new THREE.Vector3(NET_SHOT.speed, NET_SHOT.rise, 0);
 
-  // mutation: sed -i 's|^    this.addHighJumpNet(options.highJump);|    void 0;|' src/game/scenes/minigame-ground.ts  (no net: he flies on)
   it("when he is thrown at the net, then it stops him and he ends on the ground (and without the net he flies on)", async () => {
     const netBackFaceX = anchor.x + NET.netX + NET_FACE_ALLOWANCE;
     const caught = throwDummy(await ragdollOn(readOnlyGround()), seat, velocity);
@@ -552,7 +548,6 @@ describe("given a dummy flung into the high jump's frame", () => {
     return { caught, control };
   }
 
-  // mutation: sed -i 's/hz: POST_HALF_SPAN - POST_THICKNESS \/ 2 }/hz: 0.01 }/' src/game/scenes/minigame-ground.ts  (the slats are slivers: nothing stops him at the slat)
   it("when he is flung at a slat, then it stops him at its back face and catches him short of where he lands without the frame", async (t) => {
     const { caught, control } = await flung(seatAt(0, slat.y));
     t.annotate(`slat at ${slat.y} m: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
@@ -577,7 +572,6 @@ describe("given a dummy flung into the high jump's frame", () => {
 });
 
 describe("given a dummy dropped over the back face of the high jump's lip", () => {
-  // mutation: sed -i 's|^      this.meshes.push(latticeMesh(|      void ((|' src/game/scenes/minigame-ground.ts  (no lane meshes: he falls through the ramp)
   it("when he is dropped 2 m over it, then he lands on the face and stays above it (and without the lane's meshes he falls through the ramp)", async () => {
     const anchor = STATION_ANCHORS.highJump;
     const atX = stationFrontX("highJump") / 2;
@@ -597,7 +591,6 @@ describe("given a dummy thrown from the long jump's barrier", () => {
   const anchor = STATION_ANCHORS.longJump;
   const seat = new THREE.Vector3(anchor.x, lipHeight("longJump") + SEAT_OVER_LIP, anchor.z);
 
-  // mutation: sed -i 's|^      this.addPlane(0, STATION_ANCHORS\[lane.mode\].x + stationFrontX(lane.mode), PAD_HALF_EXTENT, lane.low, lane.high, Infinity);|      void 0;|' src/game/scenes/minigame-ground.ts  (no sand past the lip: he falls below it)
   it("when he is thrown at the barrier's release, then he lands on the sand past the lip and rests, never below it", async () => {
     const result = throwDummy(await ragdollOn(readOnlyGround()), seat, new THREE.Vector3(LONG_JUMP_RELEASE.speed, LONG_JUMP_RELEASE.up, 0));
     expect(result.still, `still ${result.still}`).toBeGreaterThanOrEqual(REST_HOLD);
@@ -616,7 +609,6 @@ describe("given a dummy thrown from the long jump's barrier", () => {
 });
 
 describe("given the ground every read-only row shared, after the last of them", () => {
-  // mutation: sed -i 's|^\( *const without = \)buildGround();$|\1readOnlyGround();|' src/game/scenes/minigame-ground.test.ts  (the board row's control then disables patches on the shared ground: this row goes red)
   it("when it is compared with a fresh build, then every patch, node height and mesh vertex is the same, bit for bit", () => {
     const shared = readOnlyGround();
     const fresh = buildGround();

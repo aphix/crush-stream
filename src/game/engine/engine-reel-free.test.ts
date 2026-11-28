@@ -60,7 +60,6 @@ describe("given a figure-8 spectator race on Auto, the spectator in free fly, an
     setGround(null);
   });
 
-  // Mutation (red): sed -i '/^      if (on) this\.view\.leaveFree();$/d' src/game/engine/engine-reel.ts
   it("when the results reel opens, then free fly is left and the reel's own camera holds the frame, not the eye parked over the crossing", async () => {
     expect(hud.get().cam, "the control: the spectator is in free fly when the race ends").toBe("free");
     expect(engine["view"].flying).toBe(true);

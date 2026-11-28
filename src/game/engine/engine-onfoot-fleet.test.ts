@@ -117,7 +117,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     return widest;
   }
 
-  // mutation: sed -i -e 's/^    if (!this.host.openWorld() || !this.host.runsCars()) return;/    if (!this.host.runsCars()) return;/' -e 's/^    if (!this.host.openWorld() || !this.host.runsCars()) {/    if (!this.host.runsCars()) {/' src/game/engine/engine-onfoot.ts
   it("when he gets out in the fleet, then his car's door is never written: the walker writes nothing to a car outside the open world (guard)", () => {
     const car = rig.cars()[0]!;
     let widest = 0;
@@ -228,7 +227,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     expect(rig.phase(), "and the press does nothing").toBe("inCar");
   });
 
-  // mutation: sed -i 's/    return this.host.openWorld() \&\& this.flow.phase === "onFoot";/    return this.flow.phase === "onFoot";/' src/game/engine/engine-onfoot.ts
   it("when fire is pressed on foot in the fleet, then nothing is thrown: the arms are the open world's", () => {
     rig.getOut();
     rig.engine["onFoot"].arms.press();

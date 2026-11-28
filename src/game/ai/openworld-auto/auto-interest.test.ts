@@ -34,7 +34,6 @@ describe("given what the Auto camera finds interesting", () => {
   });
 
   it("when someone run down has an ambulance called, then the call is worth a look for as long as help takes, and a danger (a street node, not a person) gives none", () => {
-    // mutation: sed -i 's/0.4, 0.9, 0.9, 0\] as const;/0.4, 0.9, 0, 0] as const;/' src/game/ai/openworld-auto/auto-constants.ts
     expect(eventInterest(EVENT_KIND.ambulance, 0), "a call just made").toBeGreaterThan(eventInterest(EVENT_KIND.push, 0));
     expect(eventInterest(EVENT_KIND.ambulance, 15), "still waiting for help").toBeGreaterThan(0);
     expect(eventInterest(EVENT_KIND.danger, 0), "a node is no one to follow").toBe(0);

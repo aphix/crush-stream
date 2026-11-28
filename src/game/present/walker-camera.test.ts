@@ -83,7 +83,6 @@ describe("given the on-foot camera's focus", () => {
     });
   }
 
-  // mutation: sed -i -e 's/^const FOLLOW_HORIZONTAL_FOV = 80;/const FOLLOW_HORIZONTAL_FOV = 66;/' -e 's/^const FOV_MIN = 48;/const FOV_MIN = 36;/' -e 's/^const FOV_MAX = 60;/const FOV_MAX = 56;/' src/game/present/walker-camera.ts
   const framings: readonly { it: string; aspect: number }[] = [
     { it: "when he stands at the default zoom on a wide screen, then his head and feet are in view and he stands in the middle across", aspect: 16 / 9 },
     { it: "when he stands at the default zoom on a 4:3 screen, then his head and feet are in view and he stands in the middle across", aspect: 4 / 3 },
@@ -141,7 +140,6 @@ describe("given the view left alone while a pad's stick runs him", () => {
     expect(worst, `overshot behind by ${worst}`).toBeLessThanOrEqual(0.01);
   });
 
-  // mutation: sed -i 's/^const RECENTER_GAP = 0.9;/const RECENTER_GAP = 9;/' src/game/present/walker-camera.ts
   it("when he walks sideways to the camera for 4 s without a look, then the camera's yaw does not move", () => {
     const yaws = recenter(RUN_SPEED, false, 4, 1.2 - Math.PI / 2);
     expect(yaws.every((yaw) => yaw === 1.2), `yaws from ${yaws[0]} to ${yaws[yaws.length - 1]}`).toBe(true);
@@ -152,7 +150,6 @@ describe("given the view left alone while a pad's stick runs him", () => {
   const holdCases: readonly { it: string; speed: number; looking: boolean; byPad: boolean }[] = [
     { it: "when the player keeps looking round, then it never comes back", speed: RUN_SPEED, looking: true, byPad: true },
     { it: "when he is nearly standing, then it never comes back", speed: 0.3, looking: false, byPad: true },
-    // mutation: sed -i 's/    if (!byPad || this.idle < RECENTER_DELAY/    if (this.idle < RECENTER_DELAY/' src/game/present/walker-camera.ts
     { it: "when the keys walk him and the mouse turned the view, then it never comes back by itself", speed: RUN_SPEED, looking: false, byPad: false },
   ];
   for (const testCase of holdCases) {
@@ -172,7 +169,6 @@ const TURN_STEP = Math.PI / 6;
 const BLOCKED: Sweep = () => 0;
 
 describe("given the camera behind him in a spot where every sweep is blocked at once", () => {
-  // mutation: sed -i 's/^const HEAD_HIDE = 0.4;/const HEAD_HIDE = 0;/' src/game/present/walker-camera.ts
   it("when the view is turned all the way round him, then the eye pulls in to his head rather than into a wall, and his head and torso are not drawn to it", () => {
     const view = new WalkerView();
     for (let k = 0; k < 12; k++) {

@@ -505,7 +505,6 @@ describe("given a car whose velocity has gone NaN or infinite (a bad impulse ups
     expect(slices[0], "the one step's length").toBeNaN();
   });
 
-  // mutation: sed -i '/^  if (!Number.isFinite(vmax)) nonFinite("the fastest car.s speed", vmax);/d' src/game/contact/sat.ts
   it("when the frame's slice is sized from it, then the game stops with an error naming the speed instead of freezing silently", () => {
     for (const bad of [NaN, Infinity]) {
       const car = new DeformableCar(paint(), new THREE.Scene());

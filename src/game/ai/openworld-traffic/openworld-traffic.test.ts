@@ -38,7 +38,6 @@ function runUntil(run: { field: FakeField; traffic: OpenWorldTraffic; clock: Clo
 }
 
 describe("given a field whose pool cars the engine has just built (shown and simulated where it builds a car: the map's middle)", () => {
-  // mutation: sed -i 's/    for (let id = first; id < first + this.total; id++) ports.putAway(id);/    \/\/ none put away/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when traffic starts, then every pool car is put away (hidden and not simulated) before anything else reads them", () => {
     const field = quietField();
     makeTraffic(field, { movers: 12, kerb: 10, patrol: 2, ambulance: 0 });
@@ -49,8 +48,6 @@ describe("given a field whose pool cars the engine has just built (shown and sim
     }
   });
 
-  // mutation: sed -i 's/      if (car.group.visible || !car.stored) ports.putAway(id);/      \/\/ left as found/' src/game/ai/openworld-traffic/kerb-cars.ts
-  // mutation: sed -i 's/    if (car.group.visible || !car.stored) {/    if (false) {/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when something outside traffic shows a car traffic put away and wakes it, then traffic puts it away again within a pass", () => {
     const field = quietField();
     const traffic = makeTraffic(field, { movers: 2, kerb: 2, patrol: 1, ambulance: 0 });
@@ -71,7 +68,6 @@ describe("given a field whose pool cars the engine has just built (shown and sim
 });
 
 describe("given traffic rebuilt on the same sight field (a new crowd key mid-session)", () => {
-  // mutation: sed -i 's/    sight.release(sightBase, this.total + 1);/    \/\/ ids kept/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when traffic is let go, then it gives back every sight id it claimed", () => {
     const field = quietField();
     const sight = new ProximitySight(field.ports);
@@ -85,15 +81,12 @@ describe("given traffic rebuilt on the same sight field (a new crowd key mid-ses
 });
 
 describe("given the open world's traffic on a field with the local player's car", () => {
-  // mutation: sed -i 's/    ports.ensureCars(first + this.total);/    ports.ensureCars(first);/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when traffic starts, then the field holds the seated car and one real car for every mover and kerb car, the pool past the seats", () => {
     const field = quietField();
     makeTraffic(field, { movers: 5, kerb: 3 });
     expect(field.cars.length).toBe(1 + 5 + 3);
   });
 
-  // mutation: sed -i 's/const lateral = network.laneOffset + (network.parkingOffset - network.laneOffset) \* smoothStep(step \/ SWING_STEPS);/const lateral = network.laneOffset;/' src/game/ai/openworld-traffic/trip-route.ts
-  // mutation: sed -i 's/    taken\[destination\] = 1;/    \/\/ taken[destination] = 1;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when a resident's car is sent from a space by home to the nearest free space by work, then it parks in that space, near work, and holds it", () => {
     const field = quietField();
     const traffic = makeTraffic(field, { movers: 4, kerb: 0 });
@@ -112,7 +105,6 @@ describe("given the open world's traffic on a field with the local player's car"
     expect(traffic.claimedSpots[from], "the space it left is free").toBe(0);
   });
 
-  // mutation: sed -i 's/    taken\[destination\] = 1;/    \/\/ taken[destination] = 1;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when two residents are sent to the same workplace, then each parks in a space of its own", () => {
     const field = quietField();
     const traffic = makeTraffic(field, { movers: 4, kerb: 0 });
@@ -158,7 +150,6 @@ describe("given the open world's traffic on a field with the local player's car"
     expect(parkedSeen, "parked cars looked at").toBeGreaterThan(20);
   });
 
-  // mutation: sed -i 's/    return ambient;/    return ambient < 0 ? 0 : ambient;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when every car of the pool is leased, then a further lease is refused", () => {
     const field = quietField();
     const traffic = makeTraffic(field, { movers: 2, kerb: 0 });
@@ -171,7 +162,6 @@ describe("given the open world's traffic on a field with the local player's car"
     expect(traffic.spawnDrivenCar(9, traffic.nearestSpot(HOME.x, HOME.z + 60), traffic.nearestSpot(WORK.x, WORK.z))).toBeNull();
   });
 
-  // mutation: sed -i 's/return handle.driver !== null ?/return handle.driver === undefined ?/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when the owner of a leased car sets its driver, then the car takes that driver's input until it is set to null", () => {
     const field = quietField();
     const traffic = makeTraffic(field, { movers: 2, kerb: 0, patrol: 1, ambulance: 0 });
@@ -210,8 +200,6 @@ describe("given a resident whose car stands at the kerb near a player and then d
     return -1;
   }
 
-  // mutation: sed -i 's/      if (body !== null \&\& ports.cars()\[id\]!.style.id !== body) ports.setBody(id, body);/      \/\/ own body/' src/game/ai/openworld-traffic/mover-fleet.ts
-  // mutation: sed -i 's/paint === NO_COLOUR ? null : paint);/null);/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when the kerb car that stood there is replaced by the car that drives off, then both wear his body and his paint", () => {
     const field = new FakeField();
     const feed = emptyFeed(8);
@@ -235,8 +223,6 @@ describe("given a resident whose car stands at the kerb near a player and then d
     expect(field.colours[car!.index], "the driven car's paint").toBe(residentColour(RESIDENT));
   });
 
-  // mutation: sed -i 's/    this.context.ports.openDoor(id, radians);/    this.context.ports.openDoor(id, 0);/' src/game/ai/openworld-traffic/openworld-traffic.ts
-  // mutation: sed -i 's/    return id < 0 ? null : this.context.ports.cars()\[id\]!.style.id;/    return id < 0 ? null : "sedan";/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when his car's pose and door are asked, then the pose is its space's and the door opens on the car that stands there", () => {
     const field = new FakeField();
     const feed = emptyFeed(8);
@@ -273,7 +259,6 @@ describe("given a traffic car a patrol car chases", () => {
     return { field, traffic, clock: new Clock(), car };
   }
 
-  // mutation: sed -i 's/    if (slot < 0 || slot >= this.size || this.state\[slot\] !== MOVER.driving || this.kindOf(slot) !== LEASE.ambient || this.context.ports.seated(carId)) return false;/    if (slot < 0 || slot >= this.size) return false;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when a parked car, a patrol car or a human's car is named as chased, then it is refused; a car on a trip is taken", () => {
     const { field, traffic, car } = chasedWorld();
     expect(traffic.evade(car.index, 0), "a car on a trip").toBe(true);
@@ -284,7 +269,6 @@ describe("given a traffic car a patrol car chases", () => {
     expect(traffic.evade(0, 0), "the human's car").toBe(false);
   });
 
-  // mutation: sed -i 's/    if (best >= 0) this.rerouteFrom(slot, best);/    \/\/ no run/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when the chaser is on it, then it runs on past the end of its trip to far spaces and does not park", () => {
     const { field, traffic, clock, car } = chasedWorld();
     expect(traffic.evade(car.index, 0)).toBe(true);
@@ -294,7 +278,6 @@ describe("given a traffic car a patrol car chases", () => {
     expect(field.cars[car.index]!.speed, "still driving").toBeGreaterThan(5);
   });
 
-  // mutation: sed -i 's/  endEvade(carId: number): void {/  endEvade(carId: number): void {\n    if (carId >= 0) return;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when the chase ends, then it finishes its run, drives as traffic and parks", () => {
     const { field, traffic, clock, car } = chasedWorld();
     traffic.evade(car.index, 0);
@@ -321,8 +304,6 @@ describe("given the open world's ambulance", () => {
     return id ?? -1;
   }
 
-  // mutation: sed -i 's/    if (kind === LEASE.ambulance) ports.sirens(id, true);/    \/\/ no lights/' src/game/ai/openworld-traffic/mover-fleet.ts
-  // mutation: sed -i 's/const paint = kind === LEASE.ambulance ? AMBULANCE_COLOUR : /const paint = /' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when it is called to a scene, then a white car with its lights on sets out from a space far away and comes to the space nearest the scene", () => {
     const { field, traffic, clock } = ambulanceWorld();
     expect(traffic.callAmbulance(SCENE.x, SCENE.z, clock.seconds), "the call was taken").toBe(true);
@@ -342,7 +323,6 @@ describe("given the open world's ambulance", () => {
     expect(field.sirens.has(id), "lights still on at the scene").toBe(true);
   });
 
-  // mutation: sed -i 's/seconds - this.since >= AMBULANCE_LOAD_SECONDS/seconds - this.since >= 0/' src/game/ai/openworld-traffic/ambulance.ts
   it("when it has stood at the scene for its loading time, then it drives off to another far space and is put away there, lights off, the pool car free again", () => {
     const { field, traffic, clock } = ambulanceWorld();
     traffic.callAmbulance(SCENE.x, SCENE.z, clock.seconds);
@@ -364,7 +344,6 @@ describe("given the open world's ambulance", () => {
     expect(none.callAmbulance(SCENE.x, SCENE.z, 0), "a pool with no ambulance").toBe(false);
   });
 
-  // mutation: sed -i 's/      if (this.queued >= AMBULANCE_QUEUE) return false;/      return false;/' src/game/ai/openworld-traffic/ambulance.ts
   it("when a second call comes while the ambulance is out, then it waits its turn: the ambulance goes to it after the first has been loaded and left, and the medics' scene follows the call it is out on", () => {
     const { field, traffic, clock } = ambulanceWorld();
     const loaded: number[] = [];
@@ -383,7 +362,6 @@ describe("given the open world's ambulance", () => {
     expect(scene.x, "its scene").toBe(SECOND_SCENE.x);
   });
 
-  // mutation: sed -i 's/      if (this.queued >= AMBULANCE_QUEUE) return false;/      if (false) return false;/' src/game/ai/openworld-traffic/ambulance.ts
   it("when more calls wait than the queue holds, then the one past it is refused", () => {
     const { traffic } = ambulanceWorld();
     expect(traffic.callAmbulance(SCENE.x, SCENE.z, 0), "the one it goes to").toBe(true);
@@ -391,7 +369,6 @@ describe("given the open world's ambulance", () => {
     expect(traffic.callAmbulance(SCENE.x + 50, SCENE.z, 0), "past the queue").toBe(false);
   });
 
-  // mutation: sed -i 's/      this.onLoaded?.(this.victim);/      \/\/ nobody told/' src/game/ai/openworld-traffic/ambulance.ts
   it("when the ambulance has loaded, then the victim is told once, at the end of the loading time and not before", () => {
     const { field, traffic, clock } = ambulanceWorld();
     const told: number[] = [];
@@ -407,7 +384,6 @@ describe("given the open world's ambulance", () => {
     expect(clock.seconds - arrived, "after the loading time").toBeGreaterThanOrEqual(AMBULANCE_LOAD_SECONDS);
   });
 
-  // mutation: sed -i 's/this.kindOf(slot) !== kind) continue;/false) continue;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when a patrol is leased, then it gets the cruiser and never the ambulance", () => {
     const { field, traffic } = ambulanceWorld();
     const patrol = traffic.spawnDrivenCar(-1, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z), { urgent: true })!;
@@ -452,7 +428,6 @@ describe("given the player takes a resident's kerb car on foot", () => {
     return { field, traffic, clock, id, spot };
   }
 
-  // mutation: sed -i 's/      residentSpot\[resident\] = CARLESS;/      residentSpot[resident] = -1;/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when he takes it, then its owner has no car (none is claimed for him again), the space is free and the car stays where it is, no longer traffic's", () => {
     const { field, traffic, clock, id, spot } = takenWorld();
     expect(traffic.takeCar(id), "the owner").toBe(OWNER);
@@ -464,7 +439,6 @@ describe("given the player takes a resident's kerb car on foot", () => {
     expect(traffic.owns(id), "it is not traffic's").toBe(false);
   });
 
-  // mutation: sed -i 's/    return this.movers.isParked(id) || this.kerb.holds(id);/    return this.movers.isParked(id);/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when it is taken and left, then it stays an empty car anyone may take, and a car on a trip is no such car", () => {
     const { field, traffic, clock, id } = takenWorld();
     traffic.takeCar(id);
@@ -490,8 +464,6 @@ describe("given residents whose cars show at the kerb and drive off, over a minu
     return feed;
   }
 
-  // mutation: sed -i 's/      const matches = body !== null \&\& car.style.id === body;/      const matches = false;/' src/game/ai/openworld-traffic/kerb-cars.ts
-  // mutation: sed -i 's/    return freeMatch >= 0 ? freeMatch : free >= 0 ? free : ambientMatch >= 0 ? ambientMatch : ambient;/    return free >= 0 ? free : ambient;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when a car of each body is among the pool, then no car is rebuilt for a body: each resident gets a pool car that wears his", () => {
     const field = new FakeField();
     const feed = parkedFeed(BODIES_ASKED);
@@ -509,7 +481,6 @@ describe("given residents whose cars show at the kerb and drive off, over a minu
     expect(field.rebuilt.length - base, "cars rebuilt for a body").toBe(0);
   });
 
-  // mutation: sed -i 's/ \&\& this.context.swaps.allows(this.seconds) \&\& spotUnseen(this.context, spot)) {/) {/' src/game/ai/openworld-traffic/kerb-cars.ts
   it("when no pool car wears his body and every space is seen, then his car stands there as it is: nothing is rebuilt where an eye is", () => {
     const field = new FakeField();
     const feed = emptyFeed(8);
@@ -541,7 +512,6 @@ describe("given a resident's car leased for a drive whose rider is due at the fa
     return { field, traffic, clock: new Clock(), car, to };
   }
 
-  // mutation: sed -i 's/    if (this.seconds > this.dueAt\[slot\]! \&\& this.unseenAndFar(slot, car)) this.standInSpace(slot);/    if (false) this.standInSpace(slot);/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when the rider's second comes with the car still on the road and no one near it, then the car stands in its space, parked and still", () => {
     const { field, traffic, clock, car, to } = dueCar({ x: FAR, z: FAR });
     runSeconds(field, traffic, clock, DUE_SECONDS + 1);
@@ -552,7 +522,6 @@ describe("given a resident's car leased for a drive whose rider is due at the fa
     expect(field.cars[car.index]!.speed, "standing").toBeLessThan(0.01);
   });
 
-  // mutation: sed -i 's/ \&\& this.unseenAndFar(slot, car)) this.standInSpace(slot);/) this.standInSpace(slot);/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when a player's car is near it at that second, then the car is not moved: it drives on and parks when it gets there", () => {
     const { field, traffic, clock, car } = dueCar(FAR_AWAY);
     field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
@@ -562,7 +531,6 @@ describe("given a resident's car leased for a drive whose rider is due at the fa
 });
 
 describe("given residents whose cars stand at a place's kerb", () => {
-  // mutation: sed -i 's/      const spot = this.candidates\[(resident + step) % count\]!;/      const spot = this.candidates[step]!;/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when two residents of one place have cars, then each holds a different one of the four empty spaces nearest its door, the one he is by number", () => {
     const field = quietField();
     const feed = emptyFeed(8);
@@ -589,7 +557,6 @@ describe("given residents whose cars stand at a place's kerb", () => {
     expect(unmasked[1], "the higher space held").toBe(wanted[1]);
   });
 
-  // mutation: sed -i 's/    if (holderPlace !== undefined \&\& residentSpotAt(/    if (false \&\& residentSpotAt(/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when a resident's own space is held by another's claim only as his fallback, then she gets her own space, as the brain draws her, and he moves on; a claim that is its holder's own pick is kept", () => {
     const field = quietField();
     const feed = emptyFeed(8);
@@ -610,7 +577,6 @@ describe("given residents whose cars stand at a place's kerb", () => {
     expect(residentSpace(traffic, 5), "5 moved on to the next free one").toBe(near[3]);
   });
 
-  // mutation: sed -i 's/residentSpotAt(this.parkingSpots, holderPlace.doorX, holderPlace.doorZ, holder) !== pick/residentSpotAt(this.parkingSpots, target!.doorX, target!.doorZ, holder) !== pick/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when a neighbour next door picks the space a resident holds as his own pick at his own door, then he keeps it: his claim is judged by his door, not hers", () => {
     const field = quietField();
     const probe = makeTraffic(field, { movers: 0, kerb: 0 });
@@ -649,7 +615,6 @@ describe("given residents whose cars stand at a place's kerb", () => {
 describe("given a patrol car on an urgent trip that is sent somewhere else on its way", () => {
   const ELSEWHERE = { x: -150, z: 80 };
 
-  // mutation: sed -i 's/    this.routes\[slot\] = this.spareRoute;/    this.routes[slot] = old;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when it is redirected mid-trip, then it drives on along the streets from where it is and parks in the new space, which it holds; the old one is free again", () => {
     const field = quietField();
     const traffic = makeTraffic(field, { movers: 2, kerb: 0, patrol: 1, ambulance: 0 });
@@ -669,7 +634,6 @@ describe("given a patrol car on an urgent trip that is sent somewhere else on it
     expect(traffic.claimedSpots[first], "the first space is free again").toBe(0);
   });
 
-  // mutation: sed -i 's/ || spots.stays\[toSpot\] === 1 || taken\[toSpot\] === 1) return false;/) return false;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when it is redirected to a space another car holds, then the redirect is refused and its trip stands", () => {
     const field = quietField();
     const traffic = makeTraffic(field, { movers: 3, kerb: 0, patrol: 1, ambulance: 0 });
@@ -715,7 +679,6 @@ describe("given the player's car crossing a junction's stop bar", () => {
 
   const crossing = [barX - 3, barX - 2.5, barX - 2, barX - 1.5, barX - 1, barX - 0.5, barX, barX + 0.5, barX + 1, barX + 2, barX + 3];
 
-  // mutation: sed -i 's/if (before >= -network.stopBar || now < -network.stopBar) continue;/continue;/' src/game/ai/openworld-traffic/red-light-watch.ts
   it("when it crosses on red, then the red-light run is raised once, for the player's car", () => {
     const runs = walk(crossing, timeWhere(true));
     expect(runs.length).toBe(1);
@@ -723,18 +686,15 @@ describe("given the player's car crossing a junction's stop bar", () => {
     expect(Math.abs(runs[0]!.x - barX)).toBeLessThan(1);
   });
 
-  // mutation: sed -i 's/if (!hadLast || seconds < this.quietUntil\[id\]! || hypot2/if (!hadLast || hypot2/' src/game/ai/openworld-traffic/red-light-watch.ts
   it("when it crosses back and forth on red, then the run is still raised once", () => {
     const back = [...crossing].reverse();
     expect(walk([...crossing, ...back, ...crossing], timeWhere(true)).length).toBe(1);
   });
 
-  // mutation: sed -i 's/if (lightState(junction, through, seconds) !== LIGHT.red || lightState(junction, through + 1, seconds) !== LIGHT.red) continue;/\/\/ any light/' src/game/ai/openworld-traffic/red-light-watch.ts
   it("when it crosses on green, then no run is raised", () => {
     expect(walk(crossing, timeWhere(false)).length).toBe(0);
   });
 
-  // mutation: sed -i 's/if (!urgent) target = Math.min(target, this.signalLimit/if (urgent) target = Math.min(target, this.signalLimit/' src/game/ai/openworld-traffic/traffic-driver.ts
   it("when traffic itself drives for minutes, then none of its cars runs a red light", () => {
     const field = quietField();
     const traffic = makeTraffic(field, { movers: 8, kerb: 0 });
@@ -755,7 +715,6 @@ describe("given kerb cars standing near the local player", () => {
     return { field, traffic, clock: new Clock() };
   }
 
-  // mutation: sed -i 's/if (spots.stays\[spot\] === 1) stays.push(spot);/stays.push(spot);/' src/game/ai/openworld-traffic/kerb-cars.ts
   it("when the player has been in a street for a few seconds, then kerb cars stand in spaces where a car stands for good, within reach of it", () => {
     const { field, traffic, clock } = kerbWorld();
     runSeconds(field, traffic, clock, 4);
@@ -771,7 +730,6 @@ describe("given kerb cars standing near the local player", () => {
     }
   });
 
-  // mutation: sed -i 's/const gone = this.wreckedFor\[slot\]! > TOW_SECONDS || (!sight.near(x, z, KERB_KEEP) && sight.unseenFor(sightId) >= sight.hideGrace);/const gone = false;/' src/game/ai/openworld-traffic/kerb-cars.ts
   it("when the player drives far away, then the kerb cars are put away", () => {
     const { field, traffic, clock } = kerbWorld();
     runSeconds(field, traffic, clock, 4);
@@ -781,7 +739,6 @@ describe("given kerb cars standing near the local player", () => {
     for (let id = 1; id < field.cars.length; id++) expect(field.cars[id]!.stored, `car ${id} put away`).toBe(true);
   });
 
-  // mutation: sed -i 's/^const CLIP_HOLD_SECONDS = 4;/const CLIP_HOLD_SECONDS = 0;/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when a resident's clip starts at an empty space no eye sees, then a kerb car stands there in her colour as hers, her door opens, the space is refused to another resident, and the car is kept through the clip though no player is near, then put away", () => {
     const { field, traffic, clock } = kerbWorld();
     runSeconds(field, traffic, clock, 4);
@@ -807,7 +764,6 @@ describe("given kerb cars standing near the local player", () => {
     expect(standsAtHerSpace(), "put away after the hold").toBe(false);
   });
 
-  // mutation: sed -i '/^    if (this.movers.hasTripFor(resident)) return -1;/d' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when her car is on a trip and her clip starts at an empty unseen space, then no car is brought there and the space stays free", () => {
     const field = new FakeField();
     const traffic = makeTraffic(field, { movers: 1, kerb: 4 });
@@ -863,7 +819,6 @@ describe("given kerb cars standing near the local player", () => {
     return -1;
   }
 
-  // mutation: sed -i 's/residentSpot\[this.holderOf(spot)\] = own;/void own;/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when a resident's claim is at another space with no car at either and the space her clip is at is another resident's claim, then a car stands there as hers, her claim is that space and the other's is her old one", () => {
     const { field, traffic, clock } = kerbWorld();
     runSeconds(field, traffic, clock, 4);
@@ -882,7 +837,6 @@ describe("given kerb cars standing near the local player", () => {
     expect([context.taken[spot], context.taken[own]].join("/"), "both spaces are still held").toBe("1/1");
   });
 
-  // mutation: sed -i 's/^    else taken\[own\] = 0;/    else taken[own] = 1;/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when a resident's claim is at another space with no car at either and the space her clip is at is free, then her claim is that space and her old one is free", () => {
     const { field, traffic, clock } = kerbWorld();
     runSeconds(field, traffic, clock, 4);
@@ -895,7 +849,6 @@ describe("given kerb cars standing near the local player", () => {
     expect([context.taken[spot], context.taken[own]].join("/"), "hers held, her old one free").toBe("1/0");
   });
 
-  // mutation: sed -i '/^    if (this.movers.hasTripFor(resident)) return -1;/d' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when her car is on a trip and her claim is at another space, then no clip is drawn and neither her claim nor the holder of the clip's space has moved", () => {
     const field = new FakeField();
     const traffic = makeTraffic(field, { movers: 1, kerb: 4 });
@@ -915,7 +868,6 @@ describe("given kerb cars standing near the local player", () => {
     expect(carAtSpace(field, traffic, spot), "no car was brought").toBe(-1);
   });
 
-  // mutation: sed -i 's/      if (this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS)) {/      if (this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS) || true) {/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when the clip's space is one the player's car is at, so no car may be brought, then no clip is drawn and no claim has moved", () => {
     const { field, traffic, clock } = kerbWorld();
     runSeconds(field, traffic, clock, 4);
@@ -934,7 +886,6 @@ describe("given kerb cars standing near the local player", () => {
     expect(carAtSpace(field, traffic, spot), "no car was brought").toBe(-1);
   });
 
-  // mutation: sed -i '/^    if (standing\[own\] !== STANDING.none || standing\[spot\] !== STANDING.none) return false;/d' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when a car stands at her claimed space and her pick is another resident's empty claim, then her clip is drawn at the space her car stands in, no claim has moved and no car is brought to her pick", () => {
     const { field, traffic, clock } = kerbWorld();
     runSeconds(field, traffic, clock, 4);
@@ -1030,14 +981,12 @@ describe("given kerb cars standing near the local player", () => {
     return { field, traffic, spot, ids, see, bring };
   }
 
-  // mutation: sed -i 's/^      const distance = hypot2(car.group.position.x - eyeX, car.group.position.z - eyeZ);/      const distance = 0;/' src/game/ai/openworld-traffic/kerb-cars.ts
   it("when every kerb car stands and a clip needs a car at an empty unseen space, then the spare farthest from the eye is moved there", () => {
     const { field, traffic, spot, ids, bring } = fullPool();
     expect(bring(), "a car stands for her").toBe(true);
     expect(carAtSpace(field, traffic, spot), "the farthest spare").toBe(ids[ids.length - 1]);
   });
 
-  // mutation: sed -i 's/^      const unseen = sight.unseenFor(this.context.sightBase + this.context.movers + slot) >= sight.hideGrace;/      const unseen = true;/' src/game/ai/openworld-traffic/kerb-cars.ts
   it("when the farthest spare is seen and the others are not, then the farthest unseen spare is moved, not the seen one", () => {
     const { field, traffic, spot, ids, see, bring } = fullPool();
     see(ids[ids.length - 1]!);
@@ -1045,7 +994,6 @@ describe("given kerb cars standing near the local player", () => {
     expect(carAtSpace(field, traffic, spot), "the farthest unseen spare").toBe(ids[ids.length - 2]);
   });
 
-  // mutation: sed -i 's/ || this.residentOfSlot\[slot\]! >= 0 || car === undefined/ || car === undefined/' src/game/ai/openworld-traffic/kerb-cars.ts
   it("when the farthest spare stands as a resident's car, then it is never taken: the next farthest is moved", () => {
     const { field, traffic, spot, ids, bring } = fullPool();
     const kerb = traffic["kerb"];
@@ -1054,7 +1002,6 @@ describe("given kerb cars standing near the local player", () => {
     expect(carAtSpace(field, traffic, spot), "the next farthest").toBe(ids[ids.length - 2]);
   });
 
-  // mutation: sed -i 's/ || car.driverOut !== null || heldByHuman/ || heldByHuman/' src/game/ai/openworld-traffic/kerb-cars.ts
   it("when the farthest spare has had its driver thrown from it, then it is never taken: the next farthest is moved", () => {
     const { field, traffic, spot, ids, bring } = fullPool();
     Object.assign(field.cars[ids[ids.length - 1]!]!, { driverOut: {} });
@@ -1062,7 +1009,6 @@ describe("given kerb cars standing near the local player", () => {
     expect(carAtSpace(field, traffic, spot), "the next farthest").toBe(ids[ids.length - 2]);
   });
 
-  // mutation: sed -i 's/ || car.driverOut !== null || heldByHuman(this.context, this.first + slot)) continue;/ || car.driverOut !== null) continue;/' src/game/ai/openworld-traffic/kerb-cars.ts
   it("when the farthest spare is a human's, then it is never taken: the next farthest is moved", () => {
     const { field, traffic, spot, ids, bring } = fullPool();
     traffic["context"].humans[ids[ids.length - 1]!] = 1;
@@ -1072,7 +1018,6 @@ describe("given kerb cars standing near the local player", () => {
 });
 
 describe("given a peer that joins while traffic runs", () => {
-  // mutation: sed -i 's/ || this.context.ports.seated(id)) return null;/) return null;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when the peer takes the id a driving traffic car held, then traffic stops driving it, its car is left alone and no car has two drivers", () => {
     const field = quietField();
     const traffic = makeTraffic(field, { movers: 4, kerb: 2 });
@@ -1094,7 +1039,6 @@ describe("given a peer that joins while traffic runs", () => {
     expect(hypot2(peer.group.position.x - 500, peer.group.position.z - 500), "the peer's car stayed where it was put").toBeLessThan(0.01);
   });
 
-  // mutation: sed -i 's/    if (ports.seated(id)) {/    if (false) {/' src/game/ai/openworld-traffic/kerb-cars.ts
   it("when the peer takes the id a standing kerb car held, then that kerb car is no longer traffic's", () => {
     const field = new FakeField();
     const traffic = makeTraffic(field, { movers: 0, kerb: 3 });
@@ -1124,7 +1068,6 @@ describe("given a pool the engine built as the fleet's mix, a coupe and a monste
   const fleet = { movers: 12, kerb: 10, patrol: 2, ambulance: 0 };
   const patrolIds = [11, 12];
 
-  // mutation: sed -i 's/if (!EVERYDAY_BODIES.includes(style)) ports.setBody/if (false) ports.setBody/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when traffic starts, then every mover and kerb car wears an everyday body (the patrol cruisers apart)", () => {
     const field = quietField();
     makeTraffic(field, fleet);
@@ -1134,7 +1077,6 @@ describe("given a pool the engine built as the fleet's mix, a coupe and a monste
     }
   });
 
-  // mutation: sed -i 's/if (!EVERYDAY_BODIES.includes(style)) ports.setBody/if (true) ports.setBody/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when a car already wears an everyday body, then it is kept, not rebuilt", () => {
     const field = quietField();
     makeTraffic(field, fleet);
@@ -1142,7 +1084,6 @@ describe("given a pool the engine built as the fleet's mix, a coupe and a monste
     for (const id of field.rebuilt) expect(EVERYDAY_BODIES, `car ${id}'s fleet body`).not.toContain(fleetStyle(id));
   });
 
-  // mutation: sed -i 's/      if (id >= this.patrolFrom && id < this.patrolEnd) continue;/      \/\/ no skip/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when the patrol cruisers are marked, then traffic leaves their bodies alone", () => {
     const field = quietField();
     makeTraffic(field, fleet);
@@ -1268,7 +1209,6 @@ describe("given people on the streets and a car of the traffic on its trip", () 
     return { field, traffic, clock: new Clock(), car, people };
   }
 
-  // mutation: sed -i 's/    this.driver.people = people;/    this.driver.people = null;/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when someone steps into its lane ahead, then the car stops short of her and waits, and goes on when she has crossed", () => {
     const { field, traffic, clock, car, people } = onTheWay();
     runSeconds(field, traffic, clock, 6);

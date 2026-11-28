@@ -12,8 +12,6 @@ const STAND_BACK = 6;
 const EYE_HEIGHT = 1.5;
 
 describe("given a crowd with a civilian shown and the look panel's eye 6 m from her", () => {
-  // mutation: sed -i 's/    return text === null || thought === null ? text : { title: text.title, lines: \[...text.lines, thought\] };/    return text;/' src/game/engine/engine-openworld-minds.ts
-  // mutation: sed -i '/^  if (shown !== null) shown.index = about ? resident.index : -1;/d' src/game/ai/civilians/civilian-look.ts
   it("when the panel's ray meets her, then her panel ends with what she thinks; with the ray on nobody, the panel is as it was", () => {
     const crowd = newCrowd(buildFixtureMap());
     const seconds = stepUntilShown(crowd);

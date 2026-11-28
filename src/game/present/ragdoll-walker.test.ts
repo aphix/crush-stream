@@ -96,7 +96,6 @@ describe("given a walker standing on open ground", () => {
     });
   }
 
-  // mutation: sed -i '/^    this.walkers\[slot\]?.stagger(share);/d' src/game/present/ragdoll-throw.ts
   it("when a standing walker is blown at 3 m/s on the chest and staggered to half, then his strength reads 0.5 or less at once and he is on his feet a frame later at 0.6 or less", () => {
     const chest = system["dolls"][WALKER]!.bodies[0]!.translation();
     system.blowWalker(WALKER, new THREE.Vector3(chest.x, chest.y, chest.z), new THREE.Vector3(0, 0.3, 1).normalize(), 3);
@@ -107,7 +106,6 @@ describe("given a walker standing on open ground", () => {
     expect(system.walker.strength, "a frame later").toBeLessThanOrEqual(0.6);
   });
 
-  // mutation: sed -i '/^  blowWalker(/,/^  }/{/strikeAt(/d}' src/game/present/ragdoll-throw.ts
   it("when a standing walker is blown at 3 m/s on the chest, then his torso gains 3 m/s along the blow at once and he is on his feet a frame later", () => {
     const torso = system["dolls"][WALKER]!.bodies[0]!;
     const chest = torso.translation();
@@ -168,7 +166,6 @@ describe("given a walker and a man standing still 2 m ahead of him", () => {
     expect([system.walker.state, system.walkers[STANDER]!.state]).toEqual(["stand", "stand"]);
   });
 
-  // mutation: sed -i 's/this.loco.yaw, this.command));/this.loco.yaw, 0));/' src/game/present/ragdoll-walker.ts
   it("when he walks into the man at 1.4 m/s, then he reaches him and pushes him on without felling him: his torso is past x 1.5 and the man's past x 2.1", () => {
     meet(1.4, 2);
     expect(system["dolls"][WALKER]!.bodies[0]!.translation().x, "his torso's x").toBeGreaterThan(1.5);
@@ -176,7 +173,6 @@ describe("given a walker and a man standing still 2 m ahead of him", () => {
     expect(system.walkers[STANDER]!.state, "the man pushed").toBe("stand");
   });
 
-  // mutation: sed -i 's/^        if (!knocksDown(FIGURE_KG, closing)) continue;/        continue;/' src/game/present/ragdoll-throw.ts
   it("when he runs into the man at 3.5 m/s, then the man is knocked down and the runner is on his feet", () => {
     meet(3.5, 1.2);
     expect(system.walkers[STANDER]!.state, "the man run into").not.toBe("stand");
@@ -204,17 +200,14 @@ describe("given a walker and a man standing still 2 m ahead of him", () => {
     return { away: system["dolls"][STANDER]!.bodies[0]!.linvel().x, runnerLeast };
   }
 
-  // mutation: sed -i 's/^        const sign = struck === b ? 1 : -1;/        const sign = struck === b ? -1 : 1;/' src/game/present/ragdoll-throw.ts
   it("when he runs into the man, then the man is thrown away from him: his torso leaves along +x the frame he goes down", () => {
     expect(runInto().away, "the man's torso's speed along +x (m/s)").toBeGreaterThan(0.5);
   });
 
-  // mutation: sed -i 's/^        this.walkers\[runner\]!.stagger(0.5);/        void runner;/' src/game/present/ragdoll-throw.ts
   it("when he runs into the man and knocks him down, then the runner staggers: his strength falls to a half", () => {
     expect(runInto().runnerLeast, "the runner's least strength").toBeLessThanOrEqual(0.55);
   });
 
-  // mutation: sed -i 's/^      if (this.beside) hit = Math.min(hit, 0.8 \* HIT_SPAN);/      void 0;/' src/game/present/ragdoll-walker.ts
   it("when his torso is moved off its root as hard as a felling blow, then beside another body he keeps his feet, weakened, and with nobody beside him he falls", () => {
     frames(system, SETTLE_SECONDS);
     const walker = system.walker;
@@ -232,7 +225,6 @@ describe("given a walker and a man standing still 2 m ahead of him", () => {
 });
 
 describe("given a walker standing on a floor 4 m up", () => {
-  // mutation: sed -i 's/height - this.floor.level < FALL_HEIGHT/height < FALL_HEIGHT/' src/game/present/ragdoll-walker.ts
   it("when his torso is half a metre over that floor, then he is fallen; at 0.9 m over it he is not", () => {
     const walker = system.walker;
     const doll = system["dolls"][WALKER]!;
@@ -243,7 +235,6 @@ describe("given a walker standing on a floor 4 m up", () => {
     expect(walker.state, "0.5 m over his floor").toBe("down");
   });
 
-  // mutation: sed -i 's/height - this.floor.level < FALL_HEIGHT - this.floor.rise/height - this.floor.level < FALL_HEIGHT/' src/game/present/ragdoll-walker.ts
   it("when one foot is planted a 0.36 m tread up and his torso is 1.1 m over the lower floor, then he is not fallen; with both feet on that tread he is", () => {
     const walker = system.walker;
     const doll = system["dolls"][WALKER]!;
@@ -258,7 +249,6 @@ describe("given a walker standing on a floor 4 m up", () => {
 });
 
 describe("given a walker standing on open ground, a part of him being carried out of something", () => {
-  // mutation: sed -i 's/^        const keep = hypot2(x, z) \/ hypot2(this.carried\[0\]!, this.carried\[1\]!);/        const keep = 1;/' src/game/present/ragdoll-walker.ts
   it("when the carry runs through a 0.05 s frame and then turns back in quarter frames, then it keeps its way and moves him no more than a walk's step a frame", () => {
     const walker = system.walker;
     const gait = walker["gait"];

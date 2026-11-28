@@ -70,7 +70,6 @@ describe("given the showcase prop gallery", () => {
   const boxes = SHOWCASE_GALLERY.map(footprint);
 
   it("when its prefabs are listed, then each non-unique prefab stands once and no unique landmark is there", () => {
-    // mutation: sed -i 's/PREFAB.grandstand, PREFAB.fountain\], 9)/PREFAB.grandstand], 9)/' src/game/present/showcase-art.ts
     expect(prefabPlacements.length).toBe(NON_UNIQUE.length + STYLES_WITHOUT_PREFAB.length);
     for (const id of NON_UNIQUE) expect(prefabPlacements.filter((p) => p.prefab === id).length, id).toBe(id === PREFAB.building ? 1 + STYLES_WITHOUT_PREFAB.length : 1);
     for (const id of EXCLUDED) expect(prefabPlacements.filter((p) => p.prefab === id).length, id).toBe(0);
@@ -81,7 +80,6 @@ describe("given the showcase prop gallery", () => {
   });
 
   it("when the showcase floor is built, then it is drawn far past the disc the gallery stands in, so the set has no rim", () => {
-    // mutation: sed -i 's/FLOOR_RADIUS = 72 \* SHOWCASE_RADIUS/FLOOR_RADIUS = SHOWCASE_RADIUS/' src/game/present/showcase-art.ts
     stubBrowser();
     const floor = new ShowcaseArt().group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh && child.geometry instanceof THREE.CircleGeometry);
     expect(floor, "the floor").toBeDefined();
@@ -89,7 +87,6 @@ describe("given the showcase prop gallery", () => {
   });
 
   it("when its footprints are placed, then all stand behind the eye's clearance and inside the disc", () => {
-    // mutation: sed -i 's/SHOWCASE_RADIUS = 160/SHOWCASE_RADIUS = 100/' src/game/present/showcase-art.ts
     const reach = SHOWCASE_RADIUS - RIM_MARGIN;
     for (const b of boxes) {
       expect(b.z0, `${b.id} reaches z ${b.z0}`).toBeGreaterThan(SHOWCASE_EYE.z + MIN_CLEARANCE);
@@ -98,7 +95,6 @@ describe("given the showcase prop gallery", () => {
   });
 
   it("when its footprints are compared, then none overlap", () => {
-    // mutation: sed -i 's/const BUILDING_GAP = 4/const BUILDING_GAP = -4/' src/game/present/showcase-gallery-rows.ts
     expect(boxes.length, "footprints compared").toBeGreaterThan(NON_UNIQUE.length);
     expect(touchingPairs(boxes).slice(0, 3).join(", "), "touching pairs").toBe("");
   });
@@ -108,13 +104,11 @@ describe("given the scenery assets in the showcase gallery", () => {
   const assetPlacements = SHOWCASE_GALLERY.filter((p) => p.asset !== undefined);
 
   it("when the assets are listed, then every asset of every family stands once", () => {
-    // mutation: sed -i 's/"trackside", "greenery", "desert"\]/"trackside", "greenery"]/' src/game/present/showcase-gallery-rows.ts
     expect(assetPlacements.length, "assets standing").toBe(SCENERY_ASSETS.length);
     for (const [index, a] of SCENERY_ASSETS.entries()) expect(assetPlacements.filter((p) => p.asset === index).length, a.id).toBe(1);
   });
 
   it("when an asset stands, then it is its own generic prefab at its own size", () => {
-    // mutation: sed -i 's/const \[sx, sy, sz\] = assetScale(a, 1);/const [sx, sy, sz] = assetScale(a, 2);/' src/game/present/showcase-gallery-rows.ts
     for (const p of assetPlacements) {
       const a = SCENERY_ASSETS[p.asset!]!;
       const [sx, sy, sz] = assetScale(a, 1);
@@ -123,7 +117,6 @@ describe("given the scenery assets in the showcase gallery", () => {
   });
 
   it("when the families are compared, then each stands in rows of its own, none sharing depth with another", () => {
-    // mutation: sed -i 's/const ROW_GAP = 2.5/const ROW_GAP = -2.5/' src/game/present/showcase-gallery-rows.ts
     const reach = ASSET_FAMILIES.map((family) => {
       const own = assetPlacements.filter((p) => SCENERY_ASSETS[p.asset!]!.family === family).map(footprint);
       return { family, z0: Math.min(...own.map((b) => b.z0)), z1: Math.max(...own.map((b) => b.z1)) };
@@ -134,7 +127,6 @@ describe("given the scenery assets in the showcase gallery", () => {
 
 describe("given the buildings in the showcase gallery", () => {
   it("when the buildings are listed, then each facade style stands once", () => {
-    // mutation: sed -i 's/const OTHER_STYLES = (Object.keys(FACADE) as FacadeStyle\[\]).filter((style) => FACADE\[style\].home === null)/const OTHER_STYLES = (Object.keys(FACADE) as FacadeStyle[]).filter((style) => FACADE[style].home === null).slice(1)/' src/game/present/showcase-gallery-rows.ts
     const styles = prefabPlacements.filter((p) => p.prefab === PREFAB.building || p.prefab === PREFAB.stucco).map((p) => galleryStyleOf(p) ?? homeStyle(p.prefab));
     expect(styles.length, "buildings standing").toBe(STYLES.length);
     for (const style of STYLES) expect(styles.filter((s) => s === style).length, style).toBe(1);

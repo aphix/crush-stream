@@ -222,7 +222,6 @@ const HOOD_FOV = 72;
 const SCENE_FOV = 50;
 
 describe("given the Auto camera taking the view from the hood view's wide lens", () => {
-  // mutation: sed -i '/^    easeFov(camera, lens, dt);$/d' src/game/present/openworld-auto-cam.ts
   it("when it cuts to a person, then the lens eases toward the scene's over the next second, not at once and not never", () => {
     const camera = new THREE.PerspectiveCamera(HOOD_FOV, 1.6, 0.1, 400);
     const cam = new AutoFollowCam();

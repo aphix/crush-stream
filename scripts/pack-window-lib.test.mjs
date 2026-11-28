@@ -40,7 +40,6 @@ const mean = (plane, test) => {
 };
 
 describe("given the storey layer of the DC style and its window mask", () => {
-  // mutation: in pack-window-lib.mjs set `const RECESS = 0.55;` to `0`
   it("when its height is derived, then the windows lie below the wall and the sills below them stand proud of it, all within 0..1", async () => {
     const { rgb, mask } = await storeyFixture();
     const sill = ledgeOf(mask, LAYER, 6, 2);
@@ -55,7 +54,6 @@ describe("given the storey layer of the DC style and its window mask", () => {
     expect(ledge.mean, `sills ${ledge.mean.toFixed(2)} above the wall ${wall.mean.toFixed(2)}`).toBeGreaterThan(wall.mean + 0.08);
   });
 
-  // mutation: in pack-window-lib.mjs set `const GLASS_ROUGHNESS = 0.1;` to `0.9`
   it("when its roughness is derived, then glass is shiny, a wet sill is between, and the wall is rough", async () => {
     const { rgb, mask } = await storeyFixture();
     const sill = ledgeOf(mask, LAYER, 6, 2);

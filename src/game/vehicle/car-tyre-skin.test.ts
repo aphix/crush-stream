@@ -82,7 +82,6 @@ describe("given a pickup's skin of which one point rests over its front tyre and
 });
 
 describe("given a pickup's skin with one point crushed over its front tyre", () => {
-  // mutation: sed -i '/^      this.writes++;/d' src/game/vehicle/car-tyre-skin.ts
   it("when it is held with a skin written or rewritten, then its written skin's serial moves; when only a wheel's move changes the lift, the drawn skin's version moves and the serial stands", () => {
     const car = buildCar("pickup", "truck");
     const mesh = car["body"] as THREE.Mesh;
@@ -928,7 +927,6 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
   };
   const shellOf = (car: DeformableCar, side: number): Float32Array => positionsOf((car.quarterPanel(side).object as THREE.Mesh).geometry);
 
-  // mutation: sed -i 's/^    this.layOwedHold();$//' src/game/vehicle/car-parts.ts  (both lays gone: the hidden car's shell tears off its stale skin, red)
   it("when a shut quarter panel is torn off a car no camera sees whose hold is owed, then the shell and its start are the held twin's bit for bit", () => {
     const { every, lazy, side } = owedOverShutPanel();
     for (const car of [every, lazy]) car.ripPanel(side, new THREE.Vector3(side * 3, 1, 0));
@@ -936,14 +934,12 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
     assertSameNumbers(lazy.quarterPanel(side).object.position.toArray(), every.quarterPanel(side).object.position.toArray(), "where the shell starts");
   });
 
-  // mutation: sed -i '/^  protected openPanel(p: DetachPart): void {$/{n;n;d;}' src/game/vehicle/car-parts.ts  (openPanel's lay gone: the first hinge copies the stale skin, red)
   it("when a shut quarter panel first hinges open on a car no camera sees whose hold is owed, then its shell is the held twin's bit for bit", () => {
     const { every, lazy, side } = owedOverShutPanel();
     for (const car of [every, lazy]) car.setPanelOpen(side, 0.3);
     assertSameNumbers(shellOf(lazy, side), shellOf(every, side), "the hinged shell");
   });
 
-  // mutation: sed -i '/so no camera changes them\.$/{n;d;}' src/game/vehicle/car-parts.ts  (detachPart's lay gone: the bonnet tears off with its stale hold, red)
   it("when the bonnet is torn off a nose-crushed car no camera sees whose bonnet hold is owed, then it flies as the held twin's bit for bit", () => {
     const hoodOf = (car: DeformableCar): THREE.Mesh => car.lookMeshes().hood;
     const twins = hiddenTwins((lazy, every) => lazy.holdOwed && farthestApart(positionsOf(hoodOf(lazy).geometry), positionsOf(hoodOf(every).geometry)) > 0, NOSE_HIT);
@@ -957,7 +953,6 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
     assertSameNumbers(a.position.toArray(), b.position.toArray(), "where the bonnet starts");
   });
 
-  // mutation: sed -i '/^    this.skinRewritten = true;$/{n;d;}' src/game/vehicle/car-tyre-skin.ts  (the owed lift outlives the reset and is laid over the rest skin, red)
   it("when a car no camera sees is reset while its hold is owed and a quarter panel is then torn off, then the shell is the held twin's bit for bit", () => {
     const { every, lazy, side } = owedOverShutPanel();
     for (const car of [every, lazy]) car.resetVisual();

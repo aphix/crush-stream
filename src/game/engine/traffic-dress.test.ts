@@ -15,7 +15,6 @@ function counted() {
 }
 
 describe("given a traffic car stood on a space again and again", () => {
-  // mutation: sed -i 's/    if (worn === undefined || (worn !== null \&\& colour === null)) this.dress(car);/    this.dress(car);/' src/game/engine/traffic-dress.ts
   it("when it is stood in the same paint, then it is dressed once and never painted again", () => {
     const { calls, dress } = counted();
     const car = {};
@@ -28,7 +27,6 @@ describe("given a traffic car stood on a space again and again", () => {
     expect(own.calls.paint.length, "its own paint: never painted").toBe(0);
   });
 
-  // mutation: sed -i 's/    if (colour !== null \&\& worn !== colour) this.paint(car, colour);/    if (colour !== null) this.paint(car, colour);/' src/game/engine/traffic-dress.ts
   it("when its colour changes, then only the paint is redone", () => {
     const { calls, dress } = counted();
     const car = {};
@@ -40,7 +38,6 @@ describe("given a traffic car stood on a space again and again", () => {
     expect(calls.paint[1], "the second paint").toBe(BLUE);
   });
 
-  // mutation: sed -i 's/ || (worn !== null \&\& colour === null)) this.dress(car);/) this.dress(car);/' src/game/engine/traffic-dress.ts
   it("when a resident's paint is given up, then the car is dressed again to take its own back", () => {
     const { calls, dress } = counted();
     const car = {};

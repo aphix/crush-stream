@@ -40,7 +40,6 @@ function trianglesOf(geometry: { getAttribute(name: string): { getX(at: number):
 }
 
 describe("given the bay alcove of a rowhome's rooms", () => {
-  // mutation: sed -i 's/        \[upright(plan, from, to, alcove.floorY + SKIRTING_HEIGHT, alcove.sill), look.wood\],/        [upright(plan, from, to, alcove.floorY + SKIRTING_HEIGHT, alcove.head), look.wood],/' src/game/present/interiors/interior-build.ts
   it("when its pieces are read, then no wall of it stands higher than the sill, and a sill board lies flat at the sill's height on each of its three sides", () => {
     for (const storeys of STOREY_COUNTS) {
       const place = { ...standing, storeys };
@@ -57,7 +56,6 @@ describe("given the bay alcove of a rowhome's rooms", () => {
     }
   });
 
-  // mutation: sed -i 's/const SILL_DEPTH = 0.12;/const SILL_DEPTH = 0.01;/' src/game/present/interiors/interior-build.ts
   it("when the sill board is measured against the glass's front pane, then it stands on the line of the pane and reaches back into the room from it", () => {
     const plan = planInterior(standing);
     const alcove = plan.alcoves.find((candidate) => candidate.level === 0)!;
@@ -77,7 +75,6 @@ describe("given the bay alcove of a rowhome's rooms", () => {
     expect(Math.min(...onFront), "the board's inner edge, back into the room (m)").toBeLessThanOrEqual(frontX - SILL_REACH_MIN);
   });
 
-  // mutation: sed -i 's/(corner\[0\] === 0 ? \[STREET_SKIN + PLATE_LIFT, corner\[1\]\] : corner)/(corner)/' src/game/present/interiors/interior-build.ts
   it("when its floor and ceiling plates are read, then each reaches past the wall plane into the room on every storey: no slot at the bay's mouth", () => {
     for (const storeys of STOREY_COUNTS) {
       const plan = planInterior({ ...standing, storeys });
@@ -104,7 +101,6 @@ describe("given the bay alcove of a rowhome's rooms", () => {
 });
 
 describe("given the bay alcove of a rowhome's ground floor", () => {
-  // mutation: sed -i 's/ ...jambPieces(plan, lookOf(plan, 0), 0)\]/]/; s/, ...jambPieces(plan, lookOf(plan, 0), 0)\]/]/' src/game/present/interiors/interior-build.ts (the wedge between the glass and the wall's opening is open)
   it("when its pieces are read, then a return of the wall closes the strip between the glass's end and the opening's edge, floor to head, on each side", () => {
     const plan = planInterior({ ...standing, storeys: 2 });
     const alcove = plan.alcoves.find((candidate) => candidate.level === 0)!;
@@ -132,7 +128,6 @@ describe("given the bay alcove of a rowhome's ground floor", () => {
 });
 
 describe("given the shell of a shop", () => {
-  // mutation: sed -i 's/^export const ROOM_CELL = 1.0;/export const ROOM_CELL = 100;/' src/game/present/interiors/interior-constants.ts
   it("when it is built, then its floor has a vertex at least every 1.05 m along its depth", () => {
     const shop = lots.places.find((place) => place.interior === "store")!;
     const shopStanding = { ...shop, x: 0, z: 0, yaw: 0 };

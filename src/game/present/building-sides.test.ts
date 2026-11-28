@@ -26,7 +26,6 @@ const placed = placeProps(new Track(openWorldCourse(lots)), SCENERY_ARM.off);
 const party = partyBuildingsOf(placed);
 
 describe("given the open world's buildings and what stands against their sides", () => {
-  // mutation: sed -i 's/(halfWidth + SIDE_PROBE)/(halfWidth - SIDE_PROBE)/g' src/game/present/building-sides.ts
   it("when each place with an interior is compared with its building, then the building has bare side walls exactly where the place has no open side", () => {
     const wrong: string[] = [];
     let bare = 0;
@@ -47,7 +46,6 @@ describe("given the open world's buildings and what stands against their sides",
 });
 
 describe("given a building skin with party walls", () => {
-  // mutation: sed -i 's/  if (storeys === DEFAULT_STOREYS) return party ? `${style}${PARTY_MARK}` : style;/  if (storeys === DEFAULT_STOREYS) return style;/' src/game/present/facades.ts
   it("when a skin is made and split for every style, storey count and party wall, then it names them again and no two skins are the same", () => {
     const seen = new Set<string>();
     const styles: readonly FacadeStyle[] = ["rowbrick", "rowpainted", "cornerstore"];
@@ -86,7 +84,6 @@ describe("given a house drawn with party walls", () => {
   const isSide = (face: { normal: [number, number, number] }): boolean => Math.abs(face.normal[2]) > 0.9;
   const isFlat = (uv: [number, number, number, number]): boolean => uv[1] - uv[0] < EPSILON && uv[3] - uv[2] < EPSILON;
 
-  // mutation: sed -i 's/const bare = party \&\& SIDE_FACES.includes(index) \&\& !cornice;/const bare = false;/' src/game/present/facade-mesh.ts
   it("when its pieces are read, then every band of a side wall but the cornice reads the plain patch of wall, and the street, the back and the cornice are as they were", () => {
     for (const style of HOME_FACADES) {
       const [plainU, plainV] = FACADE_LAYERS[style].plain as readonly [number, number];

@@ -86,7 +86,6 @@ function storage(): unknown[] {
 }
 
 describe("given a street of forty interiors an eye drives along, back and forth, past the near and far radii", () => {
-  // mutation: sed -i 's/    if (this.used + count > this.capacity) this.grow(this.used + count);/    this.grow(this.used + count);/' src/game/present/interiors/interior-pack.ts (every build makes the storage again); sed -i 's/    if (count === 0) return NO_SLOT;/    if (count === 0) return NO_SLOT;\n    void Array.from({ length: 1e5 });/' src/game/present/interiors/interior-pack.ts (a build makes a heap of throwaway)
   it("when the street is driven past again after a warm-up, then no packed mesh makes a geometry or an array, and a build or a drop allocates a bounded few bytes", () => {
     for (let warm = 0; warm < WARM_PASSES; warm++) pass();
     const kept = storage();
@@ -103,7 +102,6 @@ describe("given a street of forty interiors an eye drives along, back and forth,
     expect(perBuild, `${(perBuild / 1e6).toFixed(2)} MB a build`).toBeLessThanOrEqual(BOUND_BYTES_PER_BUILD);
   });
 
-  // mutation: sed -i 's/^    this.showBuiltThrough();/    this.showBuiltThrough();\n    void Array.from({ length: 512 });/' src/game/present/interiors/interior-art.ts (a frame makes an array)
   it("when a frame builds and drops nothing, then the set allocates no more than its sight queries box", () => {
     for (let warm = 0; warm < WARM_FRAMES; warm++) frame(QUIET_AT);
     const built = JSON.stringify(set.stats());

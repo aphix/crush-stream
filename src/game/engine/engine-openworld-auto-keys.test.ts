@@ -82,7 +82,6 @@ describe("given the real engine in the open world with the Auto camera on, the p
     { it: "a person", kind: SUBJECT.civilian },
     { it: "a foot cop", kind: SUBJECT.cop },
   ])("while it follows $it", ({ kind }) => {
-    // mutation: sed -i 's/      this.director.hold(MANUAL_HOLD_SECONDS);//' src/game/engine/engine-openworld-auto.ts
     it("when the mouse drags the view past the longest hold of a shot, then the camera has turned round him, and the same subject is on screen after the drag and the ride pause", () => {
       cutTo(kind, shown(kind));
       const before = bearing();
@@ -101,7 +100,6 @@ describe("given the real engine in the open world with the Auto camera on, the p
       expect(auto().cuts, "the director made no cut while he held the view and after it").toBe(cuts);
     });
 
-    // mutation: sed -i 's/      this.rideLooked = true;//' src/game/present/engine-camera.ts
     it("when pointer-lock mouse look turns the view, then the camera turns round him the same way a drag does", () => {
       cutTo(kind, shown(kind));
       const before = bearing();
@@ -116,7 +114,6 @@ describe("given the real engine in the open world with the Auto camera on, the p
     });
   });
 
-  // mutation: sed -i 's/    return this.showOpenWorld \&\& this.openWorld.cycleAuto(dir);/    return false;/' src/game/engine/engine.ts
   it("when E and Q are pressed, then the camera goes to the next and back to the previous person, and the driven car's seat stays where it was", () => {
     const first = shown(SUBJECT.civilian);
     cutTo(SUBJECT.civilian, first);
@@ -130,7 +127,6 @@ describe("given the real engine in the open world with the Auto camera on, the p
     expect(seat.mode, "and is still at the wheel").toBe("drive");
   });
 
-  // mutation: sed -i 's/    if (this.auto === null) return false;/    if (this.auto === null || !this.autoWanted) return false;/' src/game/engine/engine-openworld.ts
   it("when Auto is off and E is pressed, then the camera goes to somebody to spectate, Q and a drag work on them as with Auto on, and the car's seat stays at the wheel", () => {
     world().setAuto(false);
     rig.run(0.2);
@@ -158,7 +154,6 @@ describe("given the real engine in the open world with the Auto camera on, the p
     expect(seat.mode, "and is still at the wheel").toBe("drive");
   });
 
-  // mutation: sed -i 's/^      return spectated;$/      return false;/' src/game/engine/engine.ts
   it("when Auto is off, the far chase view up, and E then V are pressed, then the camera is back on his car in the far chase view, Auto off", () => {
     world().setAuto(false);
     const seat = rig.engine["seat"];
@@ -172,7 +167,6 @@ describe("given the real engine in the open world with the Auto camera on, the p
     expect(seat.mode, "at the wheel").toBe("drive");
   });
 
-  // mutation: sed -i 's/const WALKED: readonly SubjectKind\[\] = \[SUBJECT.civilian, SUBJECT.cop, SUBJECT.driver\];/const WALKED: readonly SubjectKind[] = [SUBJECT.civilian];/' src/game/engine/engine-openworld-auto.ts
   it("when E is pressed once round everybody the world shows, then it has stopped on people and on foot cops", () => {
     cutTo(SUBJECT.civilian, shown(SUBJECT.civilian));
     const kinds = new Set<number>();

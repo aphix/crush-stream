@@ -65,7 +65,6 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     setGround(null);
   });
 
-  // mutation: sed -i 's/^    this.host.setTimeOfDay(null);$/    \/\/ mutated/' src/game/engine/engine-race-field.ts  (the race's sky stays after it: red in all five cases)
   for (const testCase of cases) {
     it(`when ${testCase.it}, then the scene's sky, fog, lights, night setting and far plane are as on a fresh load`, () => {
       engine.toggleRace();
@@ -83,7 +82,6 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     });
   }
 
-  // mutation: sed -i 's/^    this.sky.setDetail(detail);$/    \/\/ mutated/' src/game/present/engine-world.ts  (the dome never changes detail: red at "expected +0 to be 5", the drawn sky)
   it("when a fresh engine runs under the Sky setting auto, then on the minimal tier it draws no sky (the studio's colour), and on high the default procedural sky, its background and fog that sky's horizon", () => {
     expect(engine["cine"].tier, "the control: a fresh page's tier").toBe("minimal");
     expect(freshDrawn, "no sky on minimal").toBe(SKY_DRAWN.off);
@@ -119,7 +117,6 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     expect(u.uStars!.value, `${label}: stars`).toBe(look.stars ? 1 : 0);
   };
 
-  // mutation: sed -i 's/^    this.sky.show(time, SUN_BEARING);$/    \/\/ mutated/' src/game/present/engine-world.ts  (a time of day never reaches the dome: red at the night horizon)
   it("when the default procedural sky runs on high, then each race's dome takes its time of day's look (night: its stops, moon and stars on), and the sandbox's Night toggle the sandbox night look", () => {
     engine.setFxTier("high");
     for (const time of [TIME_OF_DAY.night, TIME_OF_DAY.sunset, TIME_OF_DAY.day]) {

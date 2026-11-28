@@ -113,7 +113,6 @@ function together(foot: readonly Crossing[]): number {
 }
 
 describe(`given Survival's opening scene on the Havana course (five cops in a staggered formation behind the player), rolled with seed ${SEED}`, () => {
-  // mutation: sed -i 's/^  opening: 13,$/  opening: 0,/' src/game/ai/hunter.ts  (no cop flies the opening: red in both rows, "only 0 formation cops fly the opening" and "only 2 cops overshot the braking player")
   it("when the player holds the boulevard line at full throttle, then the flyers all reach the embankment's foot, three cops of the pack within half a second of each other, and three leave the ground at the crest", (t) => {
     const p = setPiece(SEED, false);
     const flyers = p.foot.filter((f) => p.flyers.includes(f.car));

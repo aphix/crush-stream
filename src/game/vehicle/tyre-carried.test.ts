@@ -133,7 +133,6 @@ function oneCrushedVertex(): Carried {
 }
 
 describe("given a wheel whose carried set was made from a crushed skin", () => {
-  // mutation: sed -i 's/c.admitOk\[w\] === 1 \&\& sameAdmission/false \&\& sameAdmission/' src/game/vehicle/tyre-carried.ts
   it("when it is admitted again with the wheel, the skin and the crush as they were, then its set is not made again: it stands and nothing is reported changed", () => {
     const c = oneCrushedVertex();
     expect(admitCarried(c, TYRE, 1, 0, true, true), "the first set is new").toBe(1);
@@ -144,7 +143,6 @@ describe("given a wheel whose carried set was made from a crushed skin", () => {
     expect(c.n[0], "the set stands").toBe(1);
   });
 
-  // mutation: sed -i 's/ \&\& sameAdmission(c, w, gone, crushed)//' src/game/vehicle/tyre-carried.ts
   it("when the wheel has moved a metre off, then its set is made again and is empty", () => {
     const c = oneCrushedVertex();
     admitCarried(c, TYRE, 1, 0, true, true);
@@ -153,7 +151,6 @@ describe("given a wheel whose carried set was made from a crushed skin", () => {
     expect(c.n[0], "no vertex is over it").toBe(0);
   });
 
-  // mutation: sed -i 's/if (skinWritten) c.admitOk.fill(0);//' src/game/vehicle/tyre-carried.ts
   it("when the skin is written again with the vertex back at its rest, then the set is made again and is empty", () => {
     const c = oneCrushedVertex();
     admitCarried(c, TYRE, 1, 0, true, true);

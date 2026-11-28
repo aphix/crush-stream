@@ -133,20 +133,16 @@ function tally(seed: number, sight: boolean, crimes: boolean): Tally {
 }
 
 describe("given the real open world and ten minutes of crimes", () => {
-  // mutation: in src/game/ai/openworld-crime/foot-cops.ts run(), change `<= STRAIGHT_APPROACH && walkers.straightClear(walkers.x[cop]!, walkers.z[cop]!, aimX, aimZ)) {` to `<= STRAIGHT_APPROACH) {`
   it("when cops chase and arrest, then nobody walks into a building, whatever corner the chase turns", () => {
     for (const seed of SEEDS) expect(tally(seed, true, true).insideSteps, `walker-steps inside a building (seed ${seed})`).toBe(0);
   });
 
-  // mutation: sed -i 's/this.replanIfAimMoved(cop, aimX, aimZ);/this.walkers.plan(cop, this.finder, this.walkers.nearestSeenNode(aimX, aimZ), this.noFear, 0);/' src/game/ai/openworld-crime/foot-cops.ts
-  // mutation: sed -i 's/new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS, senses.lineOfSight)/new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS, null)/' src/game/ai/openworld-crime/foot-law.ts
   it("when cops chase and arrest, then no walker keeps coming back to one corner", () => {
     for (const seed of SEEDS) expect(tally(seed, true, true).mostRevisits, `most times one corner was entered (seed ${seed})`).toBeLessThanOrEqual(MOST_REVISITS);
   });
 });
 
 describe("given the real open world with its police station and ten minutes of crimes", () => {
-  // mutation: sed -i 's/to === ESCORT_TO.station ? STATION_ESCORT_SECONDS : ESCORT_SECONDS/ESCORT_SECONDS/' src/game/ai/openworld-crime/arrests.ts
   it("when cops arrest, then each arrest is raised with the cop at the station's door, wherever the suspect was cuffed", () => {
     let arrests = 0;
     for (const seed of SEEDS) {
@@ -159,7 +155,6 @@ describe("given the real open world with its police station and ten minutes of c
 });
 
 describe("given a cop standing beside a corner lot of the real map", () => {
-  // mutation: in src/game/ai/openworld-crime/foot-walkers.ts nearestSeenNode(), change `if (gap >= seenGap || !this.clear(x, z, nodeX[node]!, nodeZ[node]!)) continue;` to `if (gap >= seenGap) continue;`
   it("when the nearest corner is across a building, then the node he walks to is the nearest one he can see", () => {
     const walkers = new FootWalkers(real.map.graph, 1, real.sight);
     const { nodeX, nodeZ } = real.map.graph;
@@ -178,7 +173,6 @@ describe("given a cop standing beside a corner lot of the real map", () => {
 });
 
 describe("given points on and beside the real map's sidewalks, some inside buildings", () => {
-  // mutation: sed -i 's/      if (this.clear(x, z, nodeX\[next\]!, nodeZ\[next\]!)) return next;/      return next;/' src/game/ai/openworld-crime/foot-walkers.ts
   it("when the nearest node in the clear is asked for, then it is the one a pass over every node in index order finds, with a fraction of the sight lines", () => {
     let lines = 0;
     let referenceLines = 0;
@@ -231,7 +225,6 @@ describe("given a graph of a few nodes and a sight that blocks some of them", ()
     return clear.includes(bx);
   };
 
-  // mutation: sed -i 's/        if (gap < triedGap || (gap === triedGap \&\& node <= tried) || gap >= nextGap) continue;/        if (gap < triedGap || gap >= nextGap) continue;/' src/game/ai/openworld-crime/foot-walkers.ts
   it("when two nodes are as near and the lower one is blocked, then the higher one is the node he sees, and the lower is asked about once", () => {
     const asked: number[] = [];
     const walkers = new FootWalkers(graphOf([0, 3, 9], [-3, 0, 9]), 1, sightTo(asked, [3, 9]));
@@ -239,7 +232,6 @@ describe("given a graph of a few nodes and a sight that blocks some of them", ()
     expect(asked, "the x of each node asked, in order").toEqual([0, 3]);
   });
 
-  // mutation: sed -i 's/^const SEEN_TRIES = 6;/const SEEN_TRIES = 8;/' src/game/ai/openworld-crime/foot-walkers.ts
   it("when seven nearer nodes are blocked and a far one is clear, then the far one is the node he sees after the six nearest-first tries and the full pass; with every node blocked, the nearest", () => {
     const xs = [1, 2, 3, 4, 5, 6, 7, 20];
     const zs = xs.map(() => 0);
@@ -251,12 +243,10 @@ describe("given a graph of a few nodes and a sight that blocks some of them", ()
 });
 
 describe("given the real open world and ten minutes of patrolling", () => {
-  // mutation: in src/game/ai/openworld-crime/foot-cops.ts nextCorner(), change `if (edgeStart[node + 1]! - edgeStart[node]! < 2 || this.isRecent(cop, node)) continue;` to `if (edgeStart[node + 1]! - edgeStart[node]! < 1 || this.isRecent(cop, node)) continue;`
   it("when no crime calls them, then the cops walk the sidewalks and crossings without entering a building", () => {
     for (const seed of SEEDS) expect(tally(seed, true, false).insideSteps, `walker-steps inside a building (seed ${seed})`).toBe(0);
   });
 
-  // mutation: in src/game/ai/openworld-crime/crime-constants.ts, change `PATROL_LEG_MAX = 120;` to `PATROL_LEG_MAX = 30;`
   it("when no crime calls them, then each cop walks a beat across the city, not round one corner", () => {
     const cells: number[] = [];
     for (const seed of SEEDS) {
@@ -269,7 +259,6 @@ describe("given the real open world and ten minutes of patrolling", () => {
 });
 
 describe("given a cop's last few corners", () => {
-  // mutation: in src/game/ai/openworld-crime/foot-cops.ts nextCorner(), change `this.isRecent(cop, node)) continue;` to `false) continue;`
   it("when he picks the next, then it is not one of the last `PATROL_RECENT` he walked to", () => {
     for (const seed of SEEDS) {
       const scene = new Scene(seed, true);

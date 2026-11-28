@@ -44,7 +44,6 @@ const downAt = (x: number, z: number): THREE.Vector3 | null => firstHit(new THRE
 const upAt = (x: number, z: number): THREE.Vector3 | null => firstHit(new THREE.Vector3(x, -RAY_START, z), new THREE.Vector3(0, 1, 0));
 
 describe("given the bicycle locked to the street's bike rack", () => {
-  // mutation: sed -i 's/tyreRadius: 0.31, tyreTube: 0.022/tyreRadius: 0.31, tyreTube: 0.3/' src/game/present/bicycle.ts
   it("when its wheels are probed inside their tyres, then nothing fills them (a ring, not a disc), and the tyres themselves are there", () => {
     for (const z of [-AXLE_OFFSET, AXLE_OFFSET]) {
       for (const degrees of [-90, -45, 45, 180]) {
@@ -58,9 +57,6 @@ describe("given the bicycle locked to the street's bike rack", () => {
     }
   });
 
-  // mutation: sed -i '/name: "top tube"/d' src/game/present/bicycle.ts
-  // mutation: sed -i '/name: "down tube"/d' src/game/present/bicycle.ts
-  // mutation: sed -i '/name: "seat tube"/d' src/game/present/bicycle.ts
   it("when its frame is probed, then the diamond is there: top tube, down tube, seat tube, stays, fork, head tube, bars and seat post", () => {
     const probes: { name: string; hit: THREE.Vector3 | null; x: number }[] = [
       { name: "top tube", hit: downAt(LANE, 0.015), x: LANE },
@@ -79,9 +75,6 @@ describe("given the bicycle locked to the street's bike rack", () => {
     }
   });
 
-  // mutation: sed -i 's/const SPOKES = 18;/const SPOKES = 6;/' src/game/present/bicycle.ts
-  // mutation: sed -i 's/alphaTest: ALPHA_CUTOFF, //' src/game/present/bicycle.ts
-  // mutation: sed -i 's/ side: THREE.DoubleSide,//' src/game/present/bicycle.ts
   it("when its spokes are read, then each wheel is a sprite quad on an alpha-cut double-sided material whose texture has a hub, a rim and the spokes between", () => {
     expect(parts.length, "the shape and the spokes").toBe(2);
     const sprite = parts[1]!;

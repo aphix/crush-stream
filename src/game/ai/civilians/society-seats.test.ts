@@ -75,7 +75,6 @@ describe("given Kelly's Tap Room on the city's map, whose building has flats ove
   const top = counter![3]!;
   const heights = Array.from({ length: seats!.length / SEAT_STRIDE }, (_, seat) => seats![seat * SEAT_STRIDE + 3]!);
 
-  // mutation: sed -i 's/    if (state.seatOwner\[slot\] !== NO_PLACE || seats!\[seat \* SEAT_STRIDE + 3\]! > highest) continue;/    if (state.seatOwner[slot] !== NO_PLACE) continue;/' src/game/ai/civilians/society-seats.ts
   it("when forty customers take seats one after another, then every seat in the bar's own room is taken, none in a flat over it, and the rest find none", () => {
     const state = createCityState(SEED, map, 60);
     const taken = Array.from({ length: 40 }, (_, resident) => (claimSeat(state, resident, bar, false) ? intAt(state, resident, RESIDENT_INT.seat) : NO_SEAT));

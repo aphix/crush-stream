@@ -94,8 +94,6 @@ function sweep(g: Ground): { far: number; whole: number; byProp: number } {
 }
 
 describe("given a sloped grid with a tying prism, a knockable prop, a movable prop, filler prisms and a NaN node", () => {
-  // mutation: sed -i 's/out\[C_OWNER\] = -1;/out[C_OWNER] = -2;/' src/game/world/surfaces.ts  (a far answer's owner differs from the layered path's)
-  // mutation: sed -i 's/if (!(travel2 \* (1 + NY_MARGIN) < pen \* pen \* ny \* ny)) return false;/if (false) return false;/' src/game/world/surfaces.ts  (a far answer's travel reaches its height along the normal)
   it("when every point of the lattice is asked with the bake on and off, then each answer is the same bits, and both far and whole answers occur", () => {
     const { far, whole, byProp } = sweep(ground().g);
     expect(far > 1000 && whole > 1000, `both kinds of answer are exercised (far ${far}, whole ${whole})`).toBeTruthy();

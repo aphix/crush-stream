@@ -58,7 +58,6 @@ function framesInBody(seconds: number, lookLow: boolean, z: (t: number) => numbe
 }
 
 describe("given the chase camera on a car in a garage just bigger than it", () => {
-  // mutation: sed -i '/^    if (view !== "first") outOfBody(camera.position, car, chase.aimUp);$/d' src/game/present/drive-cam.ts
   const cases = [
     { it: "when the scene opens with the car parked in it and the look held low, then the eye is never inside the car, from the first frame", lookLow: true, reverse: false },
     { it: "when the scene opens with the car parked in it at the chase's own look, then the eye is never inside the car", lookLow: false, reverse: false },
@@ -82,7 +81,6 @@ const SETTLE_S = 1.5;
 const STEP_DOWN_MAX_M = 0.1;
 
 describe("given the chase camera lifted over its car's roof in a garage just bigger than it", () => {
-  // mutation: sed -i 's/this.bodyLift \* Math.exp(-LET_GO_OMEGA \* dt)/0/' src/game/present/drive-cam.ts
   it(`when the car drives off from its back wall, then the eye never drops more than ${STEP_DOWN_MAX_M} m in a frame`, () => {
     const car = newCar();
     const sight = garage(car);
@@ -109,7 +107,6 @@ const SPIN_RAD_S = 6;
 const SWING_MAX_RAD_S = 3;
 
 describe("given the chase camera behind a car standing in the open", () => {
-  // mutation: sed -i 's/^const HEADING_RATE = 2.5;/const HEADING_RATE = Infinity;/' src/game/present/drive-cam.ts
   it("when the car spins on the spot at 6 rad/s for a second, then the eye swings round it no faster than 3 rad/s", () => {
     const car = newCar();
     const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 180);

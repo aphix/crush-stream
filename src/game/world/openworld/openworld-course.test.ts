@@ -80,7 +80,6 @@ for (const wallCase of WALL_CASES) {
       return Math.abs(dx * detCos(prop.yaw) - dz * detSin(prop.yaw)) <= depth / 2 && Math.abs(dx * detSin(prop.yaw) + dz * detCos(prop.yaw)) <= width / 2;
     };
 
-    // mutation: sed -i 's/geometry.streetX.slice(1, -1).map((x, index) => route(/geometry.streetX.slice(1, 1).map((x, index) => route(/' src/game/world/openworld/openworld-course.ts
     it("when it is parsed and built as a track, then it is the course named openworld, a closed loop with the interior streets as car-free routes", () => {
       expect(course.id, "course id").toBe(OPENWORLD_ID);
       expect(OPENWORLD_ID, "the id the scene asks for").toBe("openworld");
@@ -92,7 +91,6 @@ for (const wallCase of WALL_CASES) {
       ).toBe(true);
     });
 
-    // mutation: sed -i 's/style: building.style }/style: "other" }/' src/game/world/openworld/openworld-course.ts
     it("when each building's door is looked at from the street, then a building prop of its style stands behind it, and every prop is some place's", () => {
       const wrong: string[] = [];
       const sheltering = new Set<Prop>();
@@ -107,7 +105,6 @@ for (const wallCase of WALL_CASES) {
       expect(buildings.filter((prop) => !sheltering.has(prop)).length, "building props no place's door is in front of").toBe(0);
     });
 
-    // mutation: sed -i 's/size: \[building.depth, building.height, building.width\]/size: [building.depth * 3, building.height, building.width]/' src/game/world/openworld/openworld-course.ts
     it("when the buildings and the walk graph are laid against the roads, then no building corner and no walk node is on a carriageway", () => {
       const onRoad = buildings.filter((prop) => footprintPoints(prop).some(([x, z]) => roadClearance(x, z) < 0));
       const graph = map.graph;
@@ -119,8 +116,6 @@ for (const wallCase of WALL_CASES) {
       expect(nodesOnRoad, "walk nodes on a road").toBe(0);
     });
 
-    // mutation: sed -i 's/Array.from({ length: count }, (_, index) => {/Array.from({ length: count - 1 }, (_, index) => {/' src/game/world/openworld/openworld-course.ts
-    // mutation: sed -i 's/const outX = geometry.halfX + WALL_THICKNESS \/ 2;/const outX = geometry.halfX + WALL_THICKNESS;/' src/game/world/openworld/openworld-course.ts
     it("when the invisible walls are laid along each edge of the play area, then no gap is wider than a car, none opens at a corner and each stands on the line the layout gives", () => {
       const thickness = WALL_THICKNESS;
       const edges = [
@@ -146,7 +141,6 @@ for (const wallCase of WALL_CASES) {
       }
     });
 
-    // mutation: sed -i 's/geometry.sidewalk - LAMP_FROM_CURB/geometry.sidewalk - 1.6/' src/game/world/openworld/openworld-course.ts
     it("when every placed prop's footprint is laid against each block's sidewalk, then none stands in the clear path", () => {
       const low = geometry.sidewalkFrontage;
       const high = geometry.sidewalkFrontage + geometry.sidewalkClear;
@@ -165,7 +159,6 @@ for (const wallCase of WALL_CASES) {
       expect(inPath.slice(0, 3).join("; "), "props in a clear path").toBe("");
     });
 
-    // mutation: sed -i 's/export const TREE_SPACING = 9;/export const TREE_SPACING = 4;/' src/game/world/openworld/openworld-constants.ts
     it("when a block's north face is read, then lamps stand about 32 m apart, trees about 9 m apart and no tree within 1.5 m of a lamp", () => {
       const block = lots.blocks[0]!;
       const lineZ = block.centreZ - geometry.blockDepth / 2;
@@ -187,7 +180,6 @@ for (const wallCase of WALL_CASES) {
       for (const tree of trees) for (const lamp of lamps) expect(Math.abs(tree - lamp), "tree to lamp (m)").toBeGreaterThanOrEqual(TREE_LAMP_CLEARANCE_M);
     });
 
-    // mutation: git checkout ow-merge -- src/game/world/openworld/openworld-course.ts (the instanced parked cars come back; the file's other rows go red with it)
     it("when the whole course is placed, then no parked-car instance stands or is drawn inside the walls", () => {
       const placed = placeCourse(track);
       const everything = [...placed.placed, ...placed.drawn];
@@ -246,7 +238,6 @@ for (const wallCase of WALL_CASES) {
       return bands;
     };
 
-    // mutation: sed -i 's/const z = geometry.streetZ\[1\]! + SPAWN_LATERAL_SHIFT;/const z = geometry.streetZ[0]! + SPAWN_LATERAL_SHIFT;/' src/game/world/openworld/openworld-course.ts
     it("when the course names its seats, then there is one for every player a room holds", () => {
       expect(SPAWN_SEATS, "seats the world names").toBe(ROOM_MAX);
       expect(course.survival!.seats!.length, "seats in the course").toBe(ROOM_MAX);
@@ -311,8 +302,6 @@ for (const wallCase of WALL_CASES) {
       }
     });
 
-    // mutation: sed -i 's/prefab: dressing.prefab, x: dressing.x, z: dressing.z/prefab: PREFAB.cone, x: dressing.x, z: dressing.z/' src/game/world/openworld/openworld-course.ts
-    // mutation: sed -i 's/paint: \[...parkPaint(lots), ...paintOf(lots)\]/paint: [...paintOf(lots), ...parkPaint(lots)]/' src/game/world/openworld/openworld-course.ts
     it("when the layout's dressing and painted ground are read, then the course stands each prop and paints the park's pavers and then each area", () => {
       const standing = course.props.filter((prop) => prop.prefab === PREFAB.dumpster);
       expect(lots.dressing.length, "props the layout dresses").toBeGreaterThan(0);
@@ -331,7 +320,6 @@ for (const wallCase of WALL_CASES) {
 describe("given the invisible wall's prefab", () => {
   beforeAll(() => stubBrowser());
 
-  // mutation: sed -i '/case PREFAB.invisibleWall:/{n;s/return \[\];/return one(wall(), mats.plain);/}' src/game/present/prefabs.ts
   it("when the invisible wall is drawn, then nothing is, and when a car meets it, then it is solid", () => {
     expect(prefabParts(PREFAB.invisibleWall, makePrefabMaterials(raceTextures())), "drawn parts").toHaveLength(0);
     expect(PREFABS[PREFAB.invisibleWall].body, "what a car meets").toBe("solid");

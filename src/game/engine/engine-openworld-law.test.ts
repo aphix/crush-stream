@@ -53,7 +53,6 @@ function directorWith(extra: Partial<OpenWorldPorts>): { director: OpenWorldDire
 }
 
 describe("given the open world's director", () => {
-  // mutation: in src/game/engine/engine-openworld.ts start(), move `this.startTraffic(map, client);` to after `this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK, gaze);`
   it("when the engine gives traffic and law ports, then the police lease their patrol cars from the traffic, which was made before them", () => {
     const { director } = directorWith({ traffic: idleTrafficPorts(), law: idleLawPorts() });
     expect(director["traffic"], "the traffic is up").not.toBeNull();
@@ -61,8 +60,6 @@ describe("given the open world's director", () => {
     expect(director["law"]!["rides"], "it has the traffic's own, none to hear").toBeNull();
   });
 
-  // mutation: in src/game/engine/engine-openworld.ts makeLaw(), change `traffic: () => this.traffic,` to `traffic: () => null,`
-  // mutation: sed -i 's/this.rides = traffic === null ? new ArrestRides/this.rides = traffic !== null ? new ArrestRides/' src/game/engine/engine-openworld-law.ts
   it("when there is no traffic (a client's director, or a harness without cars), then the police are on foot until a ride is heard", () => {
     const { director } = directorWith({ law: idleLawPorts() });
     expect(director["law"], "the law is made").not.toBeNull();
@@ -70,7 +67,6 @@ describe("given the open world's director", () => {
     expect(director["law"]!["rides"], "the host's cars are its to hear").not.toBeNull();
   });
 
-  // mutation: in src/game/engine/engine-openworld.ts makeLaw(), delete the line `if (extra === undefined) return null;`
   it("when the engine gives no law ports, then there are no police and no second drawing for their cops", () => {
     const { director, arts } = directorWith({});
     expect(director["law"], "no law").toBeNull();
@@ -91,7 +87,6 @@ describe("given the open world's director", () => {
     return made;
   }
 
-  // mutation: sed -i 's/makeArt: (capacity) => gaze.follow(this.ports.makeArt(capacity), capacity),/makeArt: (capacity) => this.ports.makeArt(capacity),/' src/game/engine/engine-openworld.ts
   it("when the law is made, then its foot cops' drawing turns their heads by a gaze of their own, one a cop", () => {
     const [crowd, cops] = drawings();
     expect(cops?.gaze, "the cops' gaze").toBeInstanceOf(CrowdGaze);
@@ -99,14 +94,12 @@ describe("given the open world's director", () => {
     expect(cops!.gaze, "not the crowd's").not.toBe(crowd?.gaze);
   });
 
-  // mutation: sed -i 's/new OpenWorldMedics(gaze.follow(this.ports.makeArt(MEDICS.count), MEDICS.count))/new OpenWorldMedics(this.ports.makeArt(MEDICS.count))/' src/game/engine/engine-openworld.ts
   it("when the open world starts, then its medics' drawing turns their heads by a gaze of their own, one a medic", () => {
     const medics = drawings()[2];
     expect(medics?.gaze, "the medics' gaze").toBeInstanceOf(CrowdGaze);
     expect(medics!.gaze!.capacity, "one a medic").toBe(MEDICS.count);
   });
 
-  // mutation: in src/game/engine/engine-openworld.ts feedWalkers(), delete the line `this.law?.feedCops(crowd.walkers);`
   it("when a foot cop and a civilian stand on one spot, then the crowd steps the civilian round him as round any body", () => {
     const { director } = directorWith({ law: idleLawPorts() });
     const crowd: CivilianCrowd = director["crowd"]!;
@@ -124,7 +117,6 @@ describe("given the open world's director", () => {
     expect(apart, "pushed apart toward a body's width").toBeGreaterThan(BODY_GAP * 0.75);
   });
 
-  // mutation: sed -i '/^    this.scene.foot.spare(strike.guard);/d' src/game/engine/engine-openworld-law.ts
   it("when the crowd runs down a suspect a cop holds, then the law lets her go at once and draws her in his hands no more, so a car on her spot does not run her down again every step", () => {
     const { director } = directorWith({ law: idleLawPorts() });
     const crowd: CivilianCrowd = director["crowd"]!;
@@ -172,7 +164,6 @@ describe("given patrol cars chasing the player's car", () => {
     return { director, figures };
   }
 
-  // mutation: in src/game/engine/engine-openworld.ts bustOf(), change `if (this.law === null || !this.law.chaseOf(carIndex, this.bustScratch)) {` to `if (this.law === null) {`
   it("when none chases the car, then there is no strip; when one does, then the strip carries its numbers", () => {
     const { director, figures } = stripDirector();
     expect(director.bustOf(CAR), "none chasing").toBeNull();
@@ -185,7 +176,6 @@ describe("given patrol cars chasing the player's car", () => {
     expect(director.bustOf(CAR), "escaped").toBeNull();
   });
 
-  // mutation: in src/game/engine/engine-openworld.ts bustOf(), change `if (kept !== null && kept.cops === next.cops && kept.left === left && kept.hold === hold) return kept;` to `if (false) return kept;`
   it("when the figures change by less than the strip shows, then the HUD is handed the same object, and a changed second gives a new one", () => {
     const { director, figures } = stripDirector();
     figures.next = { cops: 1, hold: 0.5, left: 6 };
@@ -227,7 +217,6 @@ describe("given the player on foot in the open world", () => {
     return { director, crowd: director["crowd"]!, scene };
   }
 
-  // mutation: in src/game/engine/engine-openworld-law.ts hearShoves(), delete the line `if (authority) this.scene.playerShoved(this.shoveSeconds);`
   it("when he shoves a civilian where a cop stands, then the crowd's log of it sends the cops after him and the pursuit strip counts them", () => {
     const { director, crowd, scene } = playerWithCop();
     const strip = { cops: 0, hold: 0, left: 0 };
@@ -240,8 +229,6 @@ describe("given the player on foot in the open world", () => {
     expect(shown?.hold, "no hold yet").toBe(0);
   });
 
-  // mutation: sed -i 's/footArrest: extra.footArrest/footArrest: { busted: () => {}, led: () => {}, taken: () => {}, delivered: () => {} }/' src/game/engine/engine-openworld.ts
-  // mutation: sed -i 's/footArrest: ports.footArrest,/footArrest: { busted: () => {}, led: () => {}, taken: () => {}, delivered: () => {} },/' src/game/engine/engine-openworld-law.ts
   it("when a cop holds him the whole hold, then the engine's ports hear the arrest, his cop leading him, and where he is set down", () => {
     const heard = { busted: 0, led: 0, delivered: 0 };
     const { director, crowd } = playerWithCop({
@@ -257,7 +244,6 @@ describe("given the player on foot in the open world", () => {
     expect(heard.delivered, "set down, on a map with no station a few metres on").toBe(1);
   });
 
-  // mutation: in src/game/engine/engine-openworld-law.ts feedFoot(), change `this.scene.setFoot(there, ` to `this.scene.setFoot(false, `
   it("when he is in a car, then the law has no walker to judge", () => {
     const { director } = directorWith({ law: idleLawPorts() });
     director.step(FRAME_SECONDS);

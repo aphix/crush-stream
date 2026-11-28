@@ -76,7 +76,6 @@ const scenes: readonly { it: string; boxes: readonly Box[] }[] = [
 ];
 
 describe("given the camera behind him among solids", () => {
-  // mutation: sed -i 's/    this.boom = letGo(this.boom, stopShort(sweep(ox, py, oz, bx, sp, bz, length), length), dt);/    this.boom = length;/' src/game/present/walker-camera.ts
   for (const scene of scenes) {
     it(scene.it, () => {
       const sweep = boxSweep(scene.boxes);
@@ -111,7 +110,6 @@ function boomOver(frames: readonly Box[][]): number[] {
 }
 
 describe("given the camera behind him on a level boom with nothing round him", () => {
-  // mutation: sed -i 's/^const LET_GO_TIME = 0.24;/const LET_GO_TIME = 1e-6;/' src/game/present/walker-camera.ts
   it("when a wall comes in 1.5 m behind him, then the eye is in short of it the same frame; when it goes, the eye eases back out over about a quarter second", () => {
     const near = 1.5;
     const open = Array.from({ length: 10 }, () => [] as Box[]);

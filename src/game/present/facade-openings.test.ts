@@ -44,14 +44,12 @@ async function alphaOf(style: string): Promise<{ at: (layer: number, u: number, 
 }
 
 describe("given the facade styles of the places that have interiors", () => {
-  // mutation: sed -i '0,/"open": true/s//"open": false/' src/game/present/facade-layers.json
   it("when the layer data is read, then every style an interior stands behind is open in its ground band and no other new style is", () => {
     for (const style of Object.keys(OPEN_STYLES)) expect(FACADE_LAYERS[style as FacadeStyle].open, `${style} open`).toBe(true);
     expect(FACADE_LAYERS.supermarket.open, "the supermarket has no interior").toBeUndefined();
     expect(FACADE_LAYERS.rowhouse.open, "a style that was there before").toBeUndefined();
   });
 
-  // mutation: sed -i 's/const x0 = Math.round(((half - (opening.centre + opening.width \/ 2))/const x0 = Math.round(((half - (opening.centre + opening.width \/ 2) + 1)/' scripts/pack-facades.mjs, then repack the styles (the cut lands a metre off the door)
   it("when the packed albedo is read at each doorway of the plan, then it is a doorway at body height, wall at the bay's edge, and no doorway stands in the other layers", async () => {
     const half = drawnHalf(BAY_WIDTH);
     for (const [style, open] of Object.entries(OPEN_STYLES)) {
@@ -66,7 +64,6 @@ describe("given the facade styles of the places that have interiors", () => {
     }
   });
 
-  // mutation: sed -i 's/      for (let y = Math.floor((1 - v1) \* LAYER); y < Math.ceil((1 - v0) \* LAYER); y++) for (let x = x0; x < x1; x++) strip\[layer \* LAYER \* LAYER + y \* LAYER + x\] = FACADE_ALPHA.window;//' scripts/pack-facades.mjs, then repack the styles (no window is marked)
   it("when the packed albedo is read in each window the picture's table lists, then it is a window the shader cuts once its room is built: on every layer, but for a door's transom and its glass, which stay wall or doorway", async () => {
     const half = drawnHalf(BAY_WIDTH);
     for (const [style, open] of Object.entries(OPEN_STYLES)) {
@@ -92,7 +89,6 @@ describe("given the ground band of each open style drawn on its building", () =>
     materials = makePrefabMaterials(raceTextures());
   });
 
-  // mutation: sed -i 's/export const GROUND_STOREY = 3.6;/export const GROUND_STOREY = 3.2;/' src/game/world/openworld/interior-kinds.ts
   it("when a building of each style at each storey count is stretched to its height on the map, then its ground band reaches the height the plan's doorway and ceiling are built for", () => {
     for (const [style, open] of Object.entries(OPEN_STYLES)) {
       for (const storeys of [MIN_STOREYS, DEFAULT_STOREYS, MAX_STOREYS]) {

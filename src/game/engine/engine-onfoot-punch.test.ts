@@ -65,7 +65,6 @@ beforeEach(() => {
 afterAll(() => rig.dispose());
 
 describe("given the real engine in the open world, its player on foot", () => {
-  // mutation: sed -i 's/^export const PLAYER_PUNCH_COOLDOWN = 0.6;/export const PLAYER_PUNCH_COOLDOWN = 0;/' src/game/ai/civilians/civilian-constants.ts
   it("when fire is pressed on foot in the open world, then his right forearm goes at least 0.3 m forward within a quarter second, the punch lands once, and a second press inside the cooldown throws nothing", () => {
     rig.getOut();
     const landed = vi.spyOn(rig.engine["openWorld"], "punch");
@@ -86,7 +85,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     landed.mockRestore();
   });
 
-  // mutation: sed -i 's/^    if (!this.ports.guest()) {/    if (true) {/' src/game/engine/engine-openworld-acts.ts
   it("when a guest in a room presses fire on foot in the open world, then his fist swings at once, and the punch is sent to the host as an act from his torso along his facing instead of being carried out on his machine", () => {
     rig.getOut();
     const landed = vi.spyOn(rig.engine["openWorld"], "punch");
@@ -115,7 +113,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     }
   });
 
-  // mutation: sed -i 's/^    if (this.arms.aiming) {/    if (false) {/' src/game/engine/engine-onfoot-steer.ts
   it("when aim is held, then he turns to the camera's forward and a sideways key does not move him; forward walks him at no more than walking pace", () => {
     rig.getOut();
     const keys = rig.engine["keys"];
@@ -140,7 +137,6 @@ describe("given the real engine in the open world, its player on foot", () => {
     }
   });
 
-  // mutation: sed -i 's/^    } else if (!cancelled \&\& click \&\& this.click?.()) return;/    }/' src/game/present/engine-camera.ts
   it("when the mouse is free, then a click on the view throws one punch and a drag turns the view and throws none", () => {
     rig.getOut();
     const punched = vi.spyOn(rig.walker(), "punch");

@@ -12,7 +12,6 @@ const CAR_SPEED = 10;
 const CAR_START_X = 30;
 
 describe("a foot cop moves like the people round him", () => {
-  // mutation: in src/game/ai/openworld-crime/foot-walkers.ts carry(), change `(speed > 0 ? Math.min(STRIDE_RADIANS_PER_METRE, (2 * Math.PI * RUN_STRIDES_PER_SECOND) / speed) : STRIDE_RADIANS_PER_METRE)` to `STRIDE_RADIANS_PER_METRE`
   it("strides at the civilians' rate at a walk, and no faster than a runner's cadence at a run", () => {
     const walkers = new FootWalkers(lineCity().graph, 2, null);
     for (let step = 0; step < 10; step++) {
@@ -23,7 +22,6 @@ describe("a foot cop moves like the people round him", () => {
     expect(walkers.stride[1], "a second's run: one runner's strides").toBeCloseTo(2 * Math.PI * RUN_STRIDES_PER_SECOND, 6);
   });
 
-  // mutation: in src/game/ai/openworld-crime/crime-scene.ts step(), change `this.drawShare = Math.min(1, Math.max(0, (crowdSeconds - this.law.seconds) * CRIME_HZ));` to `this.drawShare = 1;`
   it("is drawn partway between his last two grid steps at a frame between them, not jumping a step at a time", () => {
     const run = harness([60, 0, 0]);
     runFor(run, 1);
@@ -47,7 +45,6 @@ describe("a car runs a foot cop down as it does a civilian", () => {
     return { run, car };
   }
 
-  // mutation: in src/game/ai/openworld-crime/crime-scene.ts step(), delete the line `if (authority) this.findCopHits(cars, crowdSeconds);`
   it("knocks down the cop the car's path meets: thrown by that car, off the street, the host's event, and back on his beat after a while", () => {
     const { run, car } = carThroughCop(true);
     for (let step = 0; step < 50 && run.copDowns.length === 0; step++) {
@@ -66,7 +63,6 @@ describe("a car runs a foot cop down as it does a civilian", () => {
     expect(run.scene.copPoses.shown[COP], "back on his beat").toBe(1);
   });
 
-  // mutation: in src/game/ai/openworld-crime/crime-scene.ts step(), delete the line `this.applyDueCopDowns(cars);`
   it("on a client, the host's knock heard puts the cop down when the client's clock reaches it, and its own hit test raises nothing", () => {
     const { run, car } = carThroughCop(false);
     car.group.position.x = 1000;

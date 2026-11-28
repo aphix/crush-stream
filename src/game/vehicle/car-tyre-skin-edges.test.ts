@@ -68,7 +68,6 @@ function expectSameEdges(got: RestEdges, want: RestEdges, label: string): void {
 }
 
 describe("given the rest skin of a pickup's body", () => {
-  // mutation: sed -i 's/^      } else if (yb < ya) {/      } else if (false) {/' src/game/vehicle/car-tyre-skin-edges.ts
   it("when its rest edges are built, then they equal the string-keyed reference's: weld, start, to and drop", () => {
     const car = buildCar("pickup", "truck");
     const mesh = car["body"] as THREE.Mesh;
@@ -77,7 +76,6 @@ describe("given the rest skin of a pickup's body", () => {
 });
 
 describe("given a small mesh with a point listed as 0 and as -0, copies of one position, and x-mirrored twins", () => {
-  // mutation: sed -i 's/(x === 0 ? 0 : bits\[o\]!/(bits[o]!/' src/game/vehicle/car-tyre-skin-edges.ts
   it("when its rest edges are built, then they equal the reference's, and 0 and -0 are one point", () => {
     // Positions: [0, 0, 0] twice, [-0, 0, 0] (the same point), [1, 0.5, 2] and its mirror [-1, 0.5, 2], a level pair [1, 0.5, -2] / [-1, 0.5, -2], and a high point.
     const rest = Float32Array.of(0, 0, 0, 0, 0, 0, -0, 0, 0, 1, 0.5, 2, -1, 0.5, 2, 1, 0.5, -2, -1, 0.5, -2, 0, 1, 0, 1, 0.5, 2, 0, 0, -0);

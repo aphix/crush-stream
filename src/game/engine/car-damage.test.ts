@@ -173,7 +173,6 @@ describe("given a racer that crosses the finish line dented and is hit again aft
 const drawnOf = (car: DeformableCar): Float32Array[] => [car.lookMeshes().body, car.lookMeshes().hood].map((m) => Float32Array.from(m.geometry.getAttribute("position").array));
 
 describe("given two identical racers crashed in a slalom, one that no camera sees, whose tyre hold is still owed when the race ends", () => {
-  // mutation: sed -i '/^    car.setHoldDeferred(false);$/d' src/game/engine/car-damage.ts  (the podium keeps the hidden finisher's skin without its hold: red)
   it("when the podium copies each car as it finished, then the hidden one is drawn as its twin held every frame, bit for bit", () => {
     const twins = hiddenTwins((lazy, every) => lazy.holdOwed && firstMismatch(drawnOf(lazy)[0], drawnOf(every)[0]!) !== undefined);
     must(twins, "a frame came with the hidden car's hold owed and its body skin behind the twin's");

@@ -44,7 +44,6 @@ function supperWith(favourite: (state: CityState) => number): number[] {
 }
 
 describe("given the neighbourhood's grown-ups at home and hungry at supper, when the coffee shops have shut for the day and the diners are open", () => {
-  // mutation: sed -i 's/  return isOpen(state, place, tick) \&\& withinHours(state, place, soonestArrival(state, resident, from, place, tick));/  return isOpen(state, place, tick);/' src/game/ai/civilians/civilian-plan.ts
   it("when their favourite place to eat is a shut coffee shop, then each goes where they would with no favourite: the shut shop never holds them home", () => {
     const coffee = (state: CityState): number => state.venues.byVenue[VENUE.coffee]![0]!;
     const withShutFavourite = supperWith(coffee);
@@ -81,7 +80,6 @@ function afternoonWith(liked: boolean): { went: number[]; likers: number } {
 }
 
 describe("given the neighbourhood's grown-ups at home and hungry at half past one, each living 250 m or more from a place to eat that is open now and shut three hours on", () => {
-  // mutation: sed -i 's/  return isOpen(state, place, tick) \&\& withinHours(state, place, soonestArrival(state, resident, from, place, tick));/  return isOpen(state, place, tick) \&\& (withinHours(state, place, tick) || withinHours(state, place, soonestArrival(state, resident, from, place, tick)));/' src/game/ai/civilians/civilian-plan.ts
   it("when it is their favourite, then each goes where they would with no favourite: a place open now that shuts before they could get there is no candidate", () => {
     const liking = afternoonWith(true);
     const none = afternoonWith(false);
@@ -91,7 +89,6 @@ describe("given the neighbourhood's grown-ups at home and hungry at half past on
 });
 
 describe("given the neighbourhood living three game days (Jamal hands out flyers on the day's block, its basketball court open only 14-18)", () => {
-  // mutation: sed -i 's/      if (openThrough(state, place, arriveTick, arriveTick + dwellTicks - 1)) return place;/      return place;/' src/game/ai/civilians/civilian-story.ts
   it("when everyone away from home and work with no walk under way is looked at every tick, then nobody stays in a place whose sign reads shut", () => {
     for (const seed of [5, 7, 11]) {
       const state = createCityState(seed, map, RESIDENTS);

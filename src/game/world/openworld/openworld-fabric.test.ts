@@ -66,7 +66,6 @@ describe("given the street's marked crossings", () => {
   const legs = crossingLegs();
   const segments = (geometry.rows + 1) * geometry.columns + (geometry.columns + 1) * geometry.rows;
 
-  // mutation: sed -i 's/graph.edgeCrossing\[edge\] === 0 || other < node/other < node/' src/game/world/openworld/openworld-fabric.ts
   it("when every placed crosswalk is read, then each lies on a crossing of the walk graph and the crossings' decals cover the carriageway", () => {
     expect(legs.length, "crossings in the walk graph (two per street segment)").toBe(2 * segments);
     expect(decals.filter((decal) => !legs.some((leg) => distanceToLeg(decal.x, decal.z, leg) < ON_LINE)).length, "crosswalk decals off every crossing").toBe(0);
@@ -81,7 +80,6 @@ describe("given the street's marked crossings", () => {
     }
   });
 
-  // mutation: sed -i 's/alongX ? 0 : QUARTER_TURN/alongX ? QUARTER_TURN : 0/' src/game/world/openworld/openworld-fabric.ts
   it("when a crossing's decals are read, then their bars run with the street being crossed", () => {
     for (const decal of decals) {
       const leg = legs.find((candidate) => distanceToLeg(decal.x, decal.z, candidate) < ON_LINE)!;
@@ -98,9 +96,6 @@ describe("given the street's manhole covers", () => {
     ...geometry.streetX.flatMap((fixed) => geometry.streetZ.slice(1).map((to, index) => ({ alongX: false, fixed, from: geometry.streetZ[index]!, to }))),
   ];
 
-  // mutation: sed -i 's/row + 1 < geometry.streetZ.length/row + 2 < geometry.streetZ.length/' src/game/world/openworld/openworld-fabric.ts
-  // mutation: sed -i 's/const lane = geometry.travelLane \/ 2;/const lane = geometry.travelLane;/' src/game/world/openworld/openworld-fabric.ts
-  // mutation: sed -i 's/, roadDecals: \[\] }/ }/' src/game/world/openworld/openworld-course.ts
   it("when each street segment is read, then it holds one cover, in the middle of a travel lane, and none lies elsewhere", () => {
     for (const street of streets) {
       const held = covers.filter((cover) => {
@@ -118,14 +113,12 @@ describe("given the street's manhole covers", () => {
 });
 
 describe("given the street furniture in the furniture strips", () => {
-  // mutation: sed -i 's/const NEAR_CURB = 0.3;/const NEAR_CURB = 0;/' src/game/world/openworld/openworld-fabric-constants.ts
   it("when every piece's four footprint corners are read, then all lie in a furniture strip (a corner's sidewalk counting) and none on the road", () => {
     const outside = kit.filter((prop) => !cornersOf(prop).every(([x, z]) => faces.some((side) => inStrip(side, lots, x, z, geometry.sidewalk))));
     expect(kit.length, "pieces of furniture").toBeGreaterThan(90);
     expect(outside.slice(0, 3).map((prop) => `${keyOf(prop)} at ${prop.x.toFixed(2)}, ${prop.z.toFixed(2)}`).join("; "), "pieces outside a strip").toBe("");
   });
 
-  // mutation: sed -i 's/to > lane.taken\[index\]!) return false;/to > lane.taken[index]!) continue;/' src/game/world/openworld/openworld-fabric.ts
   it("when each face's strip is read, then no piece overlaps a lamp, a street tree or another piece, and each keeps the gap", () => {
     const overlaps: string[] = [];
     for (const side of faces) {
@@ -150,12 +143,10 @@ describe("given the street furniture in the furniture strips", () => {
 });
 
 describe("given the hydrants, the businesses' frontages and the bus stop", () => {
-  // mutation: sed -i 's/for (const faces of lanes) {/for (const faces of lanes.slice(1)) {/' src/game/world/openworld/openworld-fabric.ts
   it("when each block face is read, then exactly one hydrant stands in its strip", () => {
     for (const side of faces) expect(standingOn(PIECE.hydrant, side, side.start, side.start + side.length).length, `hydrants on the ${side.side} face at ${side.fixed.toFixed(1)}`).toBe(1);
   });
 
-  // mutation: sed -i 's/for (const \[slot, item\] of kit.entries()) {/for (const [slot, item] of [].entries()) {/' src/game/world/openworld/openworld-fabric.ts
   it("when each business and the bus stop are read, then some of their kind's furniture stands in the strip within reach of the door, and the shelter stands at the stop", () => {
     let businesses = 0;
     for (const [index, place] of lots.places.entries()) {
@@ -179,7 +170,6 @@ describe("given the street signs at the block corners", () => {
   const signs = kit.filter((prop) => prop.prefab === PREFAB.streetSign);
   const apexes = [-1, 1].flatMap((signX) => [-1, 1].map((signZ) => ({ x: signX * geometry.streetX[geometry.streetX.length - 1]!, z: signZ * geometry.streetZ[geometry.streetZ.length - 1]! })));
 
-  // mutation: sed -i 's/if (isLoopCorner(block, signX, signZ, geometry)) continue;//' src/game/world/openworld/openworld-fabric.ts
   it("when the corners are read, then signs stand at many of them and none within reach of the loop's rounded corners", () => {
     expect(signs.length, "signs").toBeGreaterThan(10);
     for (const sign of signs) {
@@ -187,7 +177,6 @@ describe("given the street signs at the block corners", () => {
     }
   });
 
-  // mutation: sed -i 's/props.push({ prefab: PREFAB.streetSign, x: cornerX + signX \* CORNER_POCKET, z: cornerZ + signZ \* CORNER_POCKET, yaw: 0, style: streetSignStyle(alongX, alongZ) });/props.push({ prefab: PREFAB.streetSign, x: cornerX + signX * CORNER_POCKET, z: cornerZ + signZ * CORNER_POCKET, yaw: 0, style: streetSignStyle(alongZ, alongX) });/' src/game/world/openworld/openworld-fabric.ts
   it("when each sign is read, then its blade along x names the street running along x beside it and its blade along z the street along z", () => {
     const nearest = (lines: readonly number[], at: number): number => lines.reduce((best, line, index) => (Math.abs(line - at) < Math.abs(lines[best]! - at) ? index : best), 0);
     for (const sign of signs) {
@@ -205,7 +194,6 @@ describe("given the street kit's posts", () => {
   const BUMPER_HEIGHT = 0.5;
   const colliders = propColliders(placeProps(track));
 
-  // mutation: sed -i 's/  return { body: "solid", collider: colliders, foot: reach, size/  return { body: "none", collider: colliders, foot: reach, size/' src/game/world/catalog.ts
   it("when the course is placed, then every bollard, hydrant, parking meter and street and bus stop sign stands a solid a car meets, its foot reaching a bumper's height", () => {
     for (const prefab of POSTS_THAT_STOP) {
       const placed = course.props.filter((prop) => prop.prefab === prefab);
@@ -230,7 +218,6 @@ describe("given the street kit's knockable furniture and its pavilion", () => {
   const POSTS_ROUND_THE_PAVILION = 8;
   const colliders = propColliders(placeProps(track));
 
-  // mutation: sed -i 's/\[PREFAB.bench\]: knockSpec(STREET_KIT.bench, MAT.BENCH_MAPLE, benchPlan(), 0.8, KNOCKABLE.bench)/[PREFAB.bench]: kitSpec(STREET_KIT.bench, MAT.BENCH_MAPLE)/' src/game/world/catalog.ts
   it("when the course is placed, then every bin, bench, news box and bike rack stands as a knock prop with its knock speed, and each has its colliders in place", () => {
     for (const prefab of KNOCKED) {
       const placed = course.props.filter((prop) => prop.prefab === prefab);
@@ -242,7 +229,6 @@ describe("given the street kit's knockable furniture and its pavilion", () => {
     }
   });
 
-  // mutation: sed -i 's/  \[PREFAB.pavilion\]: postSpec(STREET_KIT.pavilion, MAT.GANTRY_STEEL, pavilionPlan(), PAVILION.fasciaRadius),/  [PREFAB.pavilion]: kitSpec(STREET_KIT.pavilion, MAT.GANTRY_STEEL),/' src/game/world/catalog.ts
   it("when the pavilion is placed, then its floor, its eight posts and its roof are solids a car meets", () => {
     const placed = course.props.filter((prop) => prop.prefab === PREFAB.pavilion);
     expect(placed.length, "pavilions placed").toBe(1);
@@ -254,14 +240,12 @@ describe("given the street kit's knockable furniture and its pavilion", () => {
 });
 
 describe("given the street furniture's drawing", () => {
-  // mutation: sed -i 's/  return { prefab: piece.prefab, x, z, yaw };/  return assetProp("street-fire-hydrant", x, z, yaw);/' src/game/world/openworld/openworld-fabric.ts
   it("when the course's props are read, then no piece of furniture is a sprite of the street scenery family: each is a street kit prefab, the newspaper box included", () => {
     const sprites = course.props.filter((prop) => prop.asset?.startsWith(STREET_FAMILY));
     expect(sprites.map((prop) => keyOf(prop)).join(", "), "street family sprites in the course (the greenery's are another lane's)").toBe("");
     for (const piece of Object.values(PIECE)) expect(kit.filter((prop) => keyOf(prop) === keyOf(piece)).length, `${keyOf(piece)} placed`).toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's/      if (item.piece === PIECE.busShelter) props.push(shelterWall(at.x, at.z, yaw));//' src/game/world/openworld/openworld-fabric.ts
   it("when each bus shelter is read, then a solid box stands under its back panel, behind its middle", () => {
     const shelters = kit.filter((prop) => prop.prefab === PREFAB.busShelter);
     const walls = course.props.filter((prop) => prop.prefab === PREFAB.invisibleWall && prop.size?.[2] === SHELTER_WALL.length);
@@ -284,7 +268,6 @@ describe("given the block corners without a street sign", () => {
   /** Corners of the playable blocks that are no loop corner, half of them signed. */
   const unsigned = lots.blocks.length * 2 - 2;
 
-  // mutation: sed -i 's/  \[3.3, 2.2\],/  [3.3, 1.6],/' src/game/world/openworld/openworld-fabric-constants.ts
   it("when the corners are read, then three bollards stand round each one's curb on the sidewalk, clear of the crossings' landings", () => {
     expect(bollards.length, "bollards").toBe(unsigned * BOLLARD_SPOTS.length);
     for (const bollard of bollards) {
@@ -293,7 +276,6 @@ describe("given the block corners without a street sign", () => {
     }
   });
 
-  // mutation: sed -i 's/geometry.sidewalk + DRAIN_PAST_CURB/geometry.sidewalk - DRAIN_PAST_CURB/' src/game/world/openworld/openworld-fabric.ts
   it("when the corners' drains are read, then one lies in the gutter at each, every corner of it on the road", () => {
     expect(drains.length, "drains").toBe(unsigned);
     for (const drain of drains) for (const [x, z] of cornersOf(drain)) expect(roadDepth(track, x, z), `drain at ${drain.x.toFixed(1)}, ${drain.z.toFixed(1)}: depth into the road (m)`).toBeGreaterThan(0);
@@ -303,7 +285,6 @@ describe("given the block corners without a street sign", () => {
 describe("given the paint on the roads", () => {
   const paint = everything.filter((prop) => (prop.prefab === PREFAB.assetDecal || prop.prefab === PREFAB.assetTile) && roadDepth(track, prop.x, prop.z) > 0);
 
-  // mutation: sed -i 's/, roadDecals: \[\] }/, roadDecals: ["arrow"] }/' src/game/world/openworld/openworld-course.ts
   it("when every decal and tile the course places or draws on a road is read, then it is a manhole cover, a marked crossing or a storm drain", () => {
     const ids = new Set(paint.map((prop) => SCENERY_ASSETS[prop.asset!]!.id));
     expect([...ids].sort().join(", "), "assets painted on the roads").toBe([ASSET.crosswalk, ASSET.drain, ASSET.manhole].sort().join(", "));
@@ -311,13 +292,11 @@ describe("given the paint on the roads", () => {
 });
 
 describe("given the course's road paint and its fabric", () => {
-  // mutation: sed -i 's/wall: \[false, false\], raceMarks: false }/wall: [false, false] }/' src/game/world/openworld/openworld-course.ts
   it("when the course is parsed, then it leaves off the race marks and lays no generated road paint", () => {
     expect(course.road.raceMarks, "race marks").toBe(false);
     expect(course.scenery?.roadDecals, "generated road paint").toEqual([]);
   });
 
-  // mutation: sed -i 's/const random = mulberry32(FABRIC_SEED);/const random = Math.random;/' src/game/world/openworld/openworld-fabric.ts
   it("when the fabric is laid twice, then both are the same street", () => {
     assertSameDigest(fabricProps(lots, graph), fabricProps(lots, graph), "fabric props");
   });
@@ -337,7 +316,6 @@ describe("given the shipped layout", () => {
       }),
     );
 
-  // mutation: sed -i 's/const NEAR_CURB = 0.3;/const NEAR_CURB = 2.8;/' src/game/world/openworld/openworld-fabric-constants.ts
   it("when the facade kit's boxes are read, then no piece of furniture has a footprint corner inside one (the kit stands only at the rowhomes with an interior)", () => {
     const furniture = laid.filter((prop) => FURNITURE.includes(keyOf(prop)));
     expect(boxes.length, "boxes read").toBeGreaterThan(100);
@@ -345,8 +323,6 @@ describe("given the shipped layout", () => {
     expect(furniture.filter(inABox).slice(0, 3).map((prop) => `${keyOf(prop)} at ${prop.x.toFixed(2)}, ${prop.z.toFixed(2)}`).join("; "), "pieces inside a box").toBe("");
   });
 
-  // mutation: sed -i 's/random() >= CELLAR.share/random() >= 2 * CELLAR.share/' src/game/world/openworld/openworld-fabric.ts
-  // mutation: sed -i 's/export const CELLAR = { share: 0.3, gap: 0.1 } as const;/export const CELLAR = { share: 0.3, gap: 3 } as const;/' src/game/world/openworld/openworld-fabric-constants.ts
   it("when the cellar doors are read, then about the seeded share of the rowhomes has one, each on the sidewalk between the property line and the clear path", () => {
     const doors = laid.filter((prop) => prop.prefab === PREFAB.cellarDoor);
     const rowhomes = shipped.links.filter((link) => link.side !== null && link.place < shipped.backdropStart && homeFrontages([shipped.places[link.place]!]).length > 0).length;
@@ -366,14 +342,12 @@ describe("given the shipped layout", () => {
     }
   });
 
-  // mutation: sed -i 's/export const CELLAR = { share: 0.3, gap: 0.1 } as const;/export const CELLAR = { share: 0.3, gap: -0.5 } as const;/' src/game/world/openworld/openworld-fabric-constants.ts
   it("when the facade kit's boxes are read, then no cellar door has a footprint corner inside one", () => {
     const doors = laid.filter((prop) => prop.prefab === PREFAB.cellarDoor);
     expect(doors.length, "cellar doors read").toBeGreaterThan(20);
     expect(doors.filter(inABox).slice(0, 3).map((door) => `${door.x.toFixed(2)}, ${door.z.toFixed(2)}`).join("; "), "cellar doors in a stoop or bay").toBe("");
   });
 
-  // mutation: sed -i 's/export const FURNITURE_CORNER_CLEAR = 3;/export const FURNITURE_CORNER_CLEAR = 60;/' src/game/world/openworld/openworld-fabric-constants.ts
   it("when the fabric is laid on it, then every block face has its hydrant and the bus stop its shelter", () => {
     const missing: string[] = [];
     for (const block of shipped.blocks) {

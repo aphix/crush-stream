@@ -441,7 +441,6 @@ describe("given cars in batches, one that loses a door or its front bumper", () 
     assertSameNumbers(shared, sharedBefore, "the shared grille positions");
   });
 
-  // mutation: sed -i 's/(m.parent instanceof PartSeat ? m.parent.drawn : m.geometry)/m.geometry/' src/game/vehicle/loose-dent.ts
   test("when a torn door's dents capture its mirror's clone, the mirror tears off and is dented too, then after a reset the clone is the mirror seat's drawn shape", () => {
     const { car } = stage();
     const only = car(10);

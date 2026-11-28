@@ -33,7 +33,6 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  * terrain cell by this one law (a terrain grid reaches without limit: a tyre's mount limits a prism's top, not a grid's), so the
  * terrain needs no side rule of its own. `.bench/uc2/cliff.ts`, which found the sedan climbing 5 to 9 m, launched it horizontally off
  * the top of the flank: it flew.
- * Mutation: body friction 0 in `stepFree` (both caps) fails the ny 0.30, 0.40 and 0.50 faces (the sedan rides 4 to 9 m up them).
  */
 
 const SPEED = 12;

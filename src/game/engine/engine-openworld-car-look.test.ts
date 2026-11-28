@@ -50,7 +50,6 @@ describe("given the look-at panel over the open world's cars", () => {
   const base = RESIDENT * RESIDENT_INT_STRIDE;
   const meeting = (): Meeting => ({ index: -1, along: REACH });
 
-  // mutation: sed -i 's/  if (owner >= 0 \&\& state !== null) return `${residentNameText(state, owner)}.s car`;//' src/game/engine/engine-openworld-car-look.ts
   it("when the eye rests on a resident's parked car, then the panel names its owner, its paint and body, and the place it is parked by", () => {
     const home = state.ints[base + RESIDENT_INT.home]!;
     state.ints[base + RESIDENT_INT.carPlace] = home;
@@ -66,13 +65,11 @@ describe("given the look-at panel over the open world's cars", () => {
     expect(text.lines.some((line) => line.startsWith("condition: not a scratch")), "its damage").toBe(true);
   });
 
-  // mutation: sed -i 's/  if (patrol) return "Patrol car";//' src/game/engine/engine-openworld-car-look.ts
   it("when the eye rests on a cruiser, then the panel says patrol car", () => {
     const look = lookOver([carOf("police")], [-1]);
     expect(look.text(look.met(rayAt(0), REACH, meeting()).index, state, TICK).title).toBe("Patrol car");
   });
 
-  // mutation: sed -i '/^  if (own) return "Your car";/d' src/game/engine/engine-openworld-car-look.ts
   it("when the eye rests on the player's car while he is on foot, then the panel says your car, and another player's car is a player's; while the camera rides it, the ray passes it", () => {
     const mine = carOf("coupe");
     const theirs = carOf("sedan");

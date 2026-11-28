@@ -39,7 +39,6 @@ function nearestPath(x: number, z: number): { alongX: boolean; fixed: number; ac
 describe("given the park's dressing", () => {
   const benches = props.filter((prop) => prop.prefab === PREFAB.bench);
 
-  // mutation: sed -i 's/  return side > 0 ? FACING.north : FACING.south;/  return side > 0 ? FACING.south : FACING.north;/' src/game/world/openworld/openworld-park.ts
   it("when the benches are read, then each stands beside a path, its front turned to the path's middle", () => {
     expect(benches.length, "benches").toBeGreaterThan(8);
     for (const bench of benches) {
@@ -51,7 +50,6 @@ describe("given the park's dressing", () => {
     }
   });
 
-  // mutation: sed -i 's/const EDGE_CLEAR = 2.5;/const EDGE_CLEAR = 0;/' src/game/world/openworld/openworld-park.ts
   it("when every prop is read, then none stands on a path, in the plaza's ring, on the court or on the park's edge strip, and all stand in the park's block", () => {
     const court = { x0: block.centreX + PARK.courtOffsetX - PARK.courtLength / 2, x1: block.centreX + PARK.courtOffsetX + PARK.courtLength / 2, z0: block.centreZ + PARK.courtOffsetZ - PARK.courtWidth / 2, z1: block.centreZ + PARK.courtOffsetZ + PARK.courtWidth / 2 };
     const wrong: string[] = [];
@@ -69,7 +67,6 @@ describe("given the park's dressing", () => {
     expect(wrong.slice(0, 3).join("; "), "props out of place").toBe("");
   });
 
-  // mutation: sed -i 's/  const props: ParkProp\[\] = \[{ prefab: PREFAB.plaza, x: park.block.centreX, z: park.block.centreZ, yaw: 0 }\];/  const props: ParkProp[] = [];/' src/game/world/openworld/openworld-park.ts
   it("when the props are read, then the plaza stands at the block's middle with a pavilion, lamps, bins and fences about the paths", () => {
     const plaza = props.filter((prop) => prop.prefab === PREFAB.plaza);
     expect(plaza.length, "plazas").toBe(1);
@@ -77,7 +74,6 @@ describe("given the park's dressing", () => {
     for (const prefab of [PREFAB.pavilion, PREFAB.acornLamp, PREFAB.litterBin, PREFAB.hoopFence]) expect(props.filter((prop) => prop.prefab === prefab).length, prefab).toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's/  opening: PARK.pathWidth + 0.8,/  opening: 0,/' src/game/world/openworld/openworld-plaza.ts
   it("when the plaza's stone is read along the east-west and the north-south path through it, then a car's width stays clear of every piece", () => {
     const pieces = propColliders([{ prefab: PREFAB.plaza, x: block.centreX, y: 0, z: block.centreZ, yaw: 0, sx: 1, sy: 1, sz: 1 }]);
     expect(pieces.length, "plaza pieces").toBeGreaterThan(50);
@@ -98,7 +94,6 @@ describe("given the park's dressing", () => {
     expect(hits.slice(0, 3).join("; "), "stone on a path through the plaza").toBe("");
   });
 
-  // mutation: sed -i 's/  return \[{ surface: PAVERS, poly: plaza }, ...park.paths.map/  return [...park.paths.map/' src/game/world/openworld/openworld-park.ts
   it("when the course's ground is read, then the plaza and every path are paved and the lawn beside them is grass", () => {
     const ground = track.ground();
     expect(ground.surfaceAt(block.centreX, block.centreZ), "the plaza's middle").toBe(SURFACE.cobble);
@@ -112,7 +107,6 @@ describe("given the park's dressing", () => {
     expect(parkPaint(lots).length, "painted pieces: plaza, five paths").toBe(PARK.crossPaths.length + 3);
   });
 
-  // mutation: sed -i 's/const FABRIC_SEED = 0x0fab51;/const FABRIC_SEED = 0x0fab51;\nvoid Math.random();/' src/game/world/openworld/openworld-fabric-constants.ts
   it("when the park is dressed twice, then both are the same park, and none of its props is a parked car", () => {
     assertSameDigest(parkProps(lots), parkProps(lots), "park props");
     expect(props.filter((prop) => PARKED_PREFABS.has(prop.prefab)).length, "parked cars").toBe(0);
