@@ -27,6 +27,8 @@ export class FakeNode {
 
 export class FakeContext {
   readonly nodes: FakeNode[] = [];
+  /** The audio buffers made, with their lengths: what the audio holds resident. */
+  readonly buffers: { length: number; sampleRate: number }[] = [];
 
   private make(): FakeNode {
     const node = new FakeNode();
@@ -39,8 +41,15 @@ export class FakeContext {
   createBufferSource = (): FakeNode => this.make();
   createStereoPanner = (): FakeNode => this.make();
 
-  createBuffer(_channels: number, length: number, sampleRate: number): { length: number; sampleRate: number; getChannelData: () => Float32Array } {
-    return { length, sampleRate, getChannelData: () => new Float32Array(length) };
+  createBuffer(_channels: number, length: number, sampleRate: number): { length: number; sampleRate: number; copyToChannel: () => void } {
+    const buffer = { length, sampleRate, copyToChannel: () => {} };
+    this.buffers.push(buffer);
+    return buffer;
+  }
+
+  /** Bytes of audio buffers held (32-bit mono samples). */
+  residentBytes(): number {
+    return this.buffers.reduce((sum, buffer) => sum + buffer.length * 4, 0);
   }
 
   /** The one-shots started: sources that do not loop. */

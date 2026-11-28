@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fakeAudio } from "./ambient-fake-context.test-util.ts";
 import { measure, peakOf, writeRender } from "./ambient-render.test-util.ts";
-import { UI_RATE, uiBuffer, type UiName } from "./ui-render.ts";
+import { renderUi, UI_RATE, type UiName } from "./ui-render.ts";
 import { UiSound } from "./ui-sound.ts";
 
 const LANE = "AudioAmbient";
@@ -28,7 +28,7 @@ describe("given each UI sound", () => {
   for (const name of NAMES) {
     it(`when ${name} is measured, then its attack, length and band are what it is meant to be, and it does not clip`, () => {
       const want = INTENT[name];
-      const buffer = uiBuffer(name);
+      const buffer = renderUi(name);
       const m = measure(buffer, UI_RATE);
       writeRender(LANE, `ui-${name}`, UI_RATE, buffer);
       expect(m.peak, `${name} peak`).toBeGreaterThan(0.3);
@@ -44,26 +44,42 @@ describe("given each UI sound", () => {
     });
   }
 
-  it("when each sound is read to its last sample, then it is finite and ends in silence, not a click", () => {
+  it("when each sound's dry buffer is read to its last 10 ms, then it fades to exactly 0 without a step, so the reverb is not fed a cut bell", () => {
     for (const name of NAMES) {
-      const first = uiBuffer(name);
-      expect(first[first.length - 1]!, `${name} last sample`).toBeLessThan(0.05 * peakOf(first));
-      expect(Number.isFinite(peakOf(first)), `${name} finite`).toBe(true);
+      const dry = renderUi(name, false);
+      const span = Math.round(0.01 * UI_RATE);
+      let biggest = 0;
+      for (let i = dry.length - span; i < dry.length; i++) biggest = Math.max(biggest, Math.abs(dry[i]! - dry[i - 1]!));
+      expect(dry[dry.length - 1]!, `${name} dry last sample`).toBe(0);
+      expect(biggest, `${name} largest step in the last 10 ms`).toBeLessThan(0.05 * peakOf(dry));
+    }
+  });
+
+  it("when each rendered sound is read to its last sample, then it is finite and ends in silence, not a click", () => {
+    for (const name of NAMES) {
+      const rendered = renderUi(name);
+      expect(Math.abs(rendered[rendered.length - 1]!), `${name} last sample`).toBeLessThan(0.05 * peakOf(rendered));
+      expect(Number.isFinite(peakOf(rendered)), `${name} finite`).toBe(true);
     }
   });
 });
 
 describe("given a UiSound on a recording context", () => {
-  it("when a sound is played twice, then two sources start on one shared buffer of its length", () => {
+  it("when it is made, then nothing is rendered on the calling thread before its first task, a sound asked for too soon is skipped, and once they arrive each plays on a buffer of its length", async () => {
     const { fake, ctx, out } = fakeAudio();
     const ui = new UiSound(ctx, out);
+    expect(fake.buffers.length, "nothing rendered yet").toBe(0);
+    ui.play("confirm");
+    expect(fake.nodes.filter((node) => node.buffer !== null), "too soon: skipped").toHaveLength(0);
+    for (let wait = 0; wait < 2000 && ui.pending > 0; wait++) await new Promise((resolve) => setTimeout(resolve, 2));
+    expect(ui.pending, "all twelve arrived").toBe(0);
     ui.play("confirm");
     ui.play("confirm");
     ui.play("go");
     const sources = fake.nodes.filter((node) => node.buffer !== null);
     expect(sources.map((node) => node.started)).toEqual([1, 1, 1]);
     expect(sources[0]!.buffer, "the same buffer both times").toBe(sources[1]!.buffer);
-    expect(sources[0]!.buffer!.length, "its length").toBe(uiBuffer("confirm").length);
-    expect(sources[2]!.buffer!.length, "another sound's").toBe(uiBuffer("go").length);
+    expect(sources[0]!.buffer!.length, "its length").toBe(renderUi("confirm").length);
+    expect(sources[2]!.buffer!.length, "another sound's").toBe(renderUi("go").length);
   });
 });

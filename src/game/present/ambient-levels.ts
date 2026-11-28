@@ -58,6 +58,19 @@ for (let p = 0; p < PLACES.length; p++) {
   }
 }
 
+/** The layers a place can ever want (any hour; the cheer too wherever a crowd is): loaded when the place is entered. */
+export function placeLayers(place: AmbientPlace): number[] {
+  const p = PLACES.indexOf(place);
+  const crowd = MIX[place].murmur !== undefined || MIX[place].roar !== undefined;
+  return LAYERS.map((_, l) => l).filter((l) => mixOf[(p * LAYERS.length + l) * 2]! + mixOf[(p * LAYERS.length + l) * 2 + 1]! > 0 || (crowd && l === LAYER.cheer));
+}
+
+/** The one-shots a place can ever fire (an `EMITTERS` index each): loaded when the place is entered. */
+export function placeEmitters(place: AmbientPlace): number[] {
+  const p = PLACES.indexOf(place);
+  return EMITTERS.map((_, k) => k).filter((k) => rateOf[(p * EMITTERS.length + k) * 2]! + rateOf[(p * EMITTERS.length + k) * 2 + 1]! > 0);
+}
+
 /** One-shot peak level per emitter (`EMITTERS` order), the least seconds between two of one kind, the schedule's seed and the widest pan. */
 export const SHOT_GAIN = Float32Array.of(0.2, 0.22, 0.2, 0.18, 0.2);
 export const SHOT_GAP_S = Float32Array.of(4, 14, 5, 3, 8);
@@ -102,13 +115,4 @@ export function bedLevels(place: AmbientPlace, hour: number, speed: number, indo
 export function emitterRate(place: AmbientPlace, kind: number, hour: number): number {
   const at = (PLACES.indexOf(place) * EMITTERS.length + kind) * 2;
   return rateOf[at + 1]! + (rateOf[at]! - rateOf[at + 1]!) * daylight(hour);
-}
-
-/** The next draw in [0, 1) of the generator whose one word of state is `state[0]` (mulberry32). No allocation. */
-export function nextDraw(state: Uint32Array): number {
-  const a = (state[0]! + 0x6d2b79f5) >>> 0;
-  state[0] = a;
-  let t = Math.imul(a ^ (a >>> 15), a | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }

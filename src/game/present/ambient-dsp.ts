@@ -1,5 +1,20 @@
 /** Offline synthesis primitives for the ambient beds and the UI sounds: seeded, allocation-happy, run once at load. */
 
+/** The next draw in [0, 1) of the generator whose one word of state is `state[0]` (mulberry32). No allocation. */
+export function nextDraw(state: Uint32Array): number {
+  const a = (state[0]! + 0x6d2b79f5) >>> 0;
+  state[0] = a;
+  let t = Math.imul(a ^ (a >>> 15), a | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/** A seeded generator of uniform draws in [0, 1). */
+export function rngOf(seed: number): () => number {
+  const state = Uint32Array.of(seed);
+  return () => nextDraw(state);
+}
+
 /** A direct-form RBJ biquad, one sample at a time. */
 export class Biquad {
   private b0 = 1;
@@ -139,4 +154,11 @@ export function withReverb(x: Float32Array, rate: number, tailS: number, wet: nu
     out[i] = dry + v * wet;
   }
   return out;
+}
+
+/** The last `seconds` of `x` faded linearly to 0 in place, so a sound cut mid-decay does not click. */
+export function fadedOut(x: Float32Array, rate: number, seconds: number): Float32Array {
+  const span = Math.min(x.length, Math.round(seconds * rate));
+  for (let i = 0; i < span; i++) x[x.length - 1 - i] = x[x.length - 1 - i]! * (i / span);
+  return x;
 }

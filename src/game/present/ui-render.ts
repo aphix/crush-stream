@@ -1,11 +1,12 @@
-import { mulberry32 } from "../world/placements.ts";
-import { Biquad, filtered, scaledToPeak, whiteNoise, withReverb } from "./ambient-dsp.ts";
+import { Biquad, fadedOut, filtered, rngOf, scaledToPeak, whiteNoise, withReverb } from "./ambient-dsp.ts";
 
 /** The UI sounds, each a short layered synthesis (FM bells, chirps, noise ticks, brass stabs) rendered once: sharp attacks and a dark hall tail, in the spirit of the MGS2 menu sounds. */
 export type UiName = keyof typeof SOUND;
 
 /** Sample rate (Hz) of every UI sound. */
 export const UI_RATE = 44100;
+/** The dry sound is faded to 0 over this many seconds before the reverb, so no bell is cut mid-decay into the tail. */
+const DRY_FADE_S = 0.01;
 /** A buffer's end is cut where it falls below this share of its peak. */
 const TAIL_FLOOR = 0.003;
 /** A bell's modulator decays this much faster than its carrier, so the bite fades before the ring. */
@@ -36,7 +37,7 @@ function chirp(out: Float32Array, start: number, from: number, to: number, lengt
 
 /** A burst of noise between `low` and `high` Hz, decaying over `length` s. */
 function hiss(out: Float32Array, start: number, low: number, high: number, length: number, amp: number, seed: number): void {
-  const burst = filtered(whiteNoise(Math.round(length * UI_RATE), mulberry32(seed)), Biquad.high(low, UI_RATE), Biquad.low(high, UI_RATE));
+  const burst = filtered(whiteNoise(Math.round(length * UI_RATE), rngOf(seed)), Biquad.high(low, UI_RATE), Biquad.low(high, UI_RATE));
   const first = Math.round(start * UI_RATE);
   for (let i = 0; i < burst.length && first + i < out.length; i++) out[first + i] = out[first + i]! + amp * Math.exp((-5 * i) / burst.length) * burst[i]!;
 }
@@ -129,20 +130,22 @@ const SHAPE: Record<UiName, readonly [number, number, number, number]> = {
   wrecked: [2.2, 1.4, 0.5, 0.6],
 };
 
-const rendered = new Map<UiName, Float32Array>();
+/** Every UI sound. */
+export const UI_NAMES = Object.keys(SOUND) as UiName[];
 
-/** The sound `name`, mono at `UI_RATE`; rendered on first use and kept. */
-export function uiBuffer(name: UiName): Float32Array {
-  let out = rendered.get(name);
-  if (out === undefined) {
-    const [length, tail, wet, peak] = SHAPE[name];
-    const dry = new Float32Array(Math.round(length * UI_RATE));
-    SOUND[name](dry);
-    out = scaledToPeak(withReverb(dry, UI_RATE, tail, wet), peak);
-    let end = out.length;
-    while (end > 1 && Math.abs(out[end - 1]!) < TAIL_FLOOR * peak) end--;
-    out = out.slice(0, end);
-    rendered.set(name, out);
-  }
-  return out;
+/** The sound `name` before its reverb: faded to 0 at its end. */
+function uiDry(name: UiName): Float32Array {
+  const dry = new Float32Array(Math.round(SHAPE[name][0] * UI_RATE));
+  SOUND[name](dry);
+  return fadedOut(dry, UI_RATE, DRY_FADE_S);
+}
+
+/** The sound `name`, mono at `UI_RATE`, with its reverb tail (`reverb` false: the dry sound alone, faded to 0 at its end). Each call renders anew; the caller keeps the result. */
+export function renderUi(name: UiName, reverb = true): Float32Array {
+  if (!reverb) return uiDry(name);
+  const [, tail, wet, peak] = SHAPE[name];
+  const out = scaledToPeak(withReverb(uiDry(name), UI_RATE, tail, wet), peak);
+  let end = out.length;
+  while (end > 1 && Math.abs(out[end - 1]!) < TAIL_FLOOR * peak) end--;
+  return out.slice(0, end);
 }

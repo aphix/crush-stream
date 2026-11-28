@@ -1,14 +1,16 @@
-import { mulberry32 } from "../world/placements.ts";
-import { Biquad, filtered, scaledToPeak, withReverb } from "./ambient-dsp.ts";
+import { Biquad, filtered, rngOf, scaledToPeak, withReverb } from "./ambient-dsp.ts";
 
 /** The ambient bed's sparse one-shots, each rendered once: far horns, sirens, dogs, birds and a PA voice. */
 export const EMITTERS = ["horn", "siren", "dog", "bird", "pa"] as const;
-type Emitter = (typeof EMITTERS)[number];
+export type Emitter = (typeof EMITTERS)[number];
 
 /** Sample rate (Hz) of every one-shot. */
-export const SHOT_RATE = 22050;
+export const SHOT_RATE = 16000;
 /** Variants rendered of each kind: the scheduler picks one, so a repeat is a different sound. */
 export const SHOT_VARIANTS = 3;
+/** A bark's length (s), and the fade (s) that ends it before it can click. */
+const BARK_S = 0.22;
+const BARK_FADE_S = 0.02;
 /** A one-shot's peak before the bed scales it. */
 const SHOT_PEAK = 0.5;
 
@@ -65,11 +67,11 @@ function dog(variant: number, rng: Rng): Float32Array {
     const start = Math.round((bark * 0.38 + rng() * 0.05) * SHOT_RATE);
     const pitch = 480 + rng() * 120;
     let phase = 0;
-    for (let i = 0; i < 0.22 * SHOT_RATE; i++) {
+    for (let i = 0; i < BARK_S * SHOT_RATE; i++) {
       const t = i / SHOT_RATE;
       phase = (phase + (pitch * (1 - 1.1 * t)) / SHOT_RATE) % 1;
       const source = 2 * phase - 1 + 0.4 * (rng() * 2 - 1);
-      out[start + i] = out[start + i]! + Math.min(1, t / 0.006) * Math.exp(-t / 0.08) * (mouth[0]!.tick(source) + 0.5 * mouth[1]!.tick(source));
+      out[start + i] = out[start + i]! + Math.min(1, t / 0.006, (BARK_S - t) / BARK_FADE_S) * Math.exp(-t / 0.08) * (mouth[0]!.tick(source) + 0.5 * mouth[1]!.tick(source));
     }
   }
   return withReverb(filtered(out, Biquad.low(3000, SHOT_RATE)), SHOT_RATE, 1, 0.5);
@@ -119,15 +121,7 @@ function pa(variant: number, rng: Rng): Float32Array {
 
 const RENDER: Record<Emitter, (variant: number, rng: Rng) => Float32Array> = { horn, siren, dog, bird, pa };
 
-const shots = new Map<string, Float32Array>();
-
-/** One variant of one emitter, mono at `SHOT_RATE`, peaking at `SHOT_PEAK`; rendered on first use and kept. */
-export function shotOf(kind: Emitter, variant: number): Float32Array {
-  const key = `${kind}:${variant}`;
-  let shot = shots.get(key);
-  if (shot === undefined) {
-    shot = scaledToPeak(RENDER[kind](variant, mulberry32(EMITTERS.indexOf(kind) * 31 + variant * 7 + 5)), SHOT_PEAK);
-    shots.set(key, shot);
-  }
-  return shot;
+/** One variant of one emitter, mono at `SHOT_RATE`, peaking at `SHOT_PEAK`. Each call renders anew; the caller keeps the result. */
+export function renderShot(kind: Emitter, variant: number): Float32Array {
+  return scaledToPeak(RENDER[kind](variant, rngOf(EMITTERS.indexOf(kind) * 31 + variant * 7 + 5)), SHOT_PEAK);
 }

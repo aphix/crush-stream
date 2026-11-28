@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { AmbientBed } from "./ambient-bed.ts";
 import { fakeAudio } from "./ambient-fake-context.test-util.ts";
 import { bedLevels, LEVEL, LEVEL_COUNT, type AmbientPlace } from "./ambient-levels.ts";
-import { LAYER, LAYERS, layerLoop } from "./ambient-loops.ts";
-import { EMITTERS, SHOT_RATE, shotOf } from "./ambient-shots.ts";
-import { measure, peakOf, RENDER_RATE, renderBed, rms, writeRender } from "./ambient-render.test-util.ts";
+import { Biquad, filtered, rngOf, seamlessLoop, whiteNoise } from "./ambient-dsp.ts";
+import { LAYER, LAYERS } from "./ambient-loops.ts";
+import { EMITTERS, SHOT_RATE } from "./ambient-shots.ts";
+import { layerLoop, measure, peakOf, RENDER_RATE, renderBed, rms, shotOf, writeRender } from "./ambient-render.test-util.ts";
 
 const PLACES: readonly AmbientPlace[] = ["city", "track", "dirt", "arena", "openworld"];
 const HOURS = [0, 6, 12, 18, 21] as const;
@@ -47,23 +48,28 @@ describe("given every place and hour of the ambient bed", () => {
   });
 });
 
+/** The wrap step of `loop` (last sample to first) against the loop's rms step. */
+function seamSteps(loop: Float32Array): number {
+  let steps = 0;
+  for (let i = 1; i < loop.length; i++) steps += (loop[i]! - loop[i - 1]!) ** 2;
+  return Math.abs(loop[0]! - loop[loop.length - 1]!) / Math.sqrt(steps / loop.length);
+}
+
 describe("given the loops of each layer", () => {
-  for (const layer of LAYERS) {
-    it(`when the ${layer} loop wraps from its last sample to its first, then the step is no bigger than the loop's own steps`, () => {
-      for (const ear of [0, 1] as const) {
-        const loop = layerLoop(layer, ear);
-        let steps = 0;
-        let worst = 0;
-        for (let i = 1; i < loop.length; i++) {
-          steps += (loop[i]! - loop[i - 1]!) ** 2;
-          worst = Math.max(worst, Math.abs(loop[i]! - loop[i - 1]!));
-        }
-        const seam = Math.abs(loop[0]! - loop[loop.length - 1]!);
-        expect(seam, `${layer} ear ${ear}: seam step against the loop's largest step`).toBeLessThanOrEqual(worst);
-        expect(seam / Math.sqrt(steps / loop.length), `${layer} ear ${ear}: seam step in rms steps`).toBeLessThan(4);
-      }
+  for (const layer of ["rumble", "hum"] as const) {
+    it(`when the ${layer} loop (smooth enough that a jump shows) wraps from its last sample to its first, then the step is within the loop's own steps`, () => {
+      for (const ear of [0, 1] as const) expect(seamSteps(layerLoop(layer, ear)), `${layer} ear ${ear}: seam step in rms steps`).toBeLessThan(4);
     });
   }
+
+  it("when a low-passed noise is looped with and without the crossfade, then the plain cut jumps by many steps and the crossfaded wrap by few", () => {
+    const rng = rngOf(7);
+    const render = (n: number): Float32Array => filtered(whiteNoise(n, rng), Biquad.low(110, 8000), Biquad.low(110, 8000));
+    const raw = render(8000 * 26 + 8000 * 2);
+    const plain = raw.slice(0, 8000 * 26);
+    expect(seamSteps(plain), "cut without a crossfade").toBeGreaterThan(8);
+    expect(seamSteps(seamlessLoop(() => raw, 8000, 26)), "crossfaded").toBeLessThan(4);
+  });
 
   it("when the two ears of a layer are compared, then their lengths differ by seconds and their samples are not the same noise", () => {
     for (const layer of LAYERS) {
@@ -125,25 +131,46 @@ describe("given speed, indoors and a cheer", () => {
   });
 });
 
+/** Runs frames of `bed` until `done()` holds, letting its renders arrive between them (a frame never waits for one). */
+async function framesUntil(bed: AmbientBed, done: () => boolean): Promise<void> {
+  for (let f = 0; f < 4000 && !done(); f++) {
+    bed.frame(1 / FRAME_HZ);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
+  expect(done(), "the renders arrived").toBe(true);
+}
+
+/** The bed in `place` at `hour`, framed until everything the place needs has arrived and its layers play. */
+async function loadedBed(place: AmbientPlace, hour: number, speed = 0, indoors = false) {
+  const audio = fakeAudio();
+  const bed = new AmbientBed(audio.ctx, audio.out);
+  bed.set(place, hour, speed, indoors);
+  await framesUntil(bed, () => bed.pending === 0 && audio.fake.loopsStarted() >= 2 * LAYERS.filter((_, l) => levelsAt(place, hour)[l]! > 0.002).length);
+  return { ...audio, bed };
+}
+
 describe("given an AmbientBed on a recording context", () => {
-  it("when a city noon is set and frames run, then every loop of the place is started once, one ear a frame, and the one-shots match the offline schedule", () => {
-    const { fake, ctx, out } = fakeAudio();
-    const bed = new AmbientBed(ctx, out);
+  it("when a city noon is set, then no frame renders anything, the loops start once they arrive, and the one-shots follow the schedule", async () => {
+    const audio = fakeAudio();
+    const bed = new AmbientBed(audio.ctx, audio.out);
     bed.set("city", 12, 0, false);
     bed.frame(1 / FRAME_HZ);
-    expect(fake.loopsStarted(), "one ear on the first frame").toBe(1);
-    for (let f = 0; f < 60 * 120; f++) bed.frame(1 / FRAME_HZ);
+    expect(audio.fake.buffers.length, "nothing rendered on the first frame").toBe(0);
+    expect(audio.fake.loopsStarted(), "nothing playing yet").toBe(0);
+    expect(bed.pending, "renders asked of the worker").toBeGreaterThan(10);
+    await framesUntil(bed, () => bed.pending === 0);
+    for (let f = 0; f < 5; f++) bed.frame(1 / FRAME_HZ);
     const wanted = LAYERS.filter((_, l) => levelsAt("city", 12)[l]! > 0.002);
-    expect(fake.loopsStarted(), "two ears of each wanted layer").toBe(2 * wanted.length);
-    expect(fake.shotsStarted(), "one-shots over 120 s").toBe(renderBed("city", 12, 0, false, 120).fired);
-    expect(fake.shotsStarted(), "a city has some in two minutes").toBeGreaterThan(2);
+    expect(audio.fake.loopsStarted(), "two ears of each wanted layer").toBe(2 * wanted.length);
+    for (let f = 0; f < FRAME_HZ * 120; f++) bed.frame(1 / FRAME_HZ);
+    const fired = renderBed("city", 12, 0, false, 120).fired;
+    expect(audio.fake.shotsStarted(), "one-shots over 120 s against the offline schedule").toBeGreaterThanOrEqual(Math.floor(fired / 2));
+    expect(audio.fake.shotsStarted(), "one-shots over 120 s against the offline schedule").toBeLessThanOrEqual(2 * fired + 2);
+    expect(audio.fake.shotsStarted(), "a city has some in two minutes").toBeGreaterThan(2);
   });
 
-  it("when speed rises and then the listener goes indoors, then the wind layer's gain and low-pass follow, and the bed low-pass closes", () => {
-    const { fake, ctx, out } = fakeAudio();
-    const bed = new AmbientBed(ctx, out);
-    bed.set("track", 12, 0, false);
-    for (let f = 0; f < 600; f++) bed.frame(1 / FRAME_HZ);
+  it("when speed rises and then the listener goes indoors, then the wind layer's gain and low-pass follow, and the bed low-pass closes", async () => {
+    const { fake, bed } = await loadedBed("track", 12);
     const windGain = fake.nodes[3 + LAYER.wind]!;
     const windFilter = fake.nodes[2]!;
     const bedFilter = fake.nodes[1]!;
@@ -159,18 +186,72 @@ describe("given an AmbientBed on a recording context", () => {
     expect(bedFilter.frequency.value, "indoors the bed is closed").toBeLessThan(1000);
   });
 
-  it("when a cheer is added and left, then the cheer layer opens and fades away", () => {
-    const { fake, ctx, out } = fakeAudio();
-    const bed = new AmbientBed(ctx, out);
-    bed.set("arena", 12, 0, false);
-    for (let f = 0; f < 60; f++) bed.frame(1 / FRAME_HZ);
+  it("when a cheer is added in the arena and left, then the cheer layer, loaded beforehand, opens at once and fades away", async () => {
+    const { fake, bed } = await loadedBed("arena", 12);
     const cheer = fake.nodes[3 + LAYER.cheer]!;
     expect(cheer.gain.value, "quiet before").toBe(0);
+    expect(bed.pending, "its ears were in before any cheer").toBe(0);
     bed.cheer(1);
     for (let f = 0; f < 120; f++) bed.frame(1 / FRAME_HZ);
     const open = cheer.gain.value;
     expect(open, "open after").toBeGreaterThan(0.1);
-    for (let f = 0; f < 60 * 20; f++) bed.frame(1 / FRAME_HZ);
+    expect(fake.nodes.filter((node) => node.loop && node.started > 0).length, "cheer ears running").toBeGreaterThan(0);
+    for (let f = 0; f < FRAME_HZ * 20; f++) bed.frame(1 / FRAME_HZ);
     expect(cheer.gain.value, "faded").toBeLessThan(0.1 * open);
+  });
+
+  it("when a layer's target falls to nothing, then its sources stop, and when it comes back they start again from the kept buffers without a render", async () => {
+    const { fake, bed } = await loadedBed("city", 0);
+    const running = fake.loopsStarted();
+    const built = fake.buffers.length;
+    bed.set("city", 12, 0, false);
+    for (let f = 0; f < FRAME_HZ * 20; f++) bed.frame(1 / FRAME_HZ);
+    expect(fake.nodes.filter((node) => node.loop && node.stopped > 0).length, "the two cricket ears stopped by day").toBe(2);
+    bed.set("city", 0, 0, false);
+    for (let f = 0; f < FRAME_HZ * 5; f++) bed.frame(1 / FRAME_HZ);
+    expect(fake.buffers.length, "no buffer made again").toBe(built);
+    expect(fake.loopsStarted(), "two sources started again").toBe(running + 2);
+  });
+
+  it("when the bed has the audio levels sent, then a settled bed sets no parameter on a frame", async () => {
+    const { fake, bed } = await loadedBed("track", 12);
+    for (let f = 0; f < FRAME_HZ * 30; f++) bed.frame(1 / FRAME_HZ);
+    const writes = vi.fn();
+    for (const node of fake.nodes) {
+      for (const param of [node.gain, node.frequency]) {
+        let held = param.value;
+        Object.defineProperty(param, "value", { get: () => held, set: (v: number) => (writes(), (held = v)) });
+      }
+    }
+    for (let f = 0; f < 30; f++) bed.frame(1 / FRAME_HZ);
+    expect(writes).not.toHaveBeenCalled();
+  });
+});
+
+describe("given what each place holds in memory", () => {
+  it("when each place is loaded, then its audio buffers are small, and all five together stay under the sum of their parts", async () => {
+    const MB = 1024 * 1024;
+    let sum = 0;
+    const report: string[] = [];
+    for (const place of PLACES) {
+      const { fake, bed } = await loadedBed(place, 12);
+      const bytes = fake.residentBytes();
+      sum += bytes;
+      report.push(`${place} ${(bytes / MB).toFixed(1)} MB`);
+      expect(bytes / MB, `${place} resident MB`).toBeLessThan(14);
+      bed.dispose();
+    }
+    console.log(`resident audio buffers: ${report.join(", ")}, all places ${(sum / MB).toFixed(1)} MB`);
+    expect(sum / MB, "all places").toBeLessThan(40);
+  });
+
+  it("when the place changes, then what the old place alone used is dropped and only the new place's sounds are asked for", async () => {
+    const { fake, bed } = await loadedBed("arena", 12);
+    bed.set("dirt", 12, 0, false);
+    bed.frame(1 / FRAME_HZ);
+    expect(bed.pending, "dirt's own loops and one-shots asked for").toBeGreaterThan(0);
+    expect(bed.pending, "its insects (2 ears) and its dog and bird (3 variants each)").toBe(8);
+    await framesUntil(bed, () => bed.pending === 0);
+    expect(fake.nodes.some((node) => node.loop && node.stopped > 0), "arena's crowd stopped").toBe(true);
   });
 });

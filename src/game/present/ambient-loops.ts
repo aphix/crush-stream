@@ -1,5 +1,4 @@
-import { mulberry32 } from "../world/placements.ts";
-import { Biquad, filtered, scaledToRms, seamlessLoop, whiteNoise } from "./ambient-dsp.ts";
+import { Biquad, filtered, rngOf, scaledToRms, seamlessLoop, whiteNoise } from "./ambient-dsp.ts";
 
 /** The ambient bed's looping layers, in the order `bedLevels` fills its output. */
 export const LAYER = { rumble: 0, hum: 1, wind: 2, murmur: 3, roar: 4, cheer: 5, insects: 6 } as const;
@@ -7,7 +6,7 @@ export type Layer = keyof typeof LAYER;
 export const LAYERS = Object.keys(LAYER) as Layer[];
 
 /** Each layer's own sample rate (Hz): the lowest its band needs, since the loops are rendered on the main thread. */
-export const LAYER_RATE: Record<Layer, number> = { rumble: 8000, hum: 8000, wind: 16000, murmur: 11025, roar: 11025, cheer: 11025, insects: 16000 };
+export const LAYER_RATE: Record<Layer, number> = { rumble: 8000, hum: 8000, wind: 16000, murmur: 8000, roar: 8000, cheer: 11025, insects: 16000 };
 /** Loop lengths (s) of a layer's left and right copies: unequal, so the pair repeats only every 26 x 31 s. */
 const LOOP_SECONDS = [26, 31] as const;
 /** Every loop is scaled to this RMS, so the layer gains in `bedLevels` are comparable. */
@@ -17,9 +16,9 @@ type Rng = () => number;
 type Crowd = { voices: number; noise: number; pitch: readonly [number, number]; mouth: readonly [number, number]; syllableHz: number; noiseBand: readonly [number, number] };
 
 const CROWDS: Record<"murmur" | "roar" | "cheer", Crowd> = {
-  murmur: { voices: 8, noise: 0.9, pitch: [95, 240], mouth: [550, 1800], syllableHz: 3.5, noiseBand: [350, 2200] },
-  roar: { voices: 14, noise: 1.8, pitch: [90, 260], mouth: [600, 1900], syllableHz: 1.6, noiseBand: [300, 3200] },
-  cheer: { voices: 12, noise: 0.6, pitch: [190, 340], mouth: [750, 1350], syllableHz: 0.7, noiseBand: [1500, 4500] },
+  murmur: { voices: 6, noise: 0.9, pitch: [95, 240], mouth: [550, 1800], syllableHz: 3.5, noiseBand: [350, 2200] },
+  roar: { voices: 10, noise: 1.8, pitch: [90, 260], mouth: [600, 1900], syllableHz: 1.6, noiseBand: [300, 3200] },
+  cheer: { voices: 8, noise: 0.6, pitch: [190, 340], mouth: [750, 1350], syllableHz: 0.7, noiseBand: [1500, 3600] },
 };
 
 function shaped(n: number, rng: Rng, gain: number, ...chain: Biquad[]): Float32Array {
@@ -75,15 +74,15 @@ function crowd(kind: keyof typeof CROWDS, rate: number, seconds: number, rng: Rn
   const spec = CROWDS[kind];
   const loop = seamlessLoop((n) => {
     const out = shaped(n, rng, spec.noise * 0.15, Biquad.band((spec.noiseBand[0] * spec.noiseBand[1]) ** 0.5, 0.8, rate));
-    for (let v = 0; v < spec.voices; v++) addInto(out, talker(n, rate, rng, spec));
+    for (let v = 0; v < spec.voices; v++) talkInto(out, rate, rng, spec);
     return out;
   }, rate, seconds);
   return swelled(loop, seconds, rate, rng, kind === "roar" ? 0.25 : 0.15, [1, 7]);
 }
 
-/** One voice: a vibrato saw through two vowel formants, switched on and off by random syllables. */
-function talker(n: number, rate: number, rng: Rng, spec: Crowd): Float32Array {
-  const out = new Float32Array(n);
+/** One voice added into `out`: a vibrato saw through two vowel formants, switched on and off by random syllables. */
+function talkInto(out: Float32Array, rate: number, rng: Rng, spec: Crowd): void {
+  const n = out.length;
   const f0 = spec.pitch[0] + rng() * (spec.pitch[1] - spec.pitch[0]);
   const f1 = Biquad.band(spec.mouth[0] * (0.8 + rng() * 0.4), 5, rate);
   const f2 = Biquad.band(spec.mouth[1] * (0.8 + rng() * 0.4), 6, rate);
@@ -97,9 +96,8 @@ function talker(n: number, rate: number, rng: Rng, spec: Crowd): Float32Array {
     level += (want - level) * ((spec.syllableHz * 6) / rate);
     phase = (phase + (f0 * (1 + 0.025 * Math.sin((2 * Math.PI * vibratoHz * i) / rate))) / rate) % 1;
     const glottal = 2 * phase - 1;
-    out[i] = level * (f1.tick(glottal) + 0.7 * f2.tick(glottal));
+    out[i] = out[i]! + level * (f1.tick(glottal) + 0.7 * f2.tick(glottal));
   }
-  return out;
 }
 
 /** Crickets: pulsed chirp trains on tones whose cycles and chirp periods are whole over the loop. */
@@ -134,21 +132,9 @@ const RENDER: Record<Layer, (rate: number, seconds: number, rng: Rng) => Float32
   insects,
 };
 
-function renderLoop(layer: Layer, ear: 0 | 1): Float32Array {
+/** The loop of `layer` for one ear (0 left, 1 right): mono, seamless, `LOOP_RMS`, at `LAYER_RATE`. Each call renders anew; the caller keeps the result. */
+export function renderLoop(layer: Layer, ear: 0 | 1): Float32Array {
   const rate = LAYER_RATE[layer];
   const seconds = LOOP_SECONDS[ear];
-  return RENDER[layer](rate, seconds, mulberry32(LAYER[layer] * 977 + ear * 131 + 17));
-}
-
-const loops = new Map<string, Float32Array>();
-
-/** The loop of `layer` for one ear (0 left, 1 right): mono, seamless, `LOOP_RMS`, at `LAYER_RATE`; rendered on first use and kept. */
-export function layerLoop(layer: Layer, ear: 0 | 1): Float32Array {
-  const key = `${layer}:${ear}`;
-  let loop = loops.get(key);
-  if (loop === undefined) {
-    loop = renderLoop(layer, ear);
-    loops.set(key, loop);
-  }
-  return loop;
+  return RENDER[layer](rate, seconds, rngOf(LAYER[layer] * 977 + ear * 131 + 17));
 }

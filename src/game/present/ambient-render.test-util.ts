@@ -1,10 +1,27 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { Biquad, filtered } from "./ambient-dsp.ts";
-import { bedLevels, emitterRate, LEVEL, LEVEL_COUNT, nextDraw, SCHEDULE_SEED, SHOT_GAIN, SHOT_GAP_S, SHOT_PAN, type AmbientPlace } from "./ambient-levels.ts";
-import { LAYER_RATE, LAYERS, layerLoop } from "./ambient-loops.ts";
-import { EMITTERS, SHOT_RATE, SHOT_VARIANTS, shotOf } from "./ambient-shots.ts";
+import { Biquad, filtered, nextDraw } from "./ambient-dsp.ts";
+import { bedLevels, emitterRate, LEVEL, LEVEL_COUNT, SCHEDULE_SEED, SHOT_GAIN, SHOT_GAP_S, SHOT_PAN, type AmbientPlace } from "./ambient-levels.ts";
+import { LAYER_RATE, LAYERS, renderLoop } from "./ambient-loops.ts";
+import { EMITTERS, renderShot, SHOT_RATE, SHOT_VARIANTS } from "./ambient-shots.ts";
+
+const loops = new Map<string, Float32Array>();
+const shots = new Map<string, Float32Array>();
+
+/** The loop of `layer` for `ear`, rendered once per test run. */
+export function layerLoop(layer: (typeof LAYERS)[number], ear: 0 | 1): Float32Array {
+  const key = `${layer}:${ear}`;
+  if (!loops.has(key)) loops.set(key, renderLoop(layer, ear));
+  return loops.get(key)!;
+}
+
+/** One variant of a one-shot, rendered once per test run. */
+export function shotOf(kind: (typeof EMITTERS)[number], variant: number): Float32Array {
+  const key = `${kind}:${variant}`;
+  if (!shots.has(key)) shots.set(key, renderShot(kind, variant));
+  return shots.get(key)!;
+}
 
 /** Test harness: the ambient bed rendered offline to samples (the same levels and schedule the node graph uses), a WAV writer and an FFT-band analyser. */
 export const RENDER_RATE = 44100;
