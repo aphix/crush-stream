@@ -175,13 +175,21 @@ describe("given the sim standing still (paused, held or waiting: rate 0)", () =>
   });
 });
 
-describe("given a full queue", () => {
-  it("when thirty faint near hits fill it and a hard hit 300 m off arrives, then the far one is not queued over a near one", () => {
-    const { sink, feed, frame } = setup();
+describe("given the queue before the frame plays it", () => {
+  it("when thirty faint near hits fill it and a hard hit 300 m off arrives, then the far hit is not in the queue, which holds only near ones", () => {
+    const { feed } = setup();
     for (let k = 0; k < 30; k++) feed.wall(makeCar(), 5, 1, 0, 0, "concrete");
     feed.wall(makeCar(), 90, 300, 0, 0, "concrete");
-    frame();
-    expect(sink.hits.every((h) => h.x !== 300)).toBe(true);
+    const queued = Array.from(feed["qImpulse"].subarray(0, feed["queued"]));
+    expect(queued.length, "the queue is full").toBeGreaterThan(0);
+    expect(queued.includes(90), "the far hit was queued").toBe(false);
+    expect(queued.every((impulse) => impulse === 5), "only the near hits").toBe(true);
+  });
+
+  it("when a hit lands past 400 m with the queue empty, then nothing is queued", () => {
+    const { feed } = setup();
+    feed.wall(makeCar(), 90, 500, 0, 0, "concrete");
+    expect(feed["queued"]).toBe(0);
   });
 });
 

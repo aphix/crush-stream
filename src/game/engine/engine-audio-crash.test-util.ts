@@ -24,7 +24,10 @@ export interface CrashRun {
   digest: string;
 }
 
-/** The one engine of a file (a second `CrashEngine` in the same process never resolves `ready`). */
+/** The run each engine is recording into: the wrappers installed at boot append here. */
+const recording = new WeakMap<CrashEngine, CrashRun>();
+
+/** The one engine of a file (a second `CrashEngine` in the same process never resolves `ready`); its audio's `hit` and `scrape` run as they are, then record. */
 export async function bootCrashEngine(): Promise<CrashEngine> {
   stubBrowser();
   const engine = await bootEngine({ pacer: true });
@@ -32,6 +35,18 @@ export async function bootCrashEngine(): Promise<CrashEngine> {
   engine["looping"] = false;
   engine.fadeScenes = false;
   engine["pinnedSeed"] = FLEET_SEED;
+  const audio = engine["audio"];
+  const hit = audio.hit.bind(audio);
+  const scrape = audio.scrape.bind(audio);
+  audio.hit = (e) => {
+    hit(e);
+    recording.get(engine)?.hits.push({ ...e });
+  };
+  audio.scrape = (...args) => {
+    scrape(...args);
+    const run = recording.get(engine);
+    if (run) run.scrapes++;
+  };
   return engine;
 }
 
@@ -44,8 +59,7 @@ export function runCrash(engine: CrashEngine, audioOn: boolean): CrashRun {
   engine.reset();
   engine.audioOn = audioOn;
   const run: CrashRun = { hits: [], scrapes: 0, digest: "" };
-  engine["audio"].hit = (e) => void run.hits.push({ ...e });
-  engine["audio"].scrape = () => void run.scrapes++;
+  recording.set(engine, run);
   const since = simCounters(engine);
   const cars = engine["live"]();
   for (const [k, car] of cars.entries()) {
@@ -53,7 +67,7 @@ export function runCrash(engine: CrashEngine, audioOn: boolean): CrashRun {
     car.speed = 0;
     car.spawnSpeed = 0;
   }
-  // The slab is stood up afresh, oriented to car A as it stands now: a reset leaves it visible but turned to its old yaw.
+  // A reset re-aims the slab at car A where the layout put it; the toggle off and on aims it again at where this row parks car A.
   if (engine.barrierUp) engine.toggleBarrier();
   engine.toggleBarrier();
   const slab = engine["barrier"].group.position;

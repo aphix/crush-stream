@@ -1332,8 +1332,9 @@ export class CrashEngine extends EngineGarage {
     // sent at the finish) can land while it still reads "racing" (measured: stopped 106 ms after it arrived).
     const p = this.race.phase;
     if (this.highlights.hasReel && (!this.race.active || p === null || p === "grid" || p === "countdown")) this.stopReel();
-    // The sim hears the dummies' world (a worker) at a fixed frame: it does not run one until the answer it is to hear is in.
-    if (this.playing && !held && !this.ragdolls.waiting) {
+    // The sim hears the dummies' world (a worker) at a fixed frame: it does not run one until the answer it is to hear is in. Read before the step posts to the worker: the audio feed's clock runs only on frames the sim stepped.
+    const stepping = this.playing && !held && !this.ragdolls.waiting;
+    if (stepping) {
       this.elapsedWall += wallDt;
       const reelDt = this.highlights.frame(now / 1000);
       this.reelFrame(reelDt !== null);
@@ -1500,7 +1501,7 @@ export class CrashEngine extends EngineGarage {
     if (this.audioOn) {
       const heard = this.highlights.playing ? this.highlights.focus() : this.followedCar();
       const eye = this.camera.matrixWorld.elements;
-      const simRate = this.playing && !held && !this.ragdolls.waiting ? this.clock.timeScale * this.cine.timeWarp : 0;
+      const simRate = stepping ? this.clock.timeScale * this.cine.timeWarp : 0;
       this.audioFeed.frame(wallDt, simRate, heard, eye[12]!, eye[13]!, eye[14]!);
       this.uiCues.frame(this.cuePhase(), this.cueTime(), this.cueWrecked(), this.onFoot.armed() ? this.onFoot.arms.weapon : null);
       this.audio.frame(wallDt, this.highlights.playing ? this.highlights.cars() : this.live(), heard, this.clock.timeScale * this.cine.timeWarp, this.playing && !held, this.ambientScene());
