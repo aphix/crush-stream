@@ -926,7 +926,8 @@ export class TyreSkin {
     if (!raised) return false;
     for (let k = 0; k < n; k++) {
       const p = weld[tris[k]!]!;
-      if (this.bump[p]! > 0) this.dirty[p] = 1;
+      if (!(this.bump[p]! > 0)) continue;
+      this.dirty[p] = 1;
       this.lift[p] = this.lift[p]! + this.bump[p]!;
       this.bump[p] = 0;
     }
