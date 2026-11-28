@@ -446,7 +446,7 @@ unsafe fn sag_triangle(s: &Skin, q: &Read, va: usize, vb: usize, vc: usize) -> b
 }
 
 // ---- liftSaggingTriangles: every triangle over a tyre read at points fixed on it ----------------------------------------
-// `read` holds each corner's lift at the wheel's last read (`again`: an earlier pass of this hold) and takes its lift now; `lift` and `dirty`
+// `read` holds each corner's lift at the wheel's last read (`again`: an earlier pass of this hold) and takes its lift now; `cand` is scratch for `corners / 3` entries; `lift` and `dirty`
 // are written when a corner is lifted; `bump` is zero on entry and on return. `sag_free` (per vertex, 1: never read). Returns 1 when any corner was lifted.
 #[no_mangle]
 pub unsafe extern "C" fn sag_pass(
@@ -461,6 +461,7 @@ pub unsafe extern "C" fn sag_pass(
     bump: *mut f32,
     dirty: *mut u8,
     read: *mut f32,
+    cand: *mut i32,
     again: i32,
     job: *const f64,
 ) -> i32 {
@@ -476,33 +477,39 @@ pub unsafe extern "C" fn sag_pass(
         fade: *job.add(JOB_FADE),
     };
     let t = &q.held;
-    let mut lowest = f64::INFINITY;
-    for k in 0..corners {
-        let v = *tris.add(k) as usize;
-        lowest = js_min(lowest, load(pos, v * 3 + 1) + *lift.add(*weld.add(v) as usize) as f64);
-    }
-    // A triangle's point is a blend of its corners': with every corner over the tyre's top and the clearance, none can stand short.
-    let over_top = lowest > t.h[1] + t.a[1].abs() * t.half_w + t.flat * t.r + SAG_CLEAR;
     let s = Skin { pos, rest, weld, liftable, lift, bump, bit: 1u8 << (*job.add(JOB_WHEEL) as u32) };
-    let mut raised = false;
+    // One scan reads every corner's lift (`read`), takes the lowest corner, and lists the triangles to read (`cand`: first corner of each).
+    let mut lowest = f64::INFINITY;
+    let mut listed = 0;
     let mut k = 0;
     while k < corners {
         // Read again, a triangle whose corners kept the lifts of its last read asks what it asked then: nothing, or a corner would have risen.
         let mut rose = again == 0;
         for c in k..k + 3 {
-            let now = *lift.add(*weld.add(*tris.add(c) as usize) as usize);
+            let v = *tris.add(c) as usize;
+            let now = *lift.add(*weld.add(v) as usize);
+            lowest = js_min(lowest, load(pos, v * 3 + 1) + now as f64);
             if now != *read.add(c) {
                 rose = true;
             }
             *read.add(c) = now;
         }
         let (va, vb, vc) = (*tris.add(k) as usize, *tris.add(k + 1) as usize, *tris.add(k + 2) as usize);
-        k += 3;
-        if !rose || over_top || *sag_free.add(va) as u32 + *sag_free.add(vb) as u32 + *sag_free.add(vc) as u32 > 0 {
-            continue;
+        if rose && *sag_free.add(va) as u32 + *sag_free.add(vb) as u32 + *sag_free.add(vc) as u32 == 0 {
+            *cand.add(listed) = k as i32;
+            listed += 1;
         }
-        if sag_triangle(&s, &q, va, vb, vc) {
-            raised = true;
+        k += 3;
+    }
+    // A triangle's point is a blend of its corners': with every corner over the tyre's top and the clearance, none can stand short.
+    let over_top = lowest > t.h[1] + t.a[1].abs() * t.half_w + t.flat * t.r + SAG_CLEAR;
+    let mut raised = false;
+    if !over_top {
+        for i in 0..listed {
+            let k = *cand.add(i) as usize;
+            if sag_triangle(&s, &q, *tris.add(k) as usize, *tris.add(k + 1) as usize, *tris.add(k + 2) as usize) {
+                raised = true;
+            }
         }
     }
     if !raised {
