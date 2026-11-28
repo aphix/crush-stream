@@ -364,7 +364,7 @@ describe("given the sound's frame-built bank", () => {
       frames++;
     }
     expect(frames, "frames to finish").toBeGreaterThan(20);
-    expect(worst, "ms of the slowest frame").toBeLessThan(60);
+    expect(worst, "ms of the slowest frame").toBeLessThan(8);
     expect(sound.bankBytes / 1e6, "MB of buffers").toBeLessThan(20);
   });
 
@@ -419,13 +419,32 @@ describe("given voices held by crashes", () => {
 });
 
 describe("given scrape calls with changing arguments", () => {
-  it("when a contact id's materials change, then it switches to the new pair's loop and stops the old one", () => {
+  /** Calls scrape for contact 1 once a frame with the given materials, `frames` times from frame `from`. */
+  function scraping(sound: HitSound, ctx: FakeContext, a: SoundMat, b: SoundMat, from: number, frames: number): void {
+    for (let frame = from; frame < from + frames; frame++) {
+      ctx.currentTime = frame / FRAME_HZ;
+      sound.scrape(1, 8, 0.8, 5, 0, 0, a, b);
+      sound.frame(1 / FRAME_HZ, 0, 0, 0);
+    }
+  }
+
+  it("when a contact id's materials change and stay changed, then after three frames the new pair's loop starts and the old one fades out within 15 ms", () => {
     const { ctx, sound } = recorded();
-    sound.scrape(1, 8, 0.8, 5, 0, 0, "steel", "concrete");
-    sound.scrape(1, 8, 0.8, 5, 0, 0, "rubber", "gravel");
+    scraping(sound, ctx, "steel", "concrete", 0, 5);
+    scraping(sound, ctx, "rubber", "gravel", 5, 2);
+    expect(ctx.sources, "the old loop still plays after two frames").toHaveLength(1);
+    scraping(sound, ctx, "rubber", "gravel", 7, 1);
     expect(ctx.sources, "two loops").toHaveLength(2);
-    expect(ctx.sources[0]!.stopAt, "the first stopped").toBeLessThan(Infinity);
-    expect(ctx.sources[1]!.buffer, "another loop").not.toBe(ctx.sources[0]!.buffer);
+    const old = ctx.sources[0]!;
+    expect(old.stopAt, "stops 15 ms after the switch").toBeCloseTo(7 / FRAME_HZ + 0.015, 6);
+    expect(old.sentTo!.gain.at(7 / FRAME_HZ + 0.012), "faded by then").toBeLessThan(0.05 * old.sentTo!.gain.at(7 / FRAME_HZ));
+    expect(ctx.sources[1]!.buffer, "another loop").not.toBe(old.buffer);
+  });
+
+  it("when a contact flips between two kinds every frame, then it keeps its one loop", () => {
+    const { ctx, sound } = recorded();
+    for (let frame = 0; frame < 40; frame++) scraping(sound, ctx, frame % 2 === 0 ? "steel" : "rubber", frame % 2 === 0 ? "concrete" : "gravel", frame, 1);
+    expect(ctx.sources).toHaveLength(1);
   });
 
   it("when the id is negative, then nothing plays", () => {
@@ -445,5 +464,20 @@ describe("given scrape calls with changing arguments", () => {
       return rmsOf(mixRecording(ctx, 1.5, BANK_RATE).subarray(Math.round(0.7 * BANK_RATE)));
     };
     expect(level(155)).toBeLessThan(level(0) * 0.5);
+  });
+});
+
+describe("given the bank is still being built", () => {
+  it("when a 20 m/s hit lands after the ticks and hits are rendered but before the crashes are, then it sounds as a hit-size buffer", () => {
+    const ctx = new FakeContext(true);
+    const sound = new HitSound(ctx, new FakeNode(true));
+    let spoken = false;
+    while (!sound.bankReady && !spoken) {
+      sound.frame(0, 0, 0, 0);
+      sound.hit(event(20, "steel", "steel"), 0, 0, 0);
+      spoken = ctx.sources.length > 0;
+    }
+    expect(sound.bankReady, "heard before the bank was done").toBe(false);
+    expect(ctx.sources[0]!.buffer!.duration, "a hit-size buffer (0.32 s)").toBeLessThan(0.4);
   });
 });

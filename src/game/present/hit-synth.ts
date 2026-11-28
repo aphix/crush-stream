@@ -359,10 +359,12 @@ export function scrapeSamples(rate: number): number {
 
 /** Wraps a ringing event past the loop's end back to its start, so the loop has no seam. */
 function loopRing(out: Float32Array, rate: number, at: number, hz: number, amp: number, tau: number, scratch: Float32Array): void {
-  scratch.fill(0);
   ringAt(scratch, rate, at, hz, amp, tau);
-  for (let i = 0; i < scratch.length; i++) out[i]! += scratch[i]!;
-  for (let i = out.length; i < scratch.length; i++) out[i - out.length]! += scratch[i]!;
+  const end = Math.min(scratch.length, at + Math.ceil(tau * rate * -Math.log(RING_FLOOR)));
+  for (let i = at; i < end; i++) {
+    out[i < out.length ? i : i - out.length]! += scratch[i]!;
+    scratch[i] = 0;
+  }
 }
 
 /** Renders one seamless second of a sliding sound into `out` (`scrapeSamples` long), peak 1: a noise bed, a low rumble, stick-slip bursts and grit. */

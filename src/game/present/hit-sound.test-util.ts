@@ -142,10 +142,10 @@ export class FakeContext {
     this.sources.push(source);
     return source;
   }
-  /** Sources started, not told to stop (a stolen voice still fades for 10 ms) and not yet over at the current time. */
+  /** Sources started, not stopping within the 10 ms a stolen voice fades, and not yet over at the current time. */
   sounding(): number {
     let count = 0;
-    for (const source of this.sources) if (source.startAt >= 0 && source.stopAt === Infinity && (source.loop || source.startAt + source.buffer!.duration / source.playbackRate.value > this.currentTime)) count++;
+    for (const source of this.sources) if (source.startAt >= 0 && source.stopAt > this.currentTime + 0.0101 && (source.loop || source.startAt + source.buffer!.duration / source.playbackRate.value > this.currentTime)) count++;
     return count;
   }
 }

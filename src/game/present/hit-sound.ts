@@ -130,6 +130,13 @@ const ARG_NOW = 5;
 const ARG_HOLD = 6;
 const MAX_VOICES = 24;
 const MAX_SCRAPES = 6;
+/** A scrape slot's `scrapeId` when it is unused, and when its loop is fading out. */
+const SCRAPE_FREE = -1;
+const SCRAPE_DYING = -2;
+/** A contact's new kind of loop starts once it has been asked for this many frames running, and the old loop fades with this time constant (s) and stops this long (s) after. */
+const KIND_HOLD_FRAMES = 3;
+const KIND_FADE_TAU_S = 0.003;
+const KIND_FADE_STOP_S = 0.015;
 /** Variations of each bank buffer on a phone: a third less memory and render time. */
 const PHONE_VARIATIONS = 2;
 /** `frame` renders bank buffers until this much time (ms) has gone, at least one a frame. */
@@ -188,8 +195,11 @@ export class HitSound {
   private readonly voiceStart = new Float64Array(MAX_VOICES);
   private readonly voiceEnd = new Float64Array(MAX_VOICES);
   private readonly voicePriority = new Float64Array(MAX_VOICES);
-  private readonly scrapeId = new Int32Array(MAX_SCRAPES).fill(-1);
+  private readonly scrapeId = new Int32Array(MAX_SCRAPES).fill(SCRAPE_FREE);
   private readonly scrapeKindOf = new Uint8Array(MAX_SCRAPES);
+  /** The kind a contact has been asking for instead of its loop's, and for how many frames running. */
+  private readonly scrapePending = new Uint8Array(MAX_SCRAPES);
+  private readonly scrapeHeld = new Uint8Array(MAX_SCRAPES);
   private readonly scrapeTouched = new Uint8Array(MAX_SCRAPES);
   private readonly scrapeIdle = new Float64Array(MAX_SCRAPES);
   private readonly scrapeLevel = new Float64Array(MAX_SCRAPES);
@@ -274,7 +284,12 @@ export class HitSound {
     for (let step = 0; step < SCRAPE_STEPS; step++) this.scrapeBank.push(null);
   }
 
-  /** Renders the next buffer of the plan: the scrape loops first, then each row's buffers by size and variation. */
+  /** Whether the next buffer to render is a crash's, the dearest kind. */
+  private nextIsCrash(): boolean {
+    return this.built - SCRAPE_STEPS >= this.rowKeys.length * (this.rowStride - this.variations);
+  }
+
+  /** Renders the next buffer of the plan: the scrape loops, then every row's tick and hit buffers, then every row's crash buffers. */
   private buildNext(): void {
     const step = this.built++;
     if (step < SCRAPE_STEPS) {
@@ -285,19 +300,23 @@ export class HitSound {
       return;
     }
     const at = step - SCRAPE_STEPS;
-    const within = at % this.rowStride;
+    const small = this.rowStride - this.variations;
+    const smallSteps = this.rowKeys.length * small;
+    const row = at < smallSteps ? Math.floor(at / small) : Math.floor((at - smallSteps) / this.variations);
+    const within = at < smallSteps ? at % small : small + ((at - smallSteps) % this.variations);
     const size = HIT_SIZE_LIST[Math.floor(within / this.variations)]!;
-    const [first, second] = this.rowKeys[Math.floor(at / this.rowStride)]!;
+    const [first, second] = this.rowKeys[row]!;
     const buffer = this.ctx.createBuffer(1, hitSamples(size, BANK_RATE), BANK_RATE);
     renderHit(first, second, size, within % this.variations, BANK_RATE, buffer.getChannelData(0));
-    this.bank[at] = buffer;
+    this.bank[row * this.rowStride + within] = buffer;
     this.bytes += buffer.length * 4;
   }
 
+  /** Renders buffers until the budget is spent; a crash buffer is rendered alone in its frame. */
   private buildSome(): void {
     const started = performance.now();
     do this.buildNext();
-    while (this.built < this.total && performance.now() - started < BUILD_BUDGET_MS);
+    while (this.built < this.total && performance.now() - started < BUILD_BUDGET_MS && !this.nextIsCrash());
     this.renderMs += performance.now() - started;
   }
 
@@ -312,8 +331,12 @@ export class HitSound {
     const peak = hitGain(e.impulse) * distanceGain(distance);
     if (peak < AUDIBLE) return;
     const pair = MAT_INDEX[e.a] * SOUND_MATS.length + MAT_INDEX[e.b];
-    const size = hitSize(e.impulse);
-    const base = this.rowOf[pair]! * this.rowStride + size * this.variations;
+    let size = hitSize(e.impulse);
+    let base = this.rowOf[pair]! * this.rowStride + size * this.variations;
+    if (this.bank[base] === null && size === 2) {
+      size = 1;
+      base -= this.variations;
+    }
     if (this.bank[base] === null) return;
     const args = this.args;
     args[ARG_NOW] = this.ctx.currentTime;
@@ -340,17 +363,23 @@ export class HitSound {
     if (id < 0) return;
     const distance = hypot3(x - this.listenerX, y - this.listenerY, z - this.listenerZ);
     const pair = MAT_INDEX[a] * SOUND_MATS.length + MAT_INDEX[b];
-    const kind = this.kindOf[pair]!;
-    const speedShare = clamp01(speed / SCRAPE_FULL_SPEED);
-    const forceShare = clamp01(force);
-    const level = distance > HEARD_M ? 0 : scrapeGain(kind) * distanceGain(distance) * Math.pow(speedShare, 0.8) * (0.25 + 0.75 * Math.sqrt(forceShare));
+    let kind = this.kindOf[pair]!;
     const now = this.ctx.currentTime;
     let slot = -1;
     for (let at = 0; at < MAX_SCRAPES; at++) if (this.scrapeId[at] === id) slot = at;
     if (slot >= 0 && this.scrapeKindOf[slot] !== kind) {
-      this.stopScrape(slot);
-      slot = -1;
-    }
+      // The old loop plays on until the new kind has held for a few frames, so a contact flipping between two does not restart each frame.
+      this.scrapeHeld[slot] = this.scrapePending[slot] === kind ? this.scrapeHeld[slot]! + 1 : 1;
+      this.scrapePending[slot] = kind;
+      if (this.scrapeHeld[slot]! < KIND_HOLD_FRAMES) kind = this.scrapeKindOf[slot]!;
+      else {
+        this.fadeScrape(slot, now);
+        slot = -1;
+      }
+    } else if (slot >= 0) this.scrapeHeld[slot] = 0;
+    const speedShare = clamp01(speed / SCRAPE_FULL_SPEED);
+    const forceShare = clamp01(force);
+    const level = distance > HEARD_M ? 0 : scrapeGain(kind) * distanceGain(distance) * Math.pow(speedShare, 0.8) * (0.25 + 0.75 * Math.sqrt(forceShare));
     if (slot < 0) slot = this.startScrape(id, kind, level, now);
     if (slot < 0) return;
     this.scrapeTouched[slot] = 1;
@@ -381,7 +410,12 @@ export class HitSound {
     const now = this.ctx.currentTime;
     for (let voice = 0; voice < MAX_VOICES; voice++) if (this.voiceEnd[voice]! <= now) this.release(voice);
     for (let slot = 0; slot < MAX_SCRAPES; slot++) {
-      if (this.scrapeId[slot]! < 0) continue;
+      const taken = this.scrapeId[slot]!;
+      if (taken === SCRAPE_FREE) continue;
+      if (taken === SCRAPE_DYING) {
+        if (now >= this.scrapeIdle[slot]!) this.stopScrape(slot);
+        continue;
+      }
       if (this.scrapeTouched[slot] === 1) {
         this.scrapeTouched[slot] = 0;
         continue;
@@ -403,7 +437,7 @@ export class HitSound {
       this.voiceFilter[voice]!.disconnect();
     }
     for (let slot = 0; slot < MAX_SCRAPES; slot++) {
-      if (this.scrapeId[slot]! >= 0) this.stopScrape(slot);
+      if (this.scrapeId[slot] !== SCRAPE_FREE) this.stopScrape(slot);
       this.scrapeSoundGain[slot]!.disconnect();
       this.scrapeFilter[slot]!.disconnect();
     }
@@ -499,16 +533,19 @@ export class HitSound {
     let slot = -1;
     let quietest = Infinity;
     for (let at = 0; at < MAX_SCRAPES; at++) {
-      if (this.scrapeId[at]! < 0) {
+      const taken = this.scrapeId[at]!;
+      if (taken === SCRAPE_FREE) {
         slot = at;
+        quietest = -1;
         break;
       }
-      if (this.scrapeLevel[at]! < quietest) {
+      if (taken !== SCRAPE_DYING && this.scrapeLevel[at]! < quietest) {
         quietest = this.scrapeLevel[at]!;
         slot = at;
       }
     }
-    if (this.scrapeId[slot]! >= 0) {
+    if (slot < 0) return -1;
+    if (this.scrapeId[slot] !== SCRAPE_FREE) {
       if (quietest >= level) return -1;
       this.stopScrape(slot);
     }
@@ -535,6 +572,14 @@ export class HitSound {
     source.stop(this.ctx.currentTime);
     source.disconnect();
     this.scrapeSource[slot] = null;
-    this.scrapeId[slot] = -1;
+    this.scrapeId[slot] = SCRAPE_FREE;
+  }
+
+  /** Lets a loop die away without a click: its gain falls over a few ms and it stops 15 ms on (`scrapeIdle` holds when), after which `frame` frees the slot. */
+  private fadeScrape(slot: number, now: number): void {
+    this.scrapeSoundGain[slot]!.gain.setTargetAtTime(0, now, KIND_FADE_TAU_S);
+    this.scrapeSource[slot]!.stop(now + KIND_FADE_STOP_S);
+    this.scrapeId[slot] = SCRAPE_DYING;
+    this.scrapeIdle[slot] = now + KIND_FADE_STOP_S;
   }
 }
