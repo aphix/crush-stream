@@ -17,7 +17,7 @@ export function holdHidden(cover: CarCover, race: CourseSights, car: DeformableC
   return cover.hidden(i, hidingSight(sight), p.x, p.y + COVER_LIFT, p.z, radius);
 }
 
-/** Whether `car`'s tyre hold may wait: no camera sees it, or it is drawn small (skinned every 2nd or 4th frame) and its skin is not written this frame, so a wheel's move is laid with the next skin. */
-export function holdWaits(cover: CarCover, race: CourseSights, car: DeformableCar, stride: number, i: number, skinDeferred: boolean, radius: number): boolean {
-  return (stride > 1 && skinDeferred) || holdHidden(cover, race, car, stride, i, radius);
+/** Whether a car drawn small (skinned every 2nd or 4th frame) has its skin unwritten this frame, so its tyre hold may wait too: a wheel's move is laid with the next skin. */
+export function holdWaits(stride: number, skinDeferred: boolean): boolean {
+  return stride > 1 && skinDeferred;
 }

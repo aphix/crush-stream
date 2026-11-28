@@ -1510,7 +1510,8 @@ export class CrashEngine extends EngineGarage {
       this.lodStride[i] = stride;
       car.setNearView(stride === 1);
       const skinDeferred = stride === 0 || (this.lodFrame + i) % stride !== 0;
-      car.setHoldDeferred(car !== followed && holdWaits(this.cover, this.race, car, stride, i, skinDeferred, LOD_RADIUS), car !== followed && holdHidden(this.cover, this.race, car, stride, i, LOD_RADIUS));
+      const hidden = car !== followed && holdHidden(this.cover, this.race, car, stride, i, LOD_RADIUS);
+      car.setHoldDeferred(hidden || (car !== followed && holdWaits(stride, skinDeferred)), hidden);
       car.deform.skinDeferred = skinDeferred;
     }
   }
@@ -1530,7 +1531,8 @@ export class CrashEngine extends EngineGarage {
       if (!owed && !car.holdOwed && !car.partsOwed) continue;
       if (followed === undefined) followed = this.followedCar();
       const stride = car === followed ? 1 : this.skinStride(car);
-      car.setHoldDeferred(car !== followed && holdWaits(this.cover, this.race, car, stride, i, car.deform.skinDeferred, LOD_RADIUS), car !== followed && holdHidden(this.cover, this.race, car, stride, i, LOD_RADIUS));
+      const hidden = car !== followed && holdHidden(this.cover, this.race, car, stride, i, LOD_RADIUS);
+      car.setHoldDeferred(hidden || (car !== followed && holdWaits(stride, car.deform.skinDeferred)), hidden);
       if (owed) {
         car.setNearView(stride === 1);
         if (stride === 1 || (stride > 1 && this.lodStride[i] === 0)) car.flushDeferredSkin();

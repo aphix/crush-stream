@@ -1178,6 +1178,7 @@ export abstract class CarParts extends CarGlass {
 
   /** Part `slot`'s drawn box in its own frame into `out`; returns its object, its world matrix current: the dummies' world's stand-in for it. */
   partBox(slot: number, out: THREE.Box3): THREE.Object3D {
+    if (this.wait.owed) this.poseOwed();
     const o = this.parts[slot]!.object;
     o.updateWorldMatrix(true, true);
     growDrawn(o, out.makeEmpty(), _frame.copy(o.matrixWorld).invert());
@@ -1415,6 +1416,7 @@ export abstract class CarParts extends CarGlass {
     if (p.detached) return;
     // What leaves is read off the drawn skins (a shell's loose shape and start are sim): a hidden car's owed tyre hold is laid first, so no camera changes them.
     this.layOwedHold();
+    if (this.wait.owed) this.poseOwed();
     // The part leaves in the pose its state gives now, not the last frame's (poses are written once a frame, `poseParts`; a door
     // torn off by `swingHinges` finds none pending).
     this.posePart(p, false);
