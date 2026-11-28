@@ -1,4 +1,4 @@
-// Throwaway micro-benchmark of number idioms in hot loops. Runs in node (V8) and, pasted into a page, in Firefox (SpiderMonkey).
+// Micro-benchmark of number idioms in hot loops: `node <this file>` (V8) and `~/.jsvu/bin/spidermonkey <this file>` (SpiderMonkey shell, from `npx jsvu`).
 // Each idiom is its own function over the same Float64Array; the sum defeats dead-code elimination. Reports the best of REPS, ns per element.
 const N = 1 << 20;
 const REPS = 15;

@@ -6,7 +6,7 @@ two Perplexity answers as leads (`perplexity/2026-11-27-js-numeric-idioms-jit.md
 ## Measured (this repo, 2026-11-27)
 
 `node .extraResearch/js-numeric-idioms.bench.mjs` (V8, Node 24.15) and `~/.jsvu/bin/spidermonkey .extraResearch/js-numeric-idioms.bench.mjs` (SpiderMonkey 162, installed
-with `npx jsvu --os=linux64 --engines=spidermonkey`; no sudo). Each form is its own loop over the same 1,048,576 random doubles, best of 15 runs, ns per element. The
+with `npx jsvu --os=linux64 --engines=spidermonkey`; no sudo). Each form is its own loop over the same 1,048,576-element input for its category, best of 15 runs, ns per element. The
 inputs are random, so a data-dependent branch mispredicts about half the time: that is what the 4 ns rows are.
 
 | Operation | Form | V8 | SpiderMonkey | Same answer? |
@@ -45,12 +45,14 @@ inputs are random, so a data-dependent branch mispredicts about half the time: t
 
 ## What it means for this repo
 
-- **Never hand-roll abs, min, max or a clamp with a ternary.** `Math.abs` is 7-8 times faster in both engines; `Math.min`/`Math.max` are 5-7 times faster in
-  SpiderMonkey and no slower in V8, wherever the data does not predict the branch.
+- **Never hand-roll abs, min, max or a clamp with a ternary.** `Math.abs` is 7-8 times faster in both engines; `Math.min`/`Math.max` are 4.7-6.7 times faster in
+  SpiderMonkey and 6-11 % slower in V8, wherever the data does not predict the branch: the SpiderMonkey gain is far larger than the V8 loss.
 - **`Math.hypot` stays banned** in hot code (8-10 times the cost of the square root; `CODING_STANDARDS.md` already says so, and the kernel's `hypot2`/`hypot3` give
-  every engine the same bits). No use of it is left outside tests.
-- **`Math.sign` costs four times `(x > 0) - (x < 0)`** in both engines; the cheap form answers 0 for -0 and NaN. 98 uses outside tests, none in a per-vertex or
-  per-pixel loop (the busiest: `car-drive.ts` 7, per car per step: about a microsecond a frame). Not worth a sweep; use the cheap form in a new hot loop.
+  every engine the same bits). No use is left in game code outside tests (`check:boundaries` C6 enforces it); one remains in `touch-steer.tsx`'s pointer handler,
+  which is not hot, plus some in offline scripts.
+- **`Math.sign` costs four times `(x > 0) - (x < 0)`** in both engines; the cheap form answers 0 for -0 and NaN. 98 uses outside tests: one in the JS skin
+  fallback's per-vertex wrinkle branch (`streamed-deform.ts:628`, not run when the WASM kernel is loaded), none in a hot path otherwise (the busiest:
+  `car-drive.ts` 7, per car per step: about a microsecond a frame). Not worth a sweep; use the cheap form in a new hot loop.
 - **`Math.round` is 6.6 times slower than `(x + 0.5) | 0` in V8 only**, and the cheap form is right only for 0 ≤ x < 2^31. 279 uses outside tests, mostly bench
   text, net codecs and one-off builds. Same verdict.
 - **`x | 0` for a floor** buys 0.2-0.3 ns and is wrong for negatives: `surfaces.ts` floors signed world coordinates 68 times, so it stays `Math.floor`.
