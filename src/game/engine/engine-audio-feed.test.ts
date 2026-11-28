@@ -107,16 +107,81 @@ describe("given a contact that is held", () => {
     expect(sink.hits.length).toBe(2);
   });
 
-  it("when a held contact's impulse grows past half as much again, then that blow is a second hit; a smaller rise is not", () => {
+  it("when a held contact's impulse grows past half as much again after a tenth of a second, then that blow is a second hit; a smaller rise is not", () => {
     const { sink, cars, feed, frame } = setup();
     for (const impulse of [14, 18, 20]) {
       feed.pair(cars[0]!, cars[1]!, pairHit(impulse));
+      frame();
+    }
+    for (let f = 0; f < 8; f++) {
+      feed.pair(cars[0]!, cars[1]!, pairHit(20));
       frame();
     }
     expect(sink.hits.length, "14, 18, 20: one hit").toBe(1);
     feed.pair(cars[0]!, cars[1]!, pairHit(25));
     frame();
     expect(sink.hits.length, "25 is past 1.5 x 14").toBe(2);
+  });
+
+  it("when a car grinds a wall after a 20 m/s hit, reporting every frame at 3 m/s for a second, then a 12 m/s bale it meets is a second hit", () => {
+    const { sink, cars, feed, frame } = setup();
+    feed.wall(cars[0]!, 20, 0, 0, 0, "concrete");
+    frame();
+    for (let f = 0; f < FRAME_HZ; f++) {
+      feed.wall(cars[0]!, 3, 0, 0, 0, "concrete");
+      frame();
+    }
+    feed.wall(cars[0]!, 12, 2, 0, 0, "hay");
+    frame();
+    expect(sink.hits.map((h) => h.b)).toEqual(["concrete", "hay"]);
+  });
+
+  it("when a car grazes at 0.5 m/s for a second and then a 9 m/s hit lands on the same car, then that is a hit", () => {
+    const { sink, cars, feed, frame } = setup();
+    for (let f = 0; f < FRAME_HZ; f++) {
+      feed.wall(cars[0]!, 0.5, 0, 0, 0, "concrete");
+      frame();
+    }
+    expect(sink.hits.length, "a graze is no hit").toBe(0);
+    feed.wall(cars[0]!, 9, 0, 0, 0, "concrete");
+    frame();
+    expect(sink.hits.length).toBe(1);
+  });
+});
+
+describe("given the sim standing still (paused, held or waiting: rate 0)", () => {
+  it("when a contact is reported, two seconds of frames pass at rate 0, and it is reported again, then it is one hit, not two", () => {
+    const { sink, cars, feed, frame } = setup();
+    feed.pair(cars[0]!, cars[1]!, pairHit(14));
+    frame(null, 0);
+    for (let f = 0; f < 2 * FRAME_HZ; f++) frame(null, 0);
+    feed.pair(cars[0]!, cars[1]!, pairHit(14));
+    frame(null, 0);
+    expect(sink.hits.length).toBe(1);
+  });
+
+  it("when a car is in the air for two seconds at rate 0, then landing builds no air time: its landing is not heard", () => {
+    const h = setup();
+    const car = h.cars[0]!;
+    car.airborne = true;
+    car.wheelsDown = 0;
+    car.velocity.y = -8;
+    for (let f = 0; f < 2 * FRAME_HZ; f++) h.frame(null, 0);
+    car.airborne = false;
+    car.wheelsDown = 15;
+    car.velocity.y = 0;
+    h.frame(null, 0);
+    expect(h.sink.hits.length).toBe(0);
+  });
+});
+
+describe("given a full queue", () => {
+  it("when thirty faint near hits fill it and a hard hit 300 m off arrives, then the far one is not queued over a near one", () => {
+    const { sink, feed, frame } = setup();
+    for (let k = 0; k < 30; k++) feed.wall(makeCar(), 5, 1, 0, 0, "concrete");
+    feed.wall(makeCar(), 90, 300, 0, 0, "concrete");
+    frame();
+    expect(sink.hits.every((h) => h.x !== 300)).toBe(true);
   });
 });
 

@@ -1,8 +1,8 @@
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import type { HitEvent } from "../present/hit-sound.ts";
-import { setGround } from "../world/ground.ts";
-import { simDigest } from "./engine-bench-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { simCounters, simDigest } from "./engine-bench-headless.test-util.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -15,6 +15,8 @@ const HEAD_ON_START = 6;
 const SLAB_RUN_START = 14;
 /** The head-on pair meets this far (m) along z from the slab, which stands at the origin. */
 const PAIR_Z = -40;
+/** The seed every entry of the fleet is laid out from. */
+const FLEET_SEED = 7;
 
 export interface CrashRun {
   hits: HitEvent[];
@@ -22,22 +24,37 @@ export interface CrashRun {
   digest: string;
 }
 
-/** The fleet sandbox with cars 0 and 1 head-on far from the slab and car 2 driven at the slab, run for `CRASH_SECONDS`; with `audioOn` the audio's hit and scrape calls are recorded. */
-export async function runCrash(audioOn: boolean): Promise<CrashRun> {
+/** The one engine of a file (a second `CrashEngine` in the same process never resolves `ready`). */
+export async function bootCrashEngine(): Promise<CrashEngine> {
   stubBrowser();
   const engine = await bootEngine({ pacer: true });
   engine.pace.pin = true;
   engine["looping"] = false;
+  engine.fadeScenes = false;
+  engine["pinnedSeed"] = FLEET_SEED;
+  return engine;
+}
+
+/**
+ * The fleet laid out again from its seed (`reset`), cars 0 and 1 head-on far from the slab and car 2 driven at the slab, run for `CRASH_SECONDS`; with `audioOn` the audio's hit and scrape
+ * calls are recorded. The digest is of the sim from the reset on.
+ */
+export function runCrash(engine: CrashEngine, audioOn: boolean): CrashRun {
+  engine.audioOn = false;
+  engine.reset();
   engine.audioOn = audioOn;
   const run: CrashRun = { hits: [], scrapes: 0, digest: "" };
   engine["audio"].hit = (e) => void run.hits.push({ ...e });
   engine["audio"].scrape = () => void run.scrapes++;
+  const since = simCounters(engine);
   const cars = engine["live"]();
   for (const [k, car] of cars.entries()) {
     car.spawnFacing(8 * k - 16, 60 + 8 * k, 0, 0);
     car.speed = 0;
     car.spawnSpeed = 0;
   }
+  // The slab is stood up afresh, oriented to car A as it stands now: a reset leaves it visible but turned to its old yaw.
+  if (engine.barrierUp) engine.toggleBarrier();
   engine.toggleBarrier();
   const slab = engine["barrier"].group.position;
   for (const k of [0, 1]) {
@@ -54,8 +71,6 @@ export async function runCrash(audioOn: boolean): Promise<CrashRun> {
   runner.speed = SLAB_RUN_SPEED;
   runner.spawnSpeed = SLAB_RUN_SPEED;
   for (let f = 0; f < CRASH_SECONDS * FRAME_HZ; f++) engine.advance(FRAME, { frameDt: FRAME });
-  run.digest = simDigest(engine);
-  engine.dispose();
-  setGround(null);
+  run.digest = simDigest(engine, since);
   return run;
 }

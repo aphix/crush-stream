@@ -75,7 +75,9 @@ export class AudioFeed {
   private lz = 0;
 
   private queued = 0;
+  /** Per queued hit: its impulse, and what it sounds like from the listener as last heard (`audibleImpulse`; a hit that is 0 there is never queued). */
   private readonly qImpulse = new Float64Array(QUEUE);
+  private readonly qHeard = new Float64Array(QUEUE);
   private readonly qAt = new Float64Array(QUEUE * 3);
   private readonly qCarA: (FeedCar | null)[] = new Array<FeedCar | null>(QUEUE).fill(null);
   private readonly qCarB: (FeedCar | null)[] = new Array<FeedCar | null>(QUEUE).fill(null);
@@ -88,7 +90,9 @@ export class AudioFeed {
   private readonly cId = new Int32Array(CONTACTS);
   private readonly cSeen = new Float64Array(CONTACTS).fill(-Infinity);
   private readonly cSimSeen = new Float64Array(CONTACTS).fill(-Infinity);
-  private readonly cHitImpulse = new Float64Array(CONTACTS);
+  /** The impulse a contact's next hit must outgrow (`REHIT_GROWTH`): the first hit's, then following the contact's reports down, never under `HIT_MIN_IMPULSE`. */
+  private readonly cRef = new Float64Array(CONTACTS);
+  private readonly cHitSimT = new Float64Array(CONTACTS).fill(-Infinity);
   private readonly cSpeed = new Float64Array(CONTACTS);
   private readonly cForce = new Float64Array(CONTACTS);
   private readonly cAt = new Float64Array(CONTACTS * 3);
@@ -137,16 +141,17 @@ export class AudioFeed {
   }
 
   /**
-   * Once a frame, `dt` wall s at time `rate` (1 = real time): reads the cars for panes, landings, body slams and slides, plays the audibly loudest queued hits (by their distance from the
-   * listener at (lx, ly, lz)), and scrapes the contacts still sliding. `focus` is the car whose tyres already thud on a landing (`TyreSound`).
+   * Once a frame, `dt` wall s at time `rate` (1 = real time, 0 = the sim stands still: paused, held or waiting): reads the cars for panes, landings, body slams and slides, plays the audibly loudest
+   * queued hits (by their distance from the listener at (lx, ly, lz)), and scrapes the contacts still sliding. `focus` is the car whose tyres already thud on a landing (`TyreSound`).
    */
   frame(dt: number, rate: number, focus: FeedCar | null, lx: number, ly: number, lz: number): void {
+    const simDt = dt * Math.max(0, rate);
     this.t += dt;
-    this.simT += dt * Math.max(0, rate);
+    this.simT += simDt;
     this.lx = lx;
     this.ly = ly;
     this.lz = lz;
-    this.scanCars(dt, focus);
+    this.scanCars(simDt, focus);
     this.play();
     this.scrapeSliding();
   }
@@ -163,14 +168,15 @@ export class AudioFeed {
     this.cId[oldest] = this.nextId++;
     this.cSeen[oldest] = -Infinity;
     this.cSimSeen[oldest] = -Infinity;
-    this.cHitImpulse[oldest] = 0;
+    this.cRef[oldest] = Infinity;
+    this.cHitSimT[oldest] = -Infinity;
     return oldest;
   }
 
   private touch(kind: number, a: FeedCar, b: FeedCar | null, impulse: number, speed: number, x: number, y: number, z: number, matA: SoundMat, matB: SoundMat): void {
     const s = this.slot(kind, a, b);
-    const unseenS = this.simT - this.cSimSeen[s]!;
-    const lastImpulse = this.cHitImpulse[s]!;
+    const fresh = this.simT - this.cSimSeen[s]! > HIT_GAP_S;
+    if (fresh) this.cRef[s] = Infinity;
     this.cSeen[s] = this.t;
     this.cSimSeen[s] = this.simT;
     this.cSpeed[s] = speed;
@@ -180,20 +186,28 @@ export class AudioFeed {
     this.cAt[s * 3 + 2] = z;
     this.cMatA[s] = matA;
     this.cMatB[s] = matB;
-    if (impulse < HIT_MIN_IMPULSE || (unseenS <= HIT_GAP_S && impulse <= lastImpulse * REHIT_GROWTH)) return;
-    this.cHitImpulse[s] = impulse;
+    const grew = impulse > this.cRef[s]! * REHIT_GROWTH && this.simT - this.cHitSimT[s]! >= HIT_GAP_S;
+    if (impulse < HIT_MIN_IMPULSE || !(fresh || grew)) {
+      this.cRef[s] = Math.min(this.cRef[s]!, Math.max(impulse, HIT_MIN_IMPULSE));
+      return;
+    }
+    this.cRef[s] = impulse;
+    this.cHitSimT[s] = this.simT;
     this.enqueue(impulse, x, y, z, a, b, matA, matB);
   }
 
-  /** Queues a hit; with the queue full the weakest queued hit goes if this one is harder. */
+  /** Queues a hit that can be heard from the listener at the last frame; with the queue full the one that sounds weakest there goes if this one sounds louder. */
   private enqueue(impulse: number, x: number, y: number, z: number, a: FeedCar | null, b: FeedCar | null, matA: SoundMat, matB: SoundMat): void {
+    const heard = audibleImpulse(impulse, x - this.lx, y - this.ly, z - this.lz);
+    if (heard <= 0) return;
     let at = this.queued;
     if (at === QUEUE) {
       at = 0;
-      for (let q = 1; q < QUEUE; q++) if (this.qImpulse[q]! < this.qImpulse[at]!) at = q;
-      if (this.qImpulse[at]! >= impulse) return;
+      for (let q = 1; q < QUEUE; q++) if (this.qHeard[q]! < this.qHeard[at]!) at = q;
+      if (this.qHeard[at]! >= heard) return;
     } else this.queued++;
     this.qImpulse[at] = impulse;
+    this.qHeard[at] = heard;
     this.qAt[at * 3] = x;
     this.qAt[at * 3 + 1] = y;
     this.qAt[at * 3 + 2] = z;
@@ -265,9 +279,8 @@ export class AudioFeed {
       let top = -1;
       let loudest = 0;
       for (let q = 0; q < this.queued; q++) {
-        const heard = audibleImpulse(this.qImpulse[q]!, this.qAt[q * 3]! - this.lx, this.qAt[q * 3 + 1]! - this.ly, this.qAt[q * 3 + 2]! - this.lz);
-        if (heard > loudest) {
-          loudest = heard;
+        if (this.qHeard[q]! > loudest) {
+          loudest = this.qHeard[q]!;
           top = q;
         }
       }
@@ -285,6 +298,7 @@ export class AudioFeed {
       this.sink.hit(e);
       const last = this.queued - 1;
       this.qImpulse[top] = this.qImpulse[last]!;
+      this.qHeard[top] = this.qHeard[last]!;
       this.qAt[top * 3] = this.qAt[last * 3]!;
       this.qAt[top * 3 + 1] = this.qAt[last * 3 + 1]!;
       this.qAt[top * 3 + 2] = this.qAt[last * 3 + 2]!;

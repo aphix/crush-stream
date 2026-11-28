@@ -1500,7 +1500,8 @@ export class CrashEngine extends EngineGarage {
     if (this.audioOn) {
       const heard = this.highlights.playing ? this.highlights.focus() : this.followedCar();
       const eye = this.camera.matrixWorld.elements;
-      this.audioFeed.frame(wallDt, this.clock.timeScale * this.cine.timeWarp, heard, eye[12]!, eye[13]!, eye[14]!);
+      const simRate = this.playing && !held && !this.ragdolls.waiting ? this.clock.timeScale * this.cine.timeWarp : 0;
+      this.audioFeed.frame(wallDt, simRate, heard, eye[12]!, eye[13]!, eye[14]!);
       this.uiCues.frame(this.cuePhase(), this.cueTime(), this.cueWrecked(), this.onFoot.armed() ? this.onFoot.arms.weapon : null);
       this.audio.frame(wallDt, this.highlights.playing ? this.highlights.cars() : this.live(), heard, this.clock.timeScale * this.cine.timeWarp, this.playing && !held, this.ambientScene());
     } else this.audioFeed.clear();
