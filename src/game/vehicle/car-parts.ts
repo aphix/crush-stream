@@ -1,3 +1,4 @@
+import { PartPoseWait } from "./part-pose-wait.ts";
 import { hypot2, detSin, detCos, detAtan2, PART_FAMILY } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
@@ -21,7 +22,8 @@ import type { DeformableCar } from "./car.ts";
 import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
 import { GLASS_NAMES } from "./car-glass.ts";
-import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, HIT_DOOR, HIT_HOOD, HIT_LID, HIT_MIRROR, HIT_PANEL, LATCH_CATCH_RATE, LATCH_POP_MPS, LATCH_REACH_M, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, MIRROR_BREAK_J, type PartNetState } from "./car-core.ts";
+import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassName, type GlassPane, type GlassPart, HIT_DOOR, HIT_HOOD, HIT_LID, HIT_MIRROR, HIT_PANEL, LATCH_CATCH_RATE, LATCH_POP_MPS, LATCH_REACH_M, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, MIRROR_BREAK_J, type PartNetState } from "./car-core.ts";
+import type { GlowKind } from "./lamp-lights.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_QUIET_S,
@@ -448,6 +450,42 @@ export abstract class CarParts extends CarGlass {
   /** Counts every write of an attached part's pose (`posePart`, the reset): a car whose count has not moved has nothing new for `PoseBlend` to take. */
   partWrites = 0;
 
+  protected readonly wait = new PartPoseWait();
+
+  /** The engine's verdict that no camera sees this car this frame. */
+  setPartsUnseen(unseen: boolean): void {
+    this.wait.unseen = unseen;
+  }
+
+  /** Whether poses were left to `settleParts`. */
+  get partsOwed(): boolean {
+    return this.wait.owed;
+  }
+
+  /** After the camera has moved: poses every part left unposed while no camera saw the car, if one does now, before it is drawn. */
+  settleParts(): void {
+    if (!this.wait.owed || this.wait.unseen) return;
+    this.poseOwed();
+    // The group is at the frame's blended pose here: the next frame's pose is read against the sim's own, so it is made again.
+    this.poseSig = null;
+  }
+
+  /** Poses the parts `posePart` left to `settleParts`. */
+  private poseOwed(): void {
+    const unseen = this.wait.unseen;
+    this.wait.unseen = false;
+    this.wait.owed = false;
+    this.poseLifted = false;
+    const parts = this.parts;
+    for (let pi = 0; pi < parts.length; pi++) if (!parts[pi]!.detached && parts[pi]!.region === null) this.posePart(parts[pi]!);
+    this.wait.unseen = unseen;
+  }
+
+  override snapshot(): Record<string, unknown> {
+    if (this.wait.owed) this.poseOwed();
+    return super.snapshot();
+  }
+
   /**
    * Rest pose plus the hinge value `hingeT` (crash) and, on doors and mirrors, the free swing. `onRoad` false poses an arch shell free of
    * the road under it, where its hinge alone puts it: a torn shell leaves from that pose (`detachPart`), which replays read.
@@ -455,6 +493,7 @@ export abstract class CarParts extends CarGlass {
   protected posePart(p: DetachPart, onRoad = true): void {
     const t = p.hingeT;
     p.folding = t > foldAt(p);
+    if (this.wait.defers(p, onRoad)) return;
     const fromOwnState = posesFromOwnState(p);
     if (fromOwnState && standsAsPosed(p)) return;
     this.partWrites++;
@@ -1138,8 +1177,34 @@ export abstract class CarParts extends CarGlass {
     return p === null ? -1 : this.parts.indexOf(p);
   }
 
+  /** Poses what was left owed and brings the meshes' world matrices up to date: a shot's ray meets the drawn parts, whoever sees the car. */
+  poseNow(): void {
+    if (!this.wait.owed) return;
+    this.poseOwed();
+    this.group.updateMatrixWorld(true);
+  }
+
+  /** A door pane rides its door's drawn pose: settled first, whoever sees the car (the ejection places a driver from it). */
+  override glassWorld(name: GlassName, out: THREE.Vector3): THREE.Vector3 {
+    if (this.wait.owed) this.poseOwed();
+    return super.glassWorld(name, out);
+  }
+
+  /** A siren rides the light bar's drawn pose and lights what the player may see even when the car is not: settled first. */
+  override lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3, parentsCurrent = false): GlowKind | null {
+    if (this.wait.owed && i >= this.lamps.length) this.poseOwed();
+    return super.lampWorld(i, pos, dir, parentsCurrent);
+  }
+
+  /** Shards burst from the pane's drawn place, which rides its door: settled first. */
+  protected override shatterGlass(g: GlassPane): void {
+    if (this.wait.owed) this.poseOwed();
+    super.shatterGlass(g);
+  }
+
   /** Part `slot`'s drawn box in its own frame into `out`; returns its object, its world matrix current: the dummies' world's stand-in for it. */
   partBox(slot: number, out: THREE.Box3): THREE.Object3D {
+    if (this.wait.owed) this.poseOwed();
     const o = this.parts[slot]!.object;
     o.updateWorldMatrix(true, true);
     growDrawn(o, out.makeEmpty(), _frame.copy(o.matrixWorld).invert());
@@ -1207,6 +1272,7 @@ export abstract class CarParts extends CarGlass {
 
   /** Once a frame on a crashed car (`updateSkin`, after the skin): the parts' poses a step left pending are written first, door glass rides its door. */
   protected followGlass(): void {
+    if (this.wait.owed && !this.wait.unseen) this.poseOwed();
     this.poseParts();
     const inward = this.deform.impactInward;
     for (let k = 0; k < this.glassPanes.length; k++) {
@@ -1376,6 +1442,7 @@ export abstract class CarParts extends CarGlass {
     if (p.detached) return;
     // What leaves is read off the drawn skins (a shell's loose shape and start are sim): a hidden car's owed tyre hold is laid first, so no camera changes them.
     this.layOwedHold();
+    if (this.wait.owed) this.poseOwed();
     // The part leaves in the pose its state gives now, not the last frame's (poses are written once a frame, `poseParts`; a door
     // torn off by `swingHinges` finds none pending).
     this.posePart(p, false);

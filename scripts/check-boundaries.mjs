@@ -96,7 +96,7 @@ const HOT = {
   "src/game/present/ragdoll-prop-reach.ts": ["tend", "watch"],
   "src/game/vehicle/tyre-carried.ts": ["admitCarried", "sameAdmission", "noteAdmission", "admitWheel", "findCaps", "capAtRest", "carryLift", "poseWithin", "recarry", "lowerToCap", "listMoved", "forgetTouched"],
   "src/game/vehicle/paint-scrapes.ts": ["scrape", "slice", "commit", "runsOn", "append", "mergeNearest", "gap", "mergeInto"],
-  "src/game/vehicle/car-parts.ts": ["syncAttachedParts", "advanceFlap", "poseParts", "followGlass", "evaluateBreakage", "stepLooseParts", "freeObjects"],
+  "src/game/vehicle/car-parts.ts": ["syncAttachedParts", "advanceFlap", "poseParts", "settleParts", "poseOwed", "followGlass", "evaluateBreakage", "stepLooseParts", "freeObjects"],
   "src/game/vehicle/loose-step.ts": ["stepLoose", "landOn"],
   "src/game/vehicle/loose-dent.ts": ["recordDent", "applyDents", "carve"],
   "src/game/deform/streamed-deform.ts": ["pullSensorsFromMasses", "bakeLocalSkin", "solveCages", "capCageCorners", "fitCagesToMasses"],

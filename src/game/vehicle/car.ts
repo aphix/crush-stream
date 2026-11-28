@@ -286,6 +286,7 @@ export class DeformableCar extends CarParts {
     this.endAgo.fill(9);
     this.endReach = Infinity;
     this.partWrites++;
+    this.wait.owed = false;
     this.poseSig = null;
     this.endSqueeze = false;
     for (const p of this.parts) {
@@ -742,8 +743,9 @@ export class DeformableCar extends CarParts {
   }
 
   /** The engine's verdict that no camera sees this car (`holdDeferred`). */
-  setHoldDeferred(hidden: boolean): void {
+  setHoldDeferred(hidden: boolean, unseen = false): void {
     this.holdDeferred = hidden;
+    this.setPartsUnseen(unseen);
   }
 
   /** Whether a tyre hold's lift waits to be laid on a mesh (`settleHold`). */

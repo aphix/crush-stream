@@ -32,7 +32,7 @@ describe("given the real engine and a car drawn small, skinned every second fram
     return waits;
   }
 
-  // mutation: sed -i 's/^  return (stride > 1 \&\& skinDeferred) || holdHidden(/  return holdHidden(/' src/game/engine/skin-hold.ts
+  // mutation: sed -i 's/^  return stride > 1 \&\& skinDeferred;/  return false;/' src/game/engine/skin-hold.ts
   it("when the skins are scheduled over two frames, then its tyre hold waits on the frame its skin is not written and runs on the other; a car skinned every frame never waits", () => {
     const cars = engine["live"]();
     drawn(cars[1]!);
@@ -45,7 +45,7 @@ describe("given the real engine and a car drawn small, skinned every second fram
     expect(near, "a car skinned every frame").toEqual([false, false]);
   });
 
-  // mutation: sed -i 's/holdWaits(this.cover, this.race, car, stride, i, car.deform.skinDeferred, LOD_RADIUS)/holdWaits(this.cover, this.race, car, stride, i, false, LOD_RADIUS)/' src/game/engine/engine.ts
+  // mutation: sed -i 's/holdWaits(stride, car.deform.skinDeferred)/holdWaits(stride, false)/' src/game/engine/engine.ts
   it("when the camera has moved and a hold is owed, then a small car whose skin is deferred keeps it owed, and a car that came to full rate has it laid", () => {
     const cars = engine["live"]();
     const small = cars[1]!;
@@ -64,5 +64,31 @@ describe("given the real engine and a car drawn small, skinned every second fram
     expect(smallWaits, "a small car with its skin deferred: its hold stays owed").toEqual([true]);
     expect(grownWaits, "a car at full rate: its hold is laid").toEqual([false]);
     expect(settled).toHaveBeenCalledTimes(1);
+  });
+
+  // mutation: sed -i 's/ \&\& !car.partsOwed) continue;/) continue;/' src/game/engine/engine.ts
+  it("when the camera has moved and a car's parts are owed, then a car no camera sees is told so and keeps them owed, and a seen one is told so and has them settled", () => {
+    const cars = engine["live"]();
+    const away = cars[1]!;
+    const seen = cars[2]!;
+    vi.spyOn(engine as unknown as { followedCar(): unknown }, "followedCar").mockReturnValue(cars[0]);
+    vi.spyOn(engine["cover"], "hidden").mockReturnValue(false);
+    vi.spyOn(engine as unknown as { skinStride(car: unknown): number }, "skinStride").mockImplementation((car) => (car === away ? 0 : 1));
+    const told: [DeformableCar, boolean][] = [];
+    const settled: DeformableCar[] = [];
+    for (const car of [away, seen]) {
+      vi.spyOn(car, "partsOwed", "get").mockReturnValue(true);
+      vi.spyOn(car, "setHoldDeferred").mockImplementation((_waiting, unseen) => void told.push([car, unseen === true]));
+      vi.spyOn(car, "settleParts").mockImplementation(() => void settled.push(car));
+    }
+    for (const car of [away, seen]) {
+      expect(car.deform.skinOwed, "control: no skin owed").toBe(false);
+      expect(car.holdOwed, "control: no hold owed").toBe(false);
+    }
+    engine["flushVisibleSkins"]();
+    vi.restoreAllMocks();
+    expect(told.find(([car]) => car === away)?.[1], "no camera sees it").toBe(true);
+    expect(told.find(([car]) => car === seen)?.[1], "a camera sees it").toBe(false);
+    expect(settled, "both are asked to settle; the unseen one waits inside").toContain(seen);
   });
 });
