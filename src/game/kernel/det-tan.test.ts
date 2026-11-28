@@ -14,19 +14,25 @@ const ulpsApart = (a: number, b: number): number => Math.abs(Number(ordinal(a) -
 const MAX_ULP = 2;
 const SAMPLES = 100_000;
 const REACH = 1.55;
+const DENSE_SAMPLES = 2_000_000;
+/** From here up an argument is an odd quarter turn from a reduced angle inside the kernel's 0.6743 switch: the -1/t path. */
+const BAND_FROM = 0.8964;
 /** FNV-1a over the result bits of `SAMPLES` seeded inputs in ±REACH: the same in V8 and SpiderMonkey. */
 const PINNED_BITS_HASH = 3693842762;
 
 describe("given detTan over a seeded sweep of angles in ±1.55 rad", () => {
-  it("when it is read against Math.tan, then every result is within 2 ulp, and -x gives exactly -detTan(x)", () => {
+  it("when 2 million angles in ±1.55 and 1 million in the odd-turn band 0.8964 to 1.55 are read against Math.tan (V8's is fdlibm's), then every result is the same bits, and -x gives exactly -detTan(x)", () => {
     const random = mulberry32(12345);
-    let worst = 0;
-    for (let i = 0; i < SAMPLES; i++) {
-      const x = (random() * 2 - 1) * REACH;
-      worst = Math.max(worst, ulpsApart(detTan(x), Math.tan(x)));
-      expect(Object.is(detTan(-x), -detTan(x)), `odd symmetry at ${x}`).toBe(true);
-    }
-    expect(worst, "greatest distance to Math.tan (ulp)").toBeLessThanOrEqual(MAX_ULP);
+    let different = 0;
+    let asymmetric = 0;
+    const check = (x: number): void => {
+      if (detTan(x) !== Math.tan(x)) different++;
+      if (!Object.is(detTan(-x), -detTan(x))) asymmetric++;
+    };
+    for (let i = 0; i < DENSE_SAMPLES; i++) check((random() * 2 - 1) * REACH);
+    for (let i = 0; i < DENSE_SAMPLES / 2; i++) check(BAND_FROM + random() * (REACH - BAND_FROM));
+    expect(different, "results that differ from Math.tan").toBe(0);
+    expect(asymmetric, "results where -x is not -detTan(x)").toBe(0);
   });
 
   it("when the results' bits are hashed, then they equal the bits both engines were measured to produce", () => {

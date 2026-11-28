@@ -1,6 +1,6 @@
 import { detCos, detSin } from "./physics-core.js";
 
-// fdlibm's reduction by π/2 (Cody-Waite) and __kernel_tan, in + − × ÷ and Math.abs/floor/fround only: the same bits in every engine.
+// fdlibm's reduction by π/2 (Cody-Waite) and __kernel_tan, in + − × ÷ and Math.abs/floor, with a typed-array low-word clear: the same bits in every engine.
 const INV_PIO2 = 2 / Math.PI;
 const PIO4 = Math.PI / 4;
 /** π/2 to 60 decimals, as an integer: the three Cody-Waite parts below come from it in BigInt, which is exact in every engine. */
@@ -35,6 +35,19 @@ const T10 = 7.14072491382608190305e-5;
 const T11 = -1.85586374855275456654e-5;
 const T12 = 2.59073051863633712884e-5;
 
+/** The scratch pair `lowWordCleared` writes through: no allocation per call. */
+const scratch = new Float64Array(1);
+const scratchWords = new Uint32Array(scratch.buffer);
+/** Index of a double's low 32-bit word in `scratchWords`, whatever the platform's byte order. */
+const LOW_WORD = ((scratch[0] = 1), scratchWords[1] === 0x3ff00000 ? 0 : 1);
+
+/** `v` with its low 32-bit word zeroed, as fdlibm's `SET_LOW_WORD(v, 0)`: exact in every engine. */
+function lowWordCleared(v) {
+  scratch[0] = v;
+  scratchWords[LOW_WORD] = 0;
+  return scratch[0];
+}
+
 /** tan(x) for x ≥ 0 (or -1/tan(x) when `odd`, the odd quarter turns), x = a + b with b the tail of a. */
 function kernelTan(a, b, odd) {
   let x = a;
@@ -63,10 +76,10 @@ function kernelTan(a, b, odd) {
   }
   if (!odd) return t;
   // -1/t with the quotient's head and tail split, so the odd quarter turns lose no bit to the division.
-  const head = Math.fround(t);
+  const head = lowWordCleared(t);
   const tail = r - (head - x);
   const q = -1 / t;
-  const qHead = Math.fround(q);
+  const qHead = lowWordCleared(q);
   const e = 1 + qHead * head;
   return qHead + q * (e + qHead * tail);
 }
