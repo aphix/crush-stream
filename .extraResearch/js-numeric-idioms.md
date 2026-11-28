@@ -73,16 +73,18 @@ So there is no further win from number forms in today's hot paths: the expensive
 
 ## TypeScript against hand-written JS (owner, 2026-11-27)
 
-`computeNormalsFast` (`src/game/deform/fast-normals.ts`, area-weighted vertex normals) three ways, same inputs, outputs equal to the bit: the TS as Node runs it
-(types stripped), the same TS as the shipped build compiles it (rolldown, minified), and two hand-written JS twins. A crushed indexed mesh of ~14k triangles,
-best of 60 x 20 calls, µs per call, three runs each:
+`computeNormalsFast` (`src/game/deform/fast-normals.ts`, area-weighted vertex normals): the TS as Node runs it (types stripped), the same TS as the shipped build
+compiles it (rolldown, minified), and two hand-written JS twins. Every arm's normals equal the build's to the bit (`Object.is` over every float, in both engines). Best
+of 60 x 20 calls, µs per call; ranges over 3-4 runs. Each column is one mesh, so read down a column, not across.
 
-| Arm | V8 (Node 24) | SpiderMonkey 162 |
-|---|---|---|
-| TS, types stripped | 158-182 (torus knot) | - |
-| TS, shipped build | 141-149 (grid), 157-182 (torus knot) | 142-147 |
-| JS, indexed and flat loops split, face in a helper function | 139-150 (grid), 144-165 (torus knot) | 168-174 (17-19 % slower) |
-| JS, one indexed loop, face inlined | 139-143 (grid) | 135-140 (3-5 % faster) |
+| Arm | V8, torus knot (14,080 triangles) | V8, crushed grid (14,418) | SpiderMonkey 162, crushed grid (14,418) |
+|---|---|---|---|
+| TS, types stripped (Node) | 158-182 | - | - |
+| TS, shipped build | 157-182 | 141-151 | 141-147 |
+| JS, indexed and flat loops split, face in a helper function | 144-165 | 139-150 | 168-174 |
+| JS, one indexed loop, face inlined | - | 139-143 | 134-140 |
+
+The SpiderMonkey shell cannot load TS or `three`, so it ran the built form against the twins only.
 
 - The build emits the TS source with its types erased: the same code shape, the same speed. TS neither helps nor hurts here; it does not use its types to
   optimise.
