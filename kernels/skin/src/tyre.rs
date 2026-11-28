@@ -503,25 +503,30 @@ pub unsafe extern "C" fn sag_pass(
     }
     // A triangle's point is a blend of its corners': with every corner over the tyre's top and the clearance, none can stand short.
     let over_top = lowest > t.h[1] + t.a[1].abs() * t.half_w + t.flat * t.r + SAG_CLEAR;
-    let mut raised = false;
+    // The triangles that asked any corner up go first in `cand`, in order: only their corners hold a bump.
+    let mut asked = 0;
     if !over_top {
         for i in 0..listed {
             let k = *cand.add(i) as usize;
             if sag_triangle(&s, &q, *tris.add(k) as usize, *tris.add(k + 1) as usize, *tris.add(k + 2) as usize) {
-                raised = true;
+                *cand.add(asked) = k as i32;
+                asked += 1;
             }
         }
     }
-    if !raised {
+    if asked == 0 {
         return 0;
     }
-    for k in 0..corners {
-        let p = *weld.add(*tris.add(k) as usize) as usize;
-        if *bump.add(p) > 0.0 {
-            *dirty.add(p) = 1;
+    for i in 0..asked {
+        let k = *cand.add(i) as usize;
+        for c in k..k + 3 {
+            let p = *weld.add(*tris.add(c) as usize) as usize;
+            if *bump.add(p) > 0.0 {
+                *dirty.add(p) = 1;
+                *lift.add(p) = (*lift.add(p) as f64 + *bump.add(p) as f64) as f32;
+                *bump.add(p) = 0.0;
+            }
         }
-        *lift.add(p) = (*lift.add(p) as f64 + *bump.add(p) as f64) as f32;
-        *bump.add(p) = 0.0;
     }
     1
 }
