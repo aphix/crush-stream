@@ -239,9 +239,9 @@ export class MotorSound {
   /**
    * One audio frame: ranks the cars by distance from `camera` (the listener rides it; its matrix is current), seats them in
    * the pool, moves the voices, and every `AUDIO_TICK_S` retunes them. `rate` is the presented-time rate (slow-mo pitches the
-   * engines down); `parked` holds every voice at rpm 0 (the engine volume is 0). Returns true on a tick frame.
+   * engines down); `parked` holds every voice at rpm 0 (the engine volume is 0); `firstPerson`: the priority car is seen from inside (its hood or driver's view), so it is heard from its cabin. Returns true on a tick frame.
    */
-  update(dt: number, cars: readonly DeformableCar[], camera: THREE.Camera, priority: DeformableCar | null, rate: number, parked: boolean): boolean {
+  update(dt: number, cars: readonly DeformableCar[], camera: THREE.Camera, priority: DeformableCar | null, rate: number, parked: boolean, firstPerson = false): boolean {
     const context = this.context;
     if (!this.ready || !context) return false;
     const e = camera.matrixWorld.elements;
@@ -288,7 +288,7 @@ export class MotorSound {
       const want = this.pool.car[s]!;
       if (this.voiced[s]! < 0 && want >= 0 && want < n) this.voiced[s] = want;
       const v = this.voiced[s]!;
-      if (v >= 0 && v < n) this.driveVoice(s, cars[v]!, v === priorityIndex, this.distSq[v]!, tick, rate, parked, now);
+      if (v >= 0 && v < n) this.driveVoice(s, cars[v]!, v === priorityIndex, firstPerson, this.distSq[v]!, tick, rate, parked, now);
     }
     this.playerLevel = approach(this.playerLevel, this.levelTarget, tick, PLAYER_LEVEL_TAU_S);
     return true;
@@ -314,7 +314,7 @@ export class MotorSound {
    * voice's kept generator for that tuning, so it happens under a fade or a misfire dip), rpm from the gauge's revs lifted by the load, misfires. A dead
    * or parked engine winds down to silence.
    */
-  private driveVoice(slot: number, car: DeformableCar, isPriority: boolean, distSq: number, tick: number, rate: number, parked: boolean, now: number): void {
+  private driveVoice(slot: number, car: DeformableCar, isPriority: boolean, firstPerson: boolean, distSq: number, tick: number, rate: number, parked: boolean, now: number): void {
     const voice = this.voices[slot]!;
     if (!car.deform.drivetrainAlive || parked) {
       this.windDown(slot, voice, tick, now);
@@ -352,7 +352,7 @@ export class MotorSound {
       if (!fresh) this.dip(voice, level, slot, now);
       voice.port?.postMessage(this.messages[classIndex * TONE_COUNT + damage.toneIndex]);
     }
-    this.driveView(slot, voice, cls, isPriority, distSq, damage.cutoffHz, now);
+    this.driveView(slot, voice, cls, isPriority, firstPerson, distSq, damage.cutoffHz, now);
     if (!this.gainOn[slot]) {
       voice.gain.gain.setTargetAtTime(level, now, PARAM_TAU_S);
       this.gainOn[slot] = 1;
@@ -368,9 +368,10 @@ export class MotorSound {
     if (isPriority) this.levelTarget = load * rev;
   }
 
-  /** A dead or parked engine winds down to silence. */
+  /** A dead or parked engine winds down to silence; its next drive starts fresh, so a respawn's jump of gear is no shift. */
   private windDown(slot: number, voice: Voice, tick: number, now: number): void {
     this.silentS[slot]! += tick;
+    this.fresh[slot] = 1;
     if (this.gainOn[slot]) {
       voice.gain.gain.setTargetAtTime(0, now, DIE_TAU_S);
       this.gainOn[slot] = 0;
@@ -401,8 +402,8 @@ export class MotorSound {
   }
 
   /** The ear the voice is heard from: the followed car from inside or behind, any other car at its distance. Gains and the cabin boom move on a change; the lowpass follows every tick. */
-  private driveView(slot: number, voice: Voice, cls: VehicleClassId, isPriority: boolean, distSq: number, cutoffHz: number, now: number): void {
-    const view = perspectiveFor(isPriority, distSq);
+  private driveView(slot: number, voice: Voice, cls: VehicleClassId, isPriority: boolean, firstPerson: boolean, distSq: number, cutoffHz: number, now: number): void {
+    const view = perspectiveFor(isPriority, firstPerson);
     const name = PERSPECTIVE_NAMES[view]!;
     const mix = PERSPECTIVES[name];
     if (view !== this.viewIndex[slot]) {

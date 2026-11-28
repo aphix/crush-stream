@@ -239,16 +239,13 @@ export const PERSPECTIVES: Readonly<Record<Perspective, PerspectiveMix>> = {
 /** The cabin's boom sits here (Hz), where a sedan's shell resonates. */
 export const CABIN_BOOM_HZ = 105;
 
-/** The followed car's camera this close (m) to it is inside it. */
-export const CABIN_RADIUS_M = 1.6;
-
 /** The perspectives by index (what `perspectiveFor` returns). */
 export const PERSPECTIVE_NAMES: readonly Perspective[] = ["other", "chase", "cabin"];
 
-/** The perspective index of a voice: any car but the followed one is `other`; the followed one is `cabin` when the camera (`distSq` m squared from it) is inside it, else `chase`. */
-export function perspectiveFor(isPriority: boolean, distSq: number): number {
+/** The perspective index of a voice: any car but the followed one is `other`; the followed one is `cabin` in the first-person view (the eye is in it), else `chase`. */
+export function perspectiveFor(isPriority: boolean, firstPerson: boolean): number {
   if (!isPriority) return 0;
-  return distSq < CABIN_RADIUS_M * CABIN_RADIUS_M ? 2 : 1;
+  return firstPerson ? 2 : 1;
 }
 
 /** Air takes the highs off a far car: the lowpass opens to this share of 20 kHz at each doubling of distance past `AIR_REF_M`, never under `AIR_FLOOR_HZ`. */
@@ -285,8 +282,8 @@ export function shiftStrength(load: number, up: boolean): number {
   return up ? 0.4 + 0.6 * load : 0.3 + 0.2 * load;
 }
 
-/** What a change of gear (`previous` to `gear`, 0 is reverse or a standstill) is to the sound: 1 an upshift, -1 a downshift, 0 nothing (the first gear seen, reverse, or one inside `SHIFT_GAP_S` of the last). */
+/** What a change of gear (`previous` to `gear`, 0 is reverse or a standstill) is to the sound: 1 an upshift, -1 a downshift, 0 nothing (no change, reverse, a jump of more than one gear (a respawn), or one inside `SHIFT_GAP_S` of the last). */
 export function shiftKind(previous: number, gear: number, sinceShiftS: number): number {
-  if (gear === previous || gear === 0 || previous === 0 || sinceShiftS < SHIFT_GAP_S) return 0;
+  if (Math.abs(gear - previous) !== 1 || gear === 0 || previous === 0 || sinceShiftS < SHIFT_GAP_S) return 0;
   return gear > previous ? 1 : -1;
 }

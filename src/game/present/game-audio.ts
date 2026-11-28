@@ -203,14 +203,14 @@ export class GameAudio {
    * bus (silent while `live` is false), the slow-mo lowpass from `rate`, and the music's duck under the player's engine and a crash.
    * `cars` are the ones drawn (the reel's, while it plays); `priority` is the car that always has a voice, and the one whose tyres squeal and land.
    */
-  frame(dt: number, cars: readonly DeformableCar[], priority: DeformableCar | null, rate: number, live: boolean): void {
+  frame(dt: number, cars: readonly DeformableCar[], priority: DeformableCar | null, rate: number, live: boolean, firstPerson = false): void {
     const context = this.context;
     const motor = this.motor;
     if (!context || !motor || !this.engineBus || !this.slowmoFilter || !this.musicBus) return;
     this.sinceImpactS += dt;
     this.live = live;
     this.tyres?.frame(dt, priority);
-    if (!motor.update(dt, cars, this.camera, priority, rate, this.engineLevel === 0)) return;
+    if (!motor.update(dt, cars, this.camera, priority, rate, this.engineLevel === 0, firstPerson)) return;
     const now = context.currentTime;
     this.engineBus.gain.setTargetAtTime(live ? engineBusGain(this.engineLevel) : 0, now, BUS_TAU_S);
     this.slowmoFilter.frequency.setTargetAtTime(slowmoCutoff(rate), now, BUS_TAU_S);

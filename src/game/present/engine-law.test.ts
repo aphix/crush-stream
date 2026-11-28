@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REV_IDLE, VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
-import { easeLoad, engineLawDb, engineLawGain, naturalDb } from "./engine-law.ts";
+import { easeLoad, engineLawDb, engineLawGain } from "./engine-law.ts";
 import { voiceLevels } from "./motor-level.test-util.ts";
 
 const LOADS = [0, 0.15, 0.3, 0.5, 0.75, 1] as const;
@@ -64,16 +64,12 @@ describe("given each vehicle class's engine voice at every rev and pedal positio
       expect(redline.peak >= REDLINE_PEAK_MIN && redline.peak <= REDLINE_PEAK_MAX, `${cls} redline peak ${redline.peak.toFixed(3)}`).toBeTruthy();
       for (let i = 0; i < REVS.length; i++) {
         const rev = REVS[i]!;
-        // The table is the voice at half load, interpolated: its knots (idle, 1 and every 1/8 of the span) match the render, the revs between within 2 dB.
-        const half = byLoad[LOADS.indexOf(0.5)]!;
-        const against = db(half[i]!.rms / half.at(-1)!.rms);
-        expect(Math.abs(against - naturalDb(cls, rev)), `${cls} rev ${rev}: render ${against.toFixed(1)} dB, table ${naturalDb(cls, rev).toFixed(1)}`).toBeLessThanOrEqual(2);
         for (const [at, load] of LOADS.entries()) {
-          // The voice is rendered at each pedal position: the layers' own load response is inside the 2 dB.
+          // The voice is rendered at each pedal position: the table's interpolation between its no-load and full-load grids holds the combined level inside 2 dB.
           const level = byLoad[at]![i]!;
           const gain = engineLawGain(cls, rev, load, true);
           const combined = db((level.rms * gain) / redline.rms);
-          expect(Math.abs(combined - engineLawDb(rev, load)), `${cls} rev ${rev} load ${load}: ${combined.toFixed(1)} dB, law ${engineLawDb(rev, load).toFixed(1)}`).toBeLessThanOrEqual(2.5);
+          expect(Math.abs(combined - engineLawDb(rev, load)), `${cls} rev ${rev} load ${load}: ${combined.toFixed(1)} dB, law ${engineLawDb(rev, load).toFixed(1)}`).toBeLessThanOrEqual(2);
           expect(level.peak * gain, `${cls} rev ${rev} load ${load} peaks ${(level.peak * gain).toFixed(3)}`).toBeLessThanOrEqual(VOICE_PEAK_LIMIT);
         }
       }

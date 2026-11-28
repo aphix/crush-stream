@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { REV_IDLE, VEHICLE_CLASS_IDS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
-import { CABIN_RADIUS_M, distanceCutoff, dspTone, type DspTone, PERSPECTIVE_NAMES, PERSPECTIVES, perspectiveFor, perspectiveGains, SHIFT_CUT_S, SHIFT_GAP_S, shiftKind, shiftStrength } from "./motor-layers.ts";
+import { distanceCutoff, dspTone, type DspTone, PERSPECTIVE_NAMES, PERSPECTIVES, perspectiveFor, perspectiveGains, SHIFT_CUT_S, SHIFT_GAP_S, shiftKind, shiftStrength } from "./motor-layers.ts";
 import { type BlockPlan, bandEnergy, peakRms, renderVoice } from "./motor-render.test-util.ts";
 import { BLOCK, SAMPLE_RATE } from "./motor-level.test-util.ts";
 import { motorRpm } from "./motor-tone.ts";
@@ -40,7 +40,7 @@ function strongestLine(x: Float32Array, from: number, to: number): number {
 describe("given the voice layers' tuning and the worklet that reads it", () => {
   it("when the worklet's reads are compared with the tuning's fields, then each field is read by name and each name read is a field", () => {
     const source = readFileSync(new URL("../../../kernels/motor/motor-layers.js", import.meta.url), "utf8");
-    const read = new Set([...source.matchAll(/\bc\.([a-zA-Z]+)/g)].map((m) => m[1]!));
+    const read = new Set([...source.matchAll(/\b[cd]\.([a-zA-Z]+)/g)].map((m) => m[1]!));
     expect([...read].sort().join()).toBe(Object.keys(dspTone("sedan", "healthy", 4, 850, 6000)).sort().join());
   });
 
@@ -74,15 +74,14 @@ describe("given the perspectives", () => {
     expect(PERSPECTIVES.cabin.boomDb).toBeGreaterThan(PERSPECTIVES.chase.boomDb);
     expect(PERSPECTIVES.cabin.openHz).toBeLessThan(PERSPECTIVES.chase.openHz);
     expect(PERSPECTIVES.chase.outlet, "the chase car's exhaust has weight").toBeGreaterThan(PERSPECTIVES.other.outlet);
-    expect(CABIN_RADIUS_M).toBeGreaterThan(0.5);
   });
 
-  it("when a camera is placed against the followed car, then it is the cabin inside the radius and the chase outside it; any other car is heard from afar", () => {
-    const named = (priority: boolean, metres: number): string => PERSPECTIVE_NAMES[perspectiveFor(priority, metres * metres)]!;
-    expect(named(true, CABIN_RADIUS_M * 0.8)).toBe("cabin");
-    expect(named(true, CABIN_RADIUS_M * 1.2)).toBe("chase");
-    expect(named(true, 6)).toBe("chase");
-    expect(named(false, 0.5)).toBe("other");
+  it("when the followed car is seen from its first-person view, then it is the cabin, else the chase; any other car is heard from afar whatever the view", () => {
+    const named = (priority: boolean, firstPerson: boolean): string => PERSPECTIVE_NAMES[perspectiveFor(priority, firstPerson)]!;
+    expect(named(true, true)).toBe("cabin");
+    expect(named(true, false)).toBe("chase");
+    expect(named(false, true)).toBe("other");
+    expect(named(false, false)).toBe("other");
   });
 
   it("when the class gains meet a perspective, then each channel is the class's times the perspective's", () => {
@@ -107,6 +106,7 @@ describe("given the gear shift", () => {
     expect(shiftKind(0, 1, 1), "out of reverse").toBe(0);
     expect(shiftKind(1, 0, 1), "into reverse").toBe(0);
     expect(shiftKind(2, 3, SHIFT_GAP_S / 2), "chatter at a bucket's edge").toBe(0);
+    expect(shiftKind(4, 1, 1), "a respawn drops many gears at once").toBe(0);
   });
 
   it("when a hard upshift is compared with a downshift, then the upshift thumps harder, and a harder pedal thumps harder", () => {
@@ -234,5 +234,14 @@ describe("given the induction whine", () => {
   it("when a sedan without induction runs, then nothing is added", async () => {
     const x = await added("sedan", 300, () => ({ rev: REV_IDLE + 0.4, load: 1 }), {}, { whineGain: 0, blowoffGain: 0 });
     expect(peakRms(x).peak).toBe(0);
+  });
+});
+
+describe("given the loudest moment of the loudest class", () => {
+  it("when the monster is at its redline, wide open, with a shift thump struck, then the voice peaks under -6 dBFS", async () => {
+    for (const rev of [REV_IDLE, 0.6, 1]) {
+      const x = await renderVoice("monster", "healthy", 400, (block) => ({ rev, load: 1, shift: block >= 150 && block < 160 ? 1 : 0 }));
+      expect(peakRms(x).peak, `monster at dial ${rev} (linear)`).toBeLessThanOrEqual(0.5);
+    }
   });
 });
