@@ -1,3 +1,5 @@
+import { TOP_SHARE } from "./ambient-dsp.ts";
+
 export type SoundMat = "steel" | "glass" | "plastic" | "rubber" | "concrete" | "asphalt" | "gravel" | "sand" | "dirt" | "mud" | "grass" | "wood" | "hay" | "foliage" | "stone" | "water";
 
 export const SOUND_MATS: readonly SoundMat[] = ["steel", "glass", "plastic", "rubber", "concrete", "asphalt", "gravel", "sand", "dirt", "mud", "grass", "wood", "hay", "foliage", "stone", "water"];
@@ -155,7 +157,7 @@ function onePole(hz: number, rate: number): number {
 
 /** Damped sine bursts at `hz` from sample `at`: r^n sin(wn) by recurrence, the same decay everywhere. */
 function ringAt(out: Float32Array, rate: number, at: number, hz: number, amp: number, tau: number): void {
-  if (hz >= rate * 0.45 || at >= out.length) return;
+  if (hz >= rate * TOP_SHARE || at >= out.length) return;
   const decay = Math.exp(-1 / (tau * rate));
   const w = (2 * Math.PI * hz) / rate;
   const c = 2 * decay * Math.cos(w);

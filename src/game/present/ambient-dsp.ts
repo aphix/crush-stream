@@ -1,5 +1,8 @@
 /** Offline synthesis primitives for the ambient beds and the UI sounds: seeded, allocation-happy, run once at load. */
 
+/** The highest frequency any synthesized filter or ring is set to, as a share of the sample rate: safely under Nyquist (0.5). */
+export const TOP_SHARE = 0.45;
+
 /** The next draw in [0, 1) of the generator whose one word of state is `state[0]` (mulberry32). No allocation. */
 export function nextDraw(state: Uint32Array): number {
   const a = (state[0]! + 0x6d2b79f5) >>> 0;
@@ -28,7 +31,7 @@ export class Biquad {
   private y2 = 0;
 
   private set(type: "low" | "high" | "band", hz: number, q: number, rate: number): this {
-    const w = (2 * Math.PI * Math.min(hz, rate * 0.45)) / rate;
+    const w = (2 * Math.PI * Math.min(hz, rate * TOP_SHARE)) / rate;
     const cos = Math.cos(w);
     const alpha = Math.sin(w) / (2 * q);
     const a0 = 1 + alpha;
