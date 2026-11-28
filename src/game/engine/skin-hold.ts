@@ -9,7 +9,7 @@ type CourseSights = { readonly active: boolean; courseSight(): Sight | null };
 const COVER_LIFT = 0.6;
 
 /** Whether no camera sees `car` (list index `i`) this frame, so its tyre hold may wait: off every camera, or a wreck wholly behind a solid (`CarCover`). Needs the frame's `aim` of the witness and the cover. */
-function holdHidden(cover: CarCover, race: CourseSights, car: DeformableCar, stride: number, i: number, radius: number): boolean {
+export function holdHidden(cover: CarCover, race: CourseSights, car: DeformableCar, stride: number, i: number, radius: number): boolean {
   if (stride === 0) return true;
   const sight = car.panelsFollow && race.active ? race.courseSight() : null;
   if (sight === null) return false;

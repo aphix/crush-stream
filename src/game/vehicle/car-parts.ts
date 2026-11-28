@@ -1,3 +1,4 @@
+import { PartPoseWait } from "./part-pose-wait.ts";
 import { hypot2, detSin, detCos, detAtan2, PART_FAMILY } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
@@ -448,6 +449,42 @@ export abstract class CarParts extends CarGlass {
   /** Counts every write of an attached part's pose (`posePart`, the reset): a car whose count has not moved has nothing new for `PoseBlend` to take. */
   partWrites = 0;
 
+  protected readonly wait = new PartPoseWait();
+
+  /** The engine's verdict that no camera sees this car this frame. */
+  setPartsUnseen(unseen: boolean): void {
+    this.wait.unseen = unseen;
+  }
+
+  /** Whether poses were left to `settleParts`. */
+  get partsOwed(): boolean {
+    return this.wait.owed;
+  }
+
+  /** After the camera has moved: poses every part left unposed while no camera saw the car, if one does now, before it is drawn. */
+  settleParts(): void {
+    if (!this.wait.owed || this.wait.unseen) return;
+    this.poseOwed();
+    // The group is at the frame's blended pose here: the next frame's pose is read against the sim's own, so it is made again.
+    this.poseSig = null;
+  }
+
+  /** Poses the parts `posePart` left to `settleParts`. */
+  private poseOwed(): void {
+    const unseen = this.wait.unseen;
+    this.wait.unseen = false;
+    this.wait.owed = false;
+    this.poseLifted = false;
+    const parts = this.parts;
+    for (let pi = 0; pi < parts.length; pi++) if (!parts[pi]!.detached && parts[pi]!.region === null) this.posePart(parts[pi]!);
+    this.wait.unseen = unseen;
+  }
+
+  override snapshot(): Record<string, unknown> {
+    if (this.wait.owed) this.poseOwed();
+    return super.snapshot();
+  }
+
   /**
    * Rest pose plus the hinge value `hingeT` (crash) and, on doors and mirrors, the free swing. `onRoad` false poses an arch shell free of
    * the road under it, where its hinge alone puts it: a torn shell leaves from that pose (`detachPart`), which replays read.
@@ -455,6 +492,7 @@ export abstract class CarParts extends CarGlass {
   protected posePart(p: DetachPart, onRoad = true): void {
     const t = p.hingeT;
     p.folding = t > foldAt(p);
+    if (this.wait.defers(p, onRoad)) return;
     const fromOwnState = posesFromOwnState(p);
     if (fromOwnState && standsAsPosed(p)) return;
     this.partWrites++;
@@ -1207,6 +1245,7 @@ export abstract class CarParts extends CarGlass {
 
   /** Once a frame on a crashed car (`updateSkin`, after the skin): the parts' poses a step left pending are written first, door glass rides its door. */
   protected followGlass(): void {
+    if (this.wait.owed && !this.wait.unseen) this.poseOwed();
     this.poseParts();
     const inward = this.deform.impactInward;
     for (let k = 0; k < this.glassPanes.length; k++) {

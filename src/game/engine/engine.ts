@@ -5,7 +5,7 @@ import { COUNT, countPart, lapPart, PART } from "../kernel/frame-parts.ts";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { hidingSight, sightLine, type Occluder } from "../present/spectate-cam.ts";
-import { holdWaits } from "./skin-hold.ts";
+import { holdHidden, holdWaits } from "./skin-hold.ts";
 import { EYE_HEIGHT } from "../ai/openworld-crime/crime-constants.ts";
 import { PISTON_ORBIT_RATE, PistonBank } from "../present/engine-pistons.ts";
 import { DoorRam } from "../present/engine-doors.ts";
@@ -1510,7 +1510,7 @@ export class CrashEngine extends EngineGarage {
       this.lodStride[i] = stride;
       car.setNearView(stride === 1);
       const skinDeferred = stride === 0 || (this.lodFrame + i) % stride !== 0;
-      car.setHoldDeferred(car !== followed && holdWaits(this.cover, this.race, car, stride, i, skinDeferred, LOD_RADIUS));
+      car.setHoldDeferred(car !== followed && holdWaits(this.cover, this.race, car, stride, i, skinDeferred, LOD_RADIUS), car !== followed && holdHidden(this.cover, this.race, car, stride, i, LOD_RADIUS));
       car.deform.skinDeferred = skinDeferred;
     }
   }
@@ -1527,16 +1527,17 @@ export class CrashEngine extends EngineGarage {
     for (let i = 0; i < cars.length; i++) {
       const car = cars[i]!;
       const owed = car.deform.skinOwed;
-      if (!owed && !car.holdOwed) continue;
+      if (!owed && !car.holdOwed && !car.partsOwed) continue;
       if (followed === undefined) followed = this.followedCar();
       const stride = car === followed ? 1 : this.skinStride(car);
-      car.setHoldDeferred(car !== followed && holdWaits(this.cover, this.race, car, stride, i, car.deform.skinDeferred, LOD_RADIUS));
+      car.setHoldDeferred(car !== followed && holdWaits(this.cover, this.race, car, stride, i, car.deform.skinDeferred, LOD_RADIUS), car !== followed && holdHidden(this.cover, this.race, car, stride, i, LOD_RADIUS));
       if (owed) {
         car.setNearView(stride === 1);
         if (stride === 1 || (stride > 1 && this.lodStride[i] === 0)) car.flushDeferredSkin();
         this.lodStride[i] = stride;
       }
       car.settleHold();
+      car.settleParts();
     }
   }
 
