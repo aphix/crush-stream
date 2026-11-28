@@ -53,7 +53,8 @@ function unlocked(desktop = true) {
   return { audio, player, now, buses, heard, ui, camera };
 }
 
-const hit = (impulse: number): HitEvent => ({ impulse, x: 1, y: 0, z: 2, a: "steel", b: "steel" });
+/** A hit of `impulse` at the listener (the camera stands at the origin), or `away` m along x. */
+const hit = (impulse: number, away = 0): HitEvent => ({ impulse, x: away, y: 0, z: 0, a: "steel", b: "steel" });
 
 describe("given the audio on, with a music player", () => {
   const testCases = [
@@ -109,6 +110,30 @@ describe("given a big hit, then a quiet stretch", () => {
     audio.hit(hit(2));
     expect(heard.length).toBe(1);
     expect(buses.ambient.sent.last).toBe(BUS.ambient);
+  });
+
+  it("when a 40 m/s hit lands 500 m away, then it is dropped: not played, no duck", () => {
+    const { audio, buses, heard } = unlocked();
+    audio.hit(hit(40, 500));
+    expect(heard.length).toBe(0);
+    expect(buses.ambient.sent.count).toBe(0);
+  });
+
+  it("when the same 40 m/s hit lands 60 m away, then it ducks by what is heard there: shallower than beside the listener", () => {
+    const near = unlocked();
+    near.audio.hit(hit(40));
+    const far = unlocked();
+    far.audio.hit(hit(40, 60));
+    expect(far.heard.length, "still played").toBe(1);
+    expect(far.buses.ambient.sent.last).toBeGreaterThan(near.buses.ambient.sent.last);
+  });
+
+  it("when the game pauses with no engine voice ticking, then the ambient bed dims at once, and comes back when it runs again", () => {
+    const { audio, buses } = unlocked();
+    audio.frame(FRAME, [], null, 1, false, SCENE);
+    expect(buses.ambient.sent.last).toBeCloseTo(BUS.ambient * 0.35, 9);
+    audio.frame(FRAME, [], null, 1, true, SCENE);
+    expect(buses.ambient.sent.last).toBeCloseTo(BUS.ambient, 9);
   });
 });
 

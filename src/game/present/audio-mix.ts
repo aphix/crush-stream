@@ -51,6 +51,21 @@ export const VOICES = { hitsDesktop: 10, hitsPhone: 6, ui: 2, scrapes: 3 } as co
 /** A new voice must outrank the weakest running one by this factor to displace it. */
 const STEAL_RATIO = 1.5;
 
+/** A hit heard from further than this (m) is not admitted at all. */
+export const HEARD_MAX_M = 400;
+/** Gain left of a sound heard from `distanceM`: the formula of `distanceGain` in hit-synth.ts, kept here until that module is merged, then imported from it (one place). */
+const DISTANCE_REFERENCE_M = 12;
+const DISTANCE_EXPONENT = 1.3;
+function distanceGain(distanceM: number): number {
+  return 1 / (1 + (distanceM / DISTANCE_REFERENCE_M) ** DISTANCE_EXPONENT);
+}
+
+/** A hit's impulse (closing m/s) as the listener hears it, from the offset (dx, dy, dz) m: scaled by distance, 0 beyond `HEARD_MAX_M`. */
+export function audibleImpulse(impulse: number, dx: number, dy: number, dz: number): number {
+  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  return distance > HEARD_MAX_M ? 0 : impulse * distanceGain(distance);
+}
+
 /** A gunshot: a noise burst through a band-pass (`hz` by gun), `s` s long, at `gain`, from the shared noise buffer. */
 export const SHOT = { s: 0.09, gain: 0.45, q: 0.8, attackS: 0.012, noiseS: 0.55, hz: { pistol: 1800, shotgun: 700, rifle: 2600 } } as const;
 
@@ -197,19 +212,12 @@ export class VoiceBudget {
     this.weight[slot] = priority;
     return true;
   }
-
-  /** Voices still booked at `now`. */
-  busy(now: number): number {
-    let n = 0;
-    for (let i = 0; i < this.until.length; i++) if (this.until[i]! > now) n++;
-    return n;
-  }
 }
 
 /** A hit voice is booked this long (s) at the least, and this much longer per m/s of impulse, to at most `maxS`. */
 const HIT_LIFE = { baseS: 0.3, perImpulseS: 0.02, maxS: 1.2 } as const;
 
-/** What a hit does to the mix: it needs a hit voice, and once admitted it ducks the music and ambience by its impulse. */
+/** What a hit does to the mix: it needs a hit voice, and once admitted it ducks the music and ambience; both go by the hit's audible impulse (`audibleImpulse`), not its raw one. */
 export class HitMix {
   readonly duck = new CrashDuck();
   private readonly budget: VoiceBudget;

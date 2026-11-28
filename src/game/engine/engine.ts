@@ -851,8 +851,9 @@ export class CrashEngine extends EngineGarage {
       setPolice: (from, count) => this.setPolice(from, count),
       dress: (car) => this.dressCar(car),
       setPaused: (on) => {
+        const changed = this.playing === on;
         this.playing = !on;
-        this.uiSound(on ? "open" : "close");
+        if (changed) this.uiSound(on ? "open" : "close");
         this.emitHud();
       },
       leave: () => this.setScene("fleet"),
@@ -865,9 +866,12 @@ export class CrashEngine extends EngineGarage {
       throwPassenger: (car, look) => this.ragdolls.throwPassenger(car, look),
       throwFigure: (strike) => this.ragdolls.throwFigure(strike, this.live()),
       hit: (i, closing) => this.noteHit(i, closing),
-      heard: (car, impulse, x, z, material) => {
+      heard: (car, impulse, x, z, index, knocked) => {
+        if (!this.audioOn) return;
         const struck = this.live()[car];
-        if (this.audioOn && struck) this.audioFeed.wall(struck, impulse, x, struck.group.position.y, z, propSoundMat(MATERIALS[material]![0]));
+        if (!struck) return;
+        const at = struck.group.position;
+        this.audioFeed.wall(struck, impulse, knocked ? at.x : x, at.y, knocked ? at.z : z, propSoundMat(MATERIALS[this.race.heardMaterial(index, x, z, knocked)]![0]));
       },
       knockProp: (index, car, vx, vy, vz) => this.ragdolls.knockProp(index, car, vx, vy, vz),
       buildArt: (track, placed, drawn, arm) => {
@@ -1494,9 +1498,11 @@ export class CrashEngine extends EngineGarage {
     this.lampLights.update(this.showShowcase ? this.drawnCars() : this.live(), this.camera, this.followedCar(), performance.now() / 1000, this.highlights.playing ? this.highlights.cars() : undefined, wallDt);
     lapPart(PART.scenery);
     if (this.audioOn) {
-      this.audioFeed.frame(wallDt);
+      const heard = this.highlights.playing ? this.highlights.focus() : this.followedCar();
+      const eye = this.camera.matrixWorld.elements;
+      this.audioFeed.frame(wallDt, this.clock.timeScale * this.cine.timeWarp, heard, eye[12]!, eye[13]!, eye[14]!);
       this.uiCues.frame(this.cuePhase(), this.cueTime(), this.cueWrecked(), this.onFoot.armed() ? this.onFoot.arms.weapon : null);
-      this.audio.frame(wallDt, this.highlights.playing ? this.highlights.cars() : this.live(), this.highlights.playing ? this.highlights.focus() : this.followedCar(), this.clock.timeScale * this.cine.timeWarp, this.playing && !held, this.ambientScene());
+      this.audio.frame(wallDt, this.highlights.playing ? this.highlights.cars() : this.live(), heard, this.clock.timeScale * this.cine.timeWarp, this.playing && !held, this.ambientScene());
     } else this.audioFeed.clear();
     lapPart(PART.audio);
     if (this.stage.night) this.stage.syncPools(this.poles);

@@ -5,6 +5,7 @@ import { KPH_PER_MS } from "../kernel/constants.ts";
 import { PISTON_ORBIT_RATE, pistonBearing } from "../present/engine-pistons.ts";
 import type { SoundMat } from "../present/hit-sound.ts";
 import { STEEL } from "./engine-audio-feed.ts";
+import { derbyBoxMat } from "./engine-audio-cues.ts";
 import { carFellOffRim, edgeAction, fleetEmptied, layoutFleet, layoutDerby, MAX_CARS, respawnSlot } from "../scenes/fleet.ts";
 import { RANGE, RANGE_GROUND } from "../scenes/range.ts";
 import { LAB_PRESET } from "../scenes/constants.ts";
@@ -777,9 +778,9 @@ export abstract class EngineScenes extends EngineMinigames {
       this.debris.burst(at, n, Math.min(48, 10 + closing) * this.fxDensity);
       this.sparks.poof(at, n, Math.min(28, 6 + closing * 0.5) * this.fxDensity);
     },
-    wall: (_index, i, closing, x, z) => {
+    wall: (index, i, closing, x, z) => {
       this.noteHit(i, closing);
-      this.heardSolid(i, closing, x, z, "concrete");
+      if (this.audioOn) this.heardSolid(i, closing, x, z, derbyBoxMat(index));
     },
   };
 

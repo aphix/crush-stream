@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { AmbientBed } from "./ambient-bed.ts";
-import { BUS, ceilingCurve, CrashDuck, DUCK, duckGain, engineBusGain, engineDuck, GLUE_TRIM, HitMix, MASTER_GLUE, MASTER_LIMITER, musicGain, REVERB, reverbImpulse, SEND, SHOT, slowmoCutoff, VOICES, VoiceBudget } from "./audio-mix.ts";
+import { audibleImpulse, BUS, ceilingCurve, CrashDuck, DUCK, duckGain, engineBusGain, engineDuck, GLUE_TRIM, HitMix, MASTER_GLUE, MASTER_LIMITER, musicGain, REVERB, reverbImpulse, SEND, SHOT, slowmoCutoff, VOICES, VoiceBudget } from "./audio-mix.ts";
 import { type HitEvent, HitSound, type SoundMat } from "./hit-sound.ts";
 import { bandpass, lowpass, MotorSound } from "./motor-sound.ts";
 import { MusicPlayer } from "./music.ts";
@@ -210,7 +210,7 @@ export class GameAudio {
     const motor = new MotorSound(voiceSlots(this.desktop));
     this.motor = motor;
     this.tyres = new TyreSound(context, engineBus);
-    this.hits = new HitSound(context, hitBus);
+    this.hits = new HitSound(context, hitBus, this.desktop);
     this.ambient = new AmbientBed(context, ambientBus);
     this.ui = new UiSound(context, uiBus);
     motor.load(context, listener).catch((reason: Error) => console.warn("motor sound: unavailable", reason));
@@ -274,10 +274,12 @@ export class GameAudio {
     const context = this.context;
     const motor = this.motor;
     if (!context || !motor || !this.engineBus || !this.slowmoFilter || !this.musicBus) return;
+    const pauseChanged = live !== this.live;
     this.live = live;
     this.duck.step(dt);
     this.tyres?.frame(dt, priority);
-    this.hits?.frame(dt);
+    const at = this.camera.matrixWorld.elements;
+    this.hits?.frame(dt, at[12]!, at[13]!, at[14]!);
     this.ambient?.set(scene.place, scene.hour, scene.speed, scene.indoors);
     this.ambient?.frame(dt);
     const now = context.currentTime;
@@ -286,7 +288,7 @@ export class GameAudio {
       this.slowmoFilter.frequency.setTargetAtTime(slowmoCutoff(rate), now, BUS_TAU_S);
       this.enginesDuck = engineDuck(motor.playerLevel);
       this.sendDuck(now, DUCK_TAU_S);
-    } else if (Math.abs(this.duck.level - this.sentDuck) > DUCK_STEP || (this.duck.level === 0 && this.sentDuck !== 0)) this.sendDuck(now, DUCK_TAU_S);
+    } else if (pauseChanged || Math.abs(this.duck.level - this.sentDuck) > DUCK_STEP || (this.duck.level === 0 && this.sentDuck !== 0)) this.sendDuck(now, DUCK_TAU_S);
   }
 
   /** A scene reset: every engine voice fades out and frees its slot. */
@@ -294,14 +296,15 @@ export class GameAudio {
     this.motor?.releaseVoices();
   }
 
-  /** A hit: it takes a hit voice if the budget has one (a harder hit may displace the weakest running one), ducks the music and ambience by its impulse, and plays at its place. */
+  /** A hit: one heard from past `HEARD_MAX_M` is dropped; the rest take a hit voice if the budget has one and duck the music and ambience, both by the impulse as heard from here (`audibleImpulse`). */
   hit(e: HitEvent): void {
     const context = this.context;
     if (!context || !this.hits) return;
-    const now = context.currentTime;
-    if (!this.hitMix.admit(now, e.impulse)) return;
-    this.sendDuck(now, DUCK.attackTauS);
     const at = this.camera.matrixWorld.elements;
+    const heard = audibleImpulse(e.impulse, e.x - at[12]!, e.y - at[13]!, e.z - at[14]!);
+    const now = context.currentTime;
+    if (heard <= 0 || !this.hitMix.admit(now, heard)) return;
+    this.sendDuck(now, DUCK.attackTauS);
     this.hits.hit(e, at[12]!, at[13]!, at[14]!);
   }
 

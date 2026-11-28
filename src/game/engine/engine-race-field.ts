@@ -95,8 +95,8 @@ interface RaceHost {
   shotFx(contact: THREE.Vector3, normal: THREE.Vector3): void;
   /** A wall or prop hit car `i`, closing at `closing` m/s: its view shakes if it is the watched car. */
   hit(i: number, closing: number): void;
-  /** A course solid of `material` hit car `car` at (x, z), closing at `impulse` m/s: audio hears it (headless: nothing). */
-  heard(car: number, impulse: number, x: number, z: number, material: MaterialId): void;
+  /** A course solid or knocked prop (`index` into `walls` or `placed`; `knocked`: a prop) hit car `car` at (x, z), closing at `impulse` m/s: audio hears it, resolving the material itself (headless: nothing). */
+  heard(car: number, impulse: number, x: number, z: number, index: number, knocked: boolean): void;
   /** Knockable prop `index` knocked off its spot by car `car` at (vx, vy, vz) m/s: drawn flying and tumbling (cosmetic; headless: nothing). */
   knockProp(index: number, car: number, vx: number, vy: number, vz: number): void;
   /** The course's art (null headless: rules, AI, contacts and physics run without it), and the dummies' world dressed under the same bench scenery `arm`. */
@@ -223,22 +223,21 @@ export abstract class RaceField {
     knock: (index, car, vx, vy, vz) => {
       this.recorder.knock(index, car);
       this.host.knockProp(index, car, vx, vy, vz);
-      const struck = this.host.live()[car];
-      const prop = this.placed[index];
-      if (struck && prop) this.host.heard(car, hypot2(vx, vz) * KNOCK_HEARD, struck.group.position.x, struck.group.position.z, PREFABS[prop.prefab].material);
+      this.host.heard(car, hypot2(vx, vz) * KNOCK_HEARD, 0, 0, index, true);
     },
     fx: (at, n, closing) => this.host.hitFx(at, n, closing),
     wall: (index, i, closing, x, z) => {
       this.onWallHit(i, closing, x, z);
       this.host.hit(i, closing);
-      this.host.heard(i, closing, x, z, this.solidMaterial(index, x, z));
+      this.host.heard(i, closing, x, z, index, false);
     },
   };
 
-  /** The material of the course solid `index` a hit at (x, z) met: wall pieces and props number from 0 each (`solidsOf`), so the one that stands nearer the point. */
-  private solidMaterial(index: number, x: number, z: number): MaterialId {
-    const wall = this.walls[index];
+  /** The material of what a hit met: a knocked prop `index`'s own, else the course solid `index` a hit at (x, z) met: wall pieces and props number from 0 each (`solidsOf`), so the one that stands nearer the point. */
+  heardMaterial(index: number, x: number, z: number, knocked: boolean): MaterialId {
     const prop = this.placed[index];
+    if (knocked) return prop ? PREFABS[prop.prefab].material : MAT.TRACK_WALL;
+    const wall = this.walls[index];
     const wallGap = wall ? colliderGap(wall, x, z) : Infinity;
     const propGap = prop ? Math.max(0, hypot2(x - prop.x, z - prop.z) - PREFABS[prop.prefab].foot) : Infinity;
     return prop && propGap < wallGap ? PREFABS[prop.prefab].material : MAT.TRACK_WALL;

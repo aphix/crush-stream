@@ -2,6 +2,8 @@ import type { AmbientScene, UiName } from "../present/game-audio.ts";
 import type { RacePhase, TimeOfDay } from "../match/types.ts";
 import { TIME_OF_DAY } from "../match/types.ts";
 import { BIOME, TRACK_ID } from "../world/constants.ts";
+import type { SoundMat } from "../present/hit-sound.ts";
+import { DERBY_BOXES, DERBY_PROP, type DerbyPropKind } from "../scenes/derby-ground.ts";
 
 /** The game hour a race's light stands for, and the hour of the scenes with no clock. */
 const RACE_HOUR: Record<TimeOfDay, number> = { [TIME_OF_DAY.day]: 13, [TIME_OF_DAY.sunset]: 19, [TIME_OF_DAY.night]: 23 };
@@ -24,6 +26,20 @@ const COURSE_PLACE: Readonly<Record<string, AmbientScene["place"]>> = {
 
 export function coursePlace(courseId: string | null): AmbientScene["place"] {
   return (courseId !== null ? COURSE_PLACE[courseId] : undefined) ?? DEFAULT_PLACE;
+}
+
+/** What each kind of derby arena prism sounds like when a car hits it. */
+const DERBY_SOUND: Record<DerbyPropKind, SoundMat> = {
+  [DERBY_PROP.wall]: "concrete",
+  [DERBY_PROP.container]: "steel",
+  [DERBY_PROP.rail]: "concrete",
+  [DERBY_PROP.pad]: "concrete",
+  [DERBY_PROP.tyres]: "rubber",
+};
+
+/** The material of derby arena prism `index` (an index into `DERBY_BOXES`, as `DerbyGround.contact` reports it). */
+export function derbyBoxMat(index: number): SoundMat {
+  return DERBY_SOUND[DERBY_BOXES[index]!.kind];
 }
 
 /** The game hour (0..24): the open world's clock minute, else the race's light, else midday. */

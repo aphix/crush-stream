@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { VOICES } from "../present/audio-mix.ts";
 import type { HitEvent, SoundMat } from "../present/hit-sound.ts";
 import { AudioFeed, type FeedCar, type HitSink, type PairContact } from "./engine-audio-feed.ts";
 
@@ -44,104 +45,173 @@ function setup() {
   const sink = recorder();
   const cars = [makeCar(), makeCar(), makeCar()];
   const feed = new AudioFeed(sink, () => cars);
-  feed.frame(FRAME);
-  return { sink, cars, feed };
+  const frame = (focus: FeedCar | null = null, rate = 1): void => feed.frame(FRAME, rate, focus, 0, 0, 0);
+  frame();
+  return { sink, cars, feed, frame };
 }
 
 describe("given two cars that meet", () => {
   it("when they hit hard, then one hit is heard at the contact with both steel and the impulse the sim gave", () => {
-    const { sink, cars, feed } = setup();
+    const { sink, cars, feed, frame } = setup();
     feed.pair(cars[0]!, cars[1]!, pairHit(14));
-    feed.frame(FRAME);
+    frame();
     expect(sink.hits.length).toBe(1);
     expect([sink.hits[0]!.a, sink.hits[0]!.b], "materials").toEqual(["steel", "steel"]);
     expect([sink.hits[0]!.impulse, sink.hits[0]!.x, sink.hits[0]!.y, sink.hits[0]!.z], "impulse and place").toEqual([14, 1, 0.5, 2]);
   });
 
   it("when the same contact reports itself on each of six slices, then it is one hit; a touch under 1.5 m/s is none", () => {
-    const { sink, cars, feed } = setup();
+    const { sink, cars, feed, frame } = setup();
     for (let s = 0; s < 6; s++) feed.pair(cars[0]!, cars[1]!, pairHit(14 - s));
     feed.pair(cars[0]!, cars[2]!, pairHit(1));
-    feed.frame(FRAME);
+    frame();
     expect(sink.hits.length).toBe(1);
   });
 
   it("when a pane of one of them breaks in the same frame, then the hit sounds as glass against steel", () => {
-    const { sink, cars, feed } = setup();
+    const { sink, cars, feed, frame } = setup();
     feed.pair(cars[0]!, cars[1]!, pairHit(20));
     cars[1]!.bits = 2;
-    feed.frame(FRAME);
+    frame();
     const hit = sink.hits.find((h) => h.impulse === 20)!;
     expect([hit.a, hit.b]).toEqual(["glass", "steel"]);
   });
 });
 
+describe("given a contact that is held", () => {
+  it("when two cars stay pressed for a second, reporting every frame, then it is one hit, not one every tenth of a second", () => {
+    const { sink, cars, feed, frame } = setup();
+    for (let f = 0; f < FRAME_HZ; f++) {
+      feed.pair(cars[0]!, cars[1]!, pairHit(14));
+      frame();
+    }
+    expect(sink.hits.length).toBe(1);
+  });
+
+  it("when the sim crawls at a fiftieth of real time and reports the contact every fiftieth frame, then it is still one hit", () => {
+    const { sink, cars, feed, frame } = setup();
+    for (let f = 0; f < 4 * FRAME_HZ; f++) {
+      if (f % 50 === 0) feed.pair(cars[0]!, cars[1]!, pairHit(14));
+      frame(null, 0.02);
+    }
+    expect(sink.hits.length).toBe(1);
+  });
+
+  it("when it parts for 0.2 s and meets again, then the second meeting is a second hit", () => {
+    const { sink, cars, feed, frame } = setup();
+    feed.pair(cars[0]!, cars[1]!, pairHit(14));
+    frame();
+    for (let f = 0; f < 12; f++) frame();
+    feed.pair(cars[0]!, cars[1]!, pairHit(14));
+    frame();
+    expect(sink.hits.length).toBe(2);
+  });
+
+  it("when a held contact's impulse grows past half as much again, then that blow is a second hit; a smaller rise is not", () => {
+    const { sink, cars, feed, frame } = setup();
+    for (const impulse of [14, 18, 20]) {
+      feed.pair(cars[0]!, cars[1]!, pairHit(impulse));
+      frame();
+    }
+    expect(sink.hits.length, "14, 18, 20: one hit").toBe(1);
+    feed.pair(cars[0]!, cars[1]!, pairHit(25));
+    frame();
+    expect(sink.hits.length, "25 is past 1.5 x 14").toBe(2);
+  });
+});
+
 describe("given a car that meets a wall or prop", () => {
   it("when a hay bale is hit, then the pair is steel and the material the course gave", () => {
-    const { sink, cars, feed } = setup();
+    const { sink, cars, feed, frame } = setup();
     feed.wall(cars[0]!, 9, 5, 0.4, 6, "hay");
-    feed.frame(FRAME);
+    frame();
     expect([sink.hits[0]!.a, sink.hits[0]!.b]).toEqual(["steel", "hay"]);
     expect([sink.hits[0]!.x, sink.hits[0]!.z]).toEqual([5, 6]);
   });
 });
 
-describe("given a car that lands or lies on the ground", () => {
-  it("when its upward speed jumps 8 m/s in a frame on its wheels, then rubber meets the surface under it", () => {
-    const { sink, cars, feed } = setup();
-    cars[0]!.velocity.y = -8;
-    feed.frame(FRAME);
-    cars[0]!.velocity.y = 0;
-    feed.frame(FRAME);
-    expect(sink.hits.length).toBe(1);
-    expect(sink.hits[0]!.a).toBe("rubber");
-    expect(sink.hits[0]!.impulse).toBe(8);
+/** Car `car` flies for half a second falling at 8 m/s, then is on its four wheels: the frame it lands is the last one run. */
+function flyAndLand(frame: (focus: FeedCar | null) => void, car: FeedCar, focus: FeedCar | null = null): void {
+  car.airborne = true;
+  car.wheelsDown = 0;
+  car.velocity.y = -8;
+  for (let f = 0; f < 30; f++) frame(focus);
+  car.airborne = false;
+  car.wheelsDown = 15;
+  car.velocity.y = 0;
+  frame(focus);
+}
+
+describe("given a car that lands", () => {
+  it("when it comes down on its four wheels after half a second in the air at 8 m/s, then rubber meets the surface under it at the fall's speed", () => {
+    const h = setup();
+    flyAndLand(h.frame, h.cars[0]!);
+    expect(h.sink.hits.length).toBe(1);
+    expect(h.sink.hits[0]!.a).toBe("rubber");
+    expect(h.sink.hits[0]!.impulse).toBe(8);
   });
 
-  it("when the same jump happens with a wheel off the ground, then it is the body that hits: steel", () => {
-    const { sink, cars, feed } = setup();
-    cars[0]!.wheelsDown = 3;
-    cars[0]!.velocity.y = -8;
-    feed.frame(FRAME);
-    cars[0]!.velocity.y = 0;
-    feed.frame(FRAME);
-    expect(sink.hits[0]!.a).toBe("steel");
+  it("when the car is the focus car, then its landing is the tyres' thud and the feed hears none", () => {
+    const h = setup();
+    flyAndLand(h.frame, h.cars[0]!, h.cars[0]!);
+    expect(h.sink.hits.length).toBe(0);
   });
 
-  it("when a car is placed 50 m up (a teleport) with its speed reset, then no landing is heard", () => {
-    const { sink, cars, feed } = setup();
-    cars[0]!.velocity.y = -8;
-    feed.frame(FRAME);
-    cars[0]!.velocity.y = 0;
-    cars[0]!.group.position.y = 50;
-    feed.frame(FRAME);
-    expect(sink.hits.length).toBe(0);
+  it("when it is placed 50 m away in mid-flight and lands there, then no landing is heard", () => {
+    const h = setup();
+    const car = h.cars[0]!;
+    car.airborne = true;
+    car.velocity.y = -8;
+    for (let f = 0; f < 30; f++) h.frame();
+    car.group.position.x = 50;
+    car.airborne = false;
+    car.velocity.y = 0;
+    h.frame();
+    h.frame();
+    expect(h.sink.hits.length).toBe(0);
   });
 
-  it("when a car lies on its roof sliding at 6 m/s, then its body scrapes the ground every frame, steel on the surface, and stops when it stops", () => {
-    const { sink, cars, feed } = setup();
+  it("when upward speed jumps with a wheel off the ground, then it is the body that slams: steel; on four wheels with no flight, nothing", () => {
+    const h = setup();
+    h.cars[0]!.wheelsDown = 3;
+    h.cars[0]!.velocity.y = -8;
+    h.frame();
+    h.cars[0]!.velocity.y = 0;
+    h.frame();
+    expect(h.sink.hits[0]!.a).toBe("steel");
+    h.cars[1]!.velocity.y = -8;
+    h.frame();
+    h.cars[1]!.velocity.y = 0;
+    h.frame();
+    expect(h.sink.hits.length, "the wheels-down jump added none").toBe(1);
+  });
+});
+
+describe("given a car that lies on its roof", () => {
+  it("when it slides at 6 m/s, then its body scrapes the ground every frame, steel on the surface, and stops when it stops", () => {
+    const { sink, cars, frame } = setup();
     cars[0]!.group.matrixWorld.elements[5] = -1;
     cars[0]!.velocity.set(6, 0, 0);
-    for (let f = 0; f < 5; f++) feed.frame(FRAME);
+    for (let f = 0; f < 5; f++) frame();
     expect(sink.scrapes.length, "scrapes in five frames").toBe(5);
     expect(sink.scrapes[0]!.a).toBe("steel");
     expect(sink.scrapes[0]!.speed).toBe(6);
     cars[0]!.velocity.set(0, 0, 0);
-    for (let f = 0; f < 4; f++) feed.frame(FRAME);
+    for (let f = 0; f < 4; f++) frame();
     const before = sink.scrapes.length;
-    for (let f = 0; f < 5; f++) feed.frame(FRAME);
+    for (let f = 0; f < 5; f++) frame();
     expect(sink.scrapes.length, "none four frames after it stopped").toBe(before);
   });
 });
 
 describe("given cars that slide along each other or a wall", () => {
   it("when two cars press and slide at 3 m/s, then a scrape follows each frame while they touch and carries a hit-free force", () => {
-    const { sink, cars, feed } = setup();
+    const { sink, cars, feed, frame } = setup();
     cars[0]!.velocity.set(0, 0, 3);
     const touch = pairHit(0.5);
     for (let f = 0; f < 4; f++) {
       feed.pair(cars[0]!, cars[1]!, touch);
-      feed.frame(FRAME);
+      frame();
     }
     expect(sink.hits.length, "a graze is no hit").toBe(0);
     expect(sink.scrapes.length).toBe(4);
@@ -151,39 +221,54 @@ describe("given cars that slide along each other or a wall", () => {
     expect(new Set(sink.scrapes.map((s) => s.id)).size, "one contact").toBe(1);
   });
 
-  it("when five contacts slide at once, then only the three pressed hardest scrape", () => {
-    const { sink, cars, feed } = setup();
-    for (let k = 0; k < 5; k++) {
+  it("when more contacts slide at once than the scrape budget, then only the hardest pressed scrape", () => {
+    const { sink, feed, frame } = setup();
+    for (let k = 0; k < VOICES.scrapes + 2; k++) {
       const car = makeCar();
       car.velocity.set(0, 0, 4);
       feed.wall(car, 1 + k, 0, 0, 0, "concrete");
     }
-    feed.frame(FRAME);
-    expect(sink.scrapes.length).toBe(3);
+    frame();
+    expect(sink.scrapes.length).toBe(VOICES.scrapes);
     expect(Math.min(...sink.scrapes.map((s) => s.force))).toBeGreaterThan(0.25 + 0.75 * (2 / 20) - 1e-9);
-    expect(cars.length).toBe(3);
   });
 });
 
 describe("given a pane that breaks with no contact reported", () => {
   it("when it cracks, then a glass-on-glass hit at the pane is heard, and a shatter is louder", () => {
-    const { sink, cars, feed } = setup();
+    const { sink, cars, frame } = setup();
     cars[0]!.bits = 1;
-    feed.frame(FRAME);
+    frame();
     cars[0]!.bits = 1 | (2 << 2);
-    feed.frame(FRAME);
+    frame();
     expect(sink.hits.map((h) => [h.a, h.b])).toEqual([["glass", "glass"], ["glass", "glass"]]);
     expect(sink.hits[1]!.impulse).toBeGreaterThan(sink.hits[0]!.impulse);
     expect([sink.hits[1]!.x, sink.hits[1]!.y, sink.hits[1]!.z]).toEqual([3, 1, 4]);
   });
 });
 
-describe("given a pile-up of thirty contacts in one frame", () => {
-  it("when the frame plays, then at most six hits are heard and they are the hardest", () => {
-    const { sink, feed } = setup();
+describe("given a pile-up of hits in one frame", () => {
+  it("when thirty hits of rising impulse land beside the listener, then at most six are heard and they are the hardest", () => {
+    const { sink, feed, frame } = setup();
     for (let k = 0; k < 30; k++) feed.wall(makeCar(), 2 + k, 0, 0, 0, "concrete");
-    feed.frame(FRAME);
+    frame();
     expect(sink.hits.length).toBe(6);
     expect(Math.min(...sink.hits.map((h) => h.impulse))).toBe(26);
+  });
+
+  it("when ten faint hits beside the listener meet ten hard ones 300 m away, then the six played are the near ones", () => {
+    const { sink, feed, frame } = setup();
+    for (let k = 0; k < 10; k++) feed.wall(makeCar(), 5, 1, 0, 0, "concrete");
+    for (let k = 0; k < 10; k++) feed.wall(makeCar(), 40, 300, 0, 0, "concrete");
+    frame();
+    expect(sink.hits.length).toBe(6);
+    expect(sink.hits.every((h) => h.impulse === 5)).toBe(true);
+  });
+
+  it("when a hard hit lands 500 m off, then it is not played at all", () => {
+    const { sink, feed, frame } = setup();
+    feed.wall(makeCar(), 90, 500, 0, 0, "concrete");
+    frame();
+    expect(sink.hits.length).toBe(0);
   });
 });

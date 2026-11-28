@@ -4,6 +4,8 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import type { GlassName } from "../vehicle/car-core.ts";
 import { FLIPPED_UP_Y } from "../vehicle/constants.ts";
 import { activeGround } from "../world/ground.ts";
+import { audibleImpulse, VOICES } from "../present/audio-mix.ts";
+import { LandingWatch } from "../present/landing.ts";
 
 /** A car's own material in every hit it takes part in. */
 export const STEEL: SoundMat = "steel";
@@ -30,21 +32,21 @@ export type PairContact = { impulse: number; contact: { x: number; y: number; z:
 
 /** A contact under this closing speed (m/s) is a touch, not a hit: it may still scrape. */
 const HIT_MIN_IMPULSE = 1.5;
-/** The same contact hits again only after this long (s): a collision reports itself every slice. */
+/** A contact that kept reporting is one hit, however long it is held: it hits again only after `HIT_GAP_S` s of sim time unreported, or when its impulse grows past the last hit's by `REHIT_GROWTH` (a second, harder blow). */
 const HIT_GAP_S = 0.1;
-/** Most hits queued between two frames, and most played in one frame (the loudest). */
+const REHIT_GROWTH = 1.5;
+/** Most hits queued between two frames, and most played in one frame (the audibly loudest). */
 const QUEUE = 24;
 const PLAYED_PER_FRAME = 6;
-/** Contacts tracked at once, and how many scrape at once. */
+/** Contacts tracked at once. */
 const CONTACTS = 32;
-const SCRAPES_PER_FRAME = 3;
 /** A contact slides under `SCRAPE_MIN_SPEED` m/s of slip not at all, and counts as touching for `SCRAPE_ACTIVE_S` s after it was last reported (a step is under a frame). */
 const SCRAPE_MIN_SPEED = 1;
 const SCRAPE_ACTIVE_S = 0.06;
 /** Scrape force (0..1): a light touch, rising with the contact's closing speed to a hard press at `SCRAPE_PRESS_IMPULSE`. */
 const SCRAPE_FORCE_FLOOR = 0.25;
 const SCRAPE_PRESS_IMPULSE = 20;
-/** A car that gains this much upward speed (m/s) in one frame hit the ground; a jump of more than `TELEPORT_M` m in a frame was a placement. */
+/** A body that gains this much upward speed (m/s) in one frame without its four wheels down slammed the ground; a move of more than `TELEPORT_M` m in a frame was a placement. */
 const GROUND_HIT_DV = 3;
 const TELEPORT_M = 2;
 /** A pane that cracks or shatters on its own, as a hit (m/s). */
@@ -65,7 +67,12 @@ export class AudioFeed {
   private readonly sink: HitSink;
   private readonly cars: () => readonly FeedCar[];
   private readonly event: HitEvent = { impulse: 0, x: 0, y: 0, z: 0, a: STEEL, b: STEEL };
+  /** Wall seconds, and the sim's own (wall seconds times the time rate): a contact held through slow-mo is not unseen. */
   private t = 0;
+  private simT = 0;
+  private lx = 0;
+  private ly = 0;
+  private lz = 0;
 
   private queued = 0;
   private readonly qImpulse = new Float64Array(QUEUE);
@@ -80,7 +87,8 @@ export class AudioFeed {
   private readonly cCarB: (FeedCar | null)[] = new Array<FeedCar | null>(CONTACTS).fill(null);
   private readonly cId = new Int32Array(CONTACTS);
   private readonly cSeen = new Float64Array(CONTACTS).fill(-Infinity);
-  private readonly cHitAfter = new Float64Array(CONTACTS);
+  private readonly cSimSeen = new Float64Array(CONTACTS).fill(-Infinity);
+  private readonly cHitImpulse = new Float64Array(CONTACTS);
   private readonly cSpeed = new Float64Array(CONTACTS);
   private readonly cForce = new Float64Array(CONTACTS);
   private readonly cAt = new Float64Array(CONTACTS * 3);
@@ -92,8 +100,9 @@ export class AudioFeed {
   private readonly prevGlass = new Int32Array(MAX_CARS).fill(-1);
   private readonly brokeNow = new Uint8Array(MAX_CARS);
   private readonly prevVy = new Float64Array(MAX_CARS);
-  private readonly prevY = new Float64Array(MAX_CARS);
+  private readonly prevAt = new Float64Array(MAX_CARS * 3);
   private readonly primed = new Uint8Array(MAX_CARS);
+  private readonly landing: LandingWatch[] = Array.from({ length: MAX_CARS }, () => new LandingWatch());
 
   constructor(sink: HitSink, cars: () => readonly FeedCar[]) {
     this.sink = sink;
@@ -121,14 +130,23 @@ export class AudioFeed {
   clear(): void {
     this.queued = 0;
     this.cSeen.fill(-Infinity);
+    this.cSimSeen.fill(-Infinity);
     this.primed.fill(0);
     this.prevGlass.fill(-1);
+    for (let i = 0; i < MAX_CARS; i++) this.landing[i]!.reset();
   }
 
-  /** Once a frame, `dt` s: reads the cars for panes, landings and slides, plays the loudest queued hits, and scrapes the contacts still sliding. */
-  frame(dt: number): void {
+  /**
+   * Once a frame, `dt` wall s at time `rate` (1 = real time): reads the cars for panes, landings, body slams and slides, plays the audibly loudest queued hits (by their distance from the
+   * listener at (lx, ly, lz)), and scrapes the contacts still sliding. `focus` is the car whose tyres already thud on a landing (`TyreSound`).
+   */
+  frame(dt: number, rate: number, focus: FeedCar | null, lx: number, ly: number, lz: number): void {
     this.t += dt;
-    this.scanCars();
+    this.simT += dt * Math.max(0, rate);
+    this.lx = lx;
+    this.ly = ly;
+    this.lz = lz;
+    this.scanCars(dt, focus);
     this.play();
     this.scrapeSliding();
   }
@@ -143,14 +161,18 @@ export class AudioFeed {
     this.cCarA[oldest] = a;
     this.cCarB[oldest] = b;
     this.cId[oldest] = this.nextId++;
-    this.cSeen[oldest] = this.t;
-    this.cHitAfter[oldest] = 0;
+    this.cSeen[oldest] = -Infinity;
+    this.cSimSeen[oldest] = -Infinity;
+    this.cHitImpulse[oldest] = 0;
     return oldest;
   }
 
   private touch(kind: number, a: FeedCar, b: FeedCar | null, impulse: number, speed: number, x: number, y: number, z: number, matA: SoundMat, matB: SoundMat): void {
     const s = this.slot(kind, a, b);
+    const unseenS = this.simT - this.cSimSeen[s]!;
+    const lastImpulse = this.cHitImpulse[s]!;
     this.cSeen[s] = this.t;
+    this.cSimSeen[s] = this.simT;
     this.cSpeed[s] = speed;
     this.cForce[s] = SCRAPE_FORCE_FLOOR + (1 - SCRAPE_FORCE_FLOOR) * Math.min(1, impulse / SCRAPE_PRESS_IMPULSE);
     this.cAt[s * 3] = x;
@@ -158,8 +180,8 @@ export class AudioFeed {
     this.cAt[s * 3 + 2] = z;
     this.cMatA[s] = matA;
     this.cMatB[s] = matB;
-    if (impulse < HIT_MIN_IMPULSE || this.t < this.cHitAfter[s]!) return;
-    this.cHitAfter[s] = this.t + HIT_GAP_S;
+    if (impulse < HIT_MIN_IMPULSE || (unseenS <= HIT_GAP_S && impulse <= lastImpulse * REHIT_GROWTH)) return;
+    this.cHitImpulse[s] = impulse;
     this.enqueue(impulse, x, y, z, a, b, matA, matB);
   }
 
@@ -181,8 +203,8 @@ export class AudioFeed {
     this.qMatB[at] = matB;
   }
 
-  /** Per car: a pane that cracked or shattered since the last frame, a jump in upward speed (a landing or a slam), and a body lying on the ground sliding. */
-  private scanCars(): void {
+  /** Per car: a pane that cracked or shattered since the last frame, a landing (`LandingWatch`: rubber on the ground, not the focus car's, whose tyres thud), a body slam (upward speed jumped without four wheels down), and a body lying on the ground sliding. */
+  private scanCars(dt: number, focus: FeedCar | null): void {
     const cars = this.cars();
     this.brokeNow.fill(0);
     for (let i = 0; i < cars.length && i < MAX_CARS; i++) {
@@ -190,23 +212,29 @@ export class AudioFeed {
       if (car.stored || !car.group.visible) {
         this.primed[i] = 0;
         this.prevGlass[i] = -1;
+        this.landing[i]!.reset();
         continue;
       }
       this.scanPanes(car, i);
       const { x, y, z } = car.group.position;
+      const dx = x - this.prevAt[i * 3]!;
+      const dy = y - this.prevAt[i * 3 + 1]!;
+      const dz = z - this.prevAt[i * 3 + 2]!;
       const dv = car.velocity.y - this.prevVy[i]!;
-      const jumped = Math.abs(y - this.prevY[i]!) > TELEPORT_M;
       this.prevVy[i] = car.velocity.y;
-      this.prevY[i] = y;
-      if (this.primed[i] === 0 || jumped) {
+      this.prevAt[i * 3] = x;
+      this.prevAt[i * 3 + 1] = y;
+      this.prevAt[i * 3 + 2] = z;
+      if (this.primed[i] === 0 || dx * dx + dy * dy + dz * dz > TELEPORT_M * TELEPORT_M) {
         this.primed[i] = 1;
+        this.landing[i]!.reset();
         continue;
       }
-      const surface = surfaceSoundMat(activeGround().surfaceAt(x, z));
+      const fall = this.landing[i]!.step(car, dt);
       const speed = Math.sqrt(car.velocity.x * car.velocity.x + car.velocity.z * car.velocity.z);
-      const onWheels = (car.wheelsDown & 15) === 15;
-      if (dv >= GROUND_HIT_DV) this.touch(KIND_GROUND, car, null, dv, speed, x, y, z, onWheels ? "rubber" : STEEL, surface);
-      else if (car.group.matrixWorld.elements[5]! < FLIPPED_UP_Y && !car.airborne && speed >= SCRAPE_MIN_SPEED) this.touch(KIND_GROUND, car, null, 0, speed, x, y, z, STEEL, surface);
+      if (fall > 0 && car !== focus) this.touch(KIND_GROUND, car, null, fall, speed, x, y, z, "rubber", surfaceSoundMat(activeGround().surfaceAt(x, z, y)));
+      else if (dv >= GROUND_HIT_DV && (car.wheelsDown & 15) !== 15) this.touch(KIND_GROUND, car, null, dv, speed, x, y, z, STEEL, surfaceSoundMat(activeGround().surfaceAt(x, z, y)));
+      else if (car.group.matrixWorld.elements[5]! < FLIPPED_UP_Y && !car.airborne && speed >= SCRAPE_MIN_SPEED) this.touch(KIND_GROUND, car, null, 0, speed, x, y, z, STEEL, surfaceSoundMat(activeGround().surfaceAt(x, z, y)));
     }
   }
 
@@ -234,8 +262,16 @@ export class AudioFeed {
   /** Plays the loudest `PLAYED_PER_FRAME` queued hits, each by its material: a hit on a car that broke a pane this frame sounds as glass on what it met. */
   private play(): void {
     for (let n = 0; n < PLAYED_PER_FRAME && this.queued > 0; n++) {
-      let top = 0;
-      for (let q = 1; q < this.queued; q++) if (this.qImpulse[q]! > this.qImpulse[top]!) top = q;
+      let top = -1;
+      let loudest = 0;
+      for (let q = 0; q < this.queued; q++) {
+        const heard = audibleImpulse(this.qImpulse[q]!, this.qAt[q * 3]! - this.lx, this.qAt[q * 3 + 1]! - this.ly, this.qAt[q * 3 + 2]! - this.lz);
+        if (heard > loudest) {
+          loudest = heard;
+          top = q;
+        }
+      }
+      if (top < 0) break;
       const e = this.event;
       e.impulse = this.qImpulse[top]!;
       e.x = this.qAt[top * 3]!;
@@ -268,10 +304,10 @@ export class AudioFeed {
     this.queued = 0;
   }
 
-  /** The `SCRAPES_PER_FRAME` hardest-pressed contacts still touching and slipping, one `scrape` each; a contact left out stops being called, so its sound fades. */
+  /** The `VOICES.scrapes` hardest-pressed contacts still touching and slipping, one `scrape` each; a contact left out stops being called, so its sound fades. */
   private scrapeSliding(): void {
     this.chosen.fill(0);
-    for (let taken = 0; taken < SCRAPES_PER_FRAME; taken++) {
+    for (let taken = 0; taken < VOICES.scrapes; taken++) {
       let best = -1;
       for (let s = 0; s < CONTACTS; s++) {
         if (this.chosen[s] === 1 || this.t - this.cSeen[s]! > SCRAPE_ACTIVE_S || this.cSpeed[s]! < SCRAPE_MIN_SPEED) continue;
