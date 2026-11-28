@@ -517,6 +517,8 @@ pub unsafe extern "C" fn sag_pass(
     if asked == 0 {
         return 0;
     }
+    // The JS adds every point's bump, zero or not; a zero bump leaves a lift's bits alone because no lift is ever -0
+    // (every writer starts from +0 or a part floor and only raises it), so adding only the asked corners is the same.
     for i in 0..asked {
         let k = *cand.add(i) as usize;
         for c in k..k + 3 {
