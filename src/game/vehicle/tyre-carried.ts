@@ -60,6 +60,9 @@ export type Carried = {
   n: Int32Array;
   /** The scratch a wheel's carried set is listed into. */
   scratch: Int32Array;
+  /** Per wheel, what its set was last made from (`ADMIT_KEY` numbers: its `wheelNow` elements, whether it was gone, whether the skin was crushed), and whether it still stands as made (`admitCarried`). */
+  admitted: Float64Array;
+  admitOk: Uint8Array;
   /** Per welded rest point, the most lift `capAtRest` lets it keep this hold (`findCaps`). */
   cap: Float64Array;
   /** The vertices written `CARRIED_MIN` off their rest (the first `movedN`, ascending), listed each time the skin is written: the only ones a tyre can carry. */
@@ -91,14 +94,14 @@ export type Carried = {
 };
 
 /** The carried set's buffers for a skin of `vertices` vertices and `points` welded points, over the hold's tables `tables`. */
-export function newCarried(vertices: number, points: number, tables: Omit<Carried, "restInside" | "at" | "n" | "scratch" | "cap" | "moved" | "movedN" | "touched" | "touchedN" | "mark" | "downStart" | "downTo">): Carried {
+export function newCarried(vertices: number, points: number, tables: Omit<Carried, "restInside" | "at" | "n" | "admitted" | "admitOk" | "scratch" | "cap" | "moved" | "movedN" | "touched" | "touchedN" | "mark" | "downStart" | "downTo">): Carried {
   const { start, to } = tables;
   const downStart = new Int32Array(points + 2);
   for (let e = 0; e < to.length; e++) downStart[to[e]! + 2]!++;
   for (let q = 0; q < points; q++) downStart[q + 2]! += downStart[q + 1]!;
   const downTo = new Int32Array(to.length);
   for (let p = 0; p < points; p++) for (let e = start[p]!; e < start[p + 1]!; e++) downTo[downStart[to[e]! + 1]!++] = p;
-  return { downStart: downStart.subarray(0, points + 1), downTo, restInside: new Uint8Array(vertices), at: [], n: new Int32Array(4), scratch: new Int32Array(vertices), cap: new Float64Array(points), moved: new Int32Array(vertices), movedN: 0, touched: new Int32Array(points), touchedN: 0, mark: new Uint8Array(points), ...tables };
+  return { downStart: downStart.subarray(0, points + 1), downTo, restInside: new Uint8Array(vertices), at: [], n: new Int32Array(4), admitted: new Float64Array(4 * ADMIT_KEY), admitOk: new Uint8Array(4), scratch: new Int32Array(vertices), cap: new Float64Array(points), moved: new Int32Array(vertices), movedN: 0, touched: new Int32Array(points), touchedN: 0, mark: new Uint8Array(points), ...tables };
 }
 
 /** Lists into `c.moved` the vertices written `CARRIED_MIN` off their rest, ascending; how many. */
@@ -117,10 +120,40 @@ function listMoved(c: Carried): number {
  * counts, and none while the skin is uncrushed. The last set is put back first, so the set never depends on what earlier holds read. Returns the wheels (bit w) whose set changed. `skinWritten`: the skin was written since the last call, so the vertices it moved are listed again.
  */
 export function admitCarried(c: Carried, tyre: { r: number; halfW: number }, count: number, gone: number, crushed: boolean, skinWritten: boolean): number {
+  if (skinWritten) c.admitOk.fill(0);
   if (crushed && skinWritten) c.movedN = listMoved(c);
   let changed = 0;
-  for (let w = 0; w < count; w++) changed |= admitWheel(c, tyre, w, gone, crushed);
+  for (let w = 0; w < count; w++) {
+    // A wheel made from what it is made from now stands as made: nothing but `over` found again (which clears `admitOk`) or a written skin changes its set.
+    if (c.admitOk[w] === 1 && sameAdmission(c, w, gone, crushed)) continue;
+    changed |= admitWheel(c, tyre, w, gone, crushed);
+    noteAdmission(c, w, gone, crushed);
+  }
   return changed;
+}
+
+/** Numbers in a wheel's `admitted` record: its `wheelNow` elements, then whether it was gone and whether the skin was crushed. */
+const ADMIT_KEY = HELD_ELEMENTS.length + 2;
+
+/** Whether wheel `w` is as `admitted` has it (a gone wheel's NaN pose matches itself). */
+function sameAdmission(c: Carried, w: number, gone: number, crushed: boolean): boolean {
+  const at = w * ADMIT_KEY;
+  const o = w * HELD_ELEMENTS.length;
+  for (let k = 0; k < HELD_ELEMENTS.length; k++) {
+    const now = c.wheelNow[o + k]!;
+    const was = c.admitted[at + k]!;
+    if (now !== was && !(now !== now && was !== was)) return false;
+  }
+  return c.admitted[at + HELD_ELEMENTS.length] === ((gone >> w) & 1) && c.admitted[at + HELD_ELEMENTS.length + 1] === (crushed ? 1 : 0);
+}
+
+function noteAdmission(c: Carried, w: number, gone: number, crushed: boolean): void {
+  const at = w * ADMIT_KEY;
+  const o = w * HELD_ELEMENTS.length;
+  for (let k = 0; k < HELD_ELEMENTS.length; k++) c.admitted[at + k] = c.wheelNow[o + k]!;
+  c.admitted[at + HELD_ELEMENTS.length] = (gone >> w) & 1;
+  c.admitted[at + HELD_ELEMENTS.length + 1] = crushed ? 1 : 0;
+  c.admitOk[w] = 1;
 }
 
 /** `admitCarried` for wheel `w`: a function of its own, so its long loops are not OSR entries of a caller that left them deopting on every exit. Bit `w` when its set changed. */

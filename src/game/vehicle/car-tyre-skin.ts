@@ -441,6 +441,7 @@ export class TyreSkin {
       f[at] = sx;
       f[at + 1] = sz;
       this.carried.n[w] = 0;
+      this.carried.admitOk[w] = 0;
       if (!found) {
         this.mesh.updateMatrix();
         _mesh.makeTranslation(0, this.mesh.parent === group ? 0 : lift, 0).multiply(this.mesh.matrix).invert();
