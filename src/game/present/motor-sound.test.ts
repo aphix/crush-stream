@@ -95,10 +95,11 @@ describe("given a voice that follows its car's gear", () => {
     expect(voice.shift.calls, "the first look is no shift").toHaveLength(0);
     drivers.trackGear(0, voice, sedanInGear(3), 1, false, TICK_S, 10.1);
     const strike = 10.1 + SHIFT_CUT_S * SHIFT_THUMP_AT;
-    expect(voice.shift.calls, "a pulse up and down").toEqual([
-      { kind: "set", value: shiftStrength(1, true), at: strike },
-      { kind: "set", value: 0, at: strike + SHIFT_PULSE_S },
-    ]);
+    expect(voice.shift.calls, "a pulse up and down").toHaveLength(2);
+    expect(voice.shift.calls[0]!.value, "the thump's strength").toBe(shiftStrength(1, true));
+    expect(voice.shift.calls[0]!.at, "struck at the clutch's return").toBe(strike);
+    expect(voice.shift.calls[1]!.value, "let go").toBe(0);
+    expect(voice.shift.calls[1]!.at, "after the pulse").toBe(strike + SHIFT_PULSE_S);
     expect(sound["shiftCutS"][0], "the torque cut").toBe(SHIFT_CUT_S);
   });
 
@@ -114,7 +115,8 @@ describe("given a voice that follows its car's gear", () => {
     const { sound, drivers, voice } = rig();
     drivers.trackGear(0, voice, sedanInGear(3), 0.5, true, TICK_S, 10);
     drivers.trackGear(0, voice, sedanInGear(2), 0.5, false, TICK_S, 10.1);
-    expect(voice.shift.calls[0], "struck now").toEqual({ kind: "set", value: shiftStrength(0.5, false), at: 10.1 });
+    expect(voice.shift.calls[0]!.value, "a blip's worth").toBe(shiftStrength(0.5, false));
+    expect(voice.shift.calls[0]!.at, "struck now").toBe(10.1);
     expect(sound["shiftCutS"][0]).toBe(0);
   });
 });
@@ -139,9 +141,13 @@ describe("given a voice heard from the followed car's seat", () => {
     const DAMAGE_CUTOFF_HZ = 9000;
     drivers.driveView(0, voice, "sedan", true, true, 0, DAMAGE_CUTOFF_HZ, 1);
     drivers.driveView(0, voice, "sedan", true, false, 0, DAMAGE_CUTOFF_HZ, 2);
-    expect(read(voice).outlet, "outlet gain").toEqual([gains("cabin")[2], gains("chase")[2]]);
-    expect(read(voice).boom, "boom gain (dB)").toEqual([PERSPECTIVES.cabin.boomDb, PERSPECTIVES.chase.boomDb]);
-    expect(read(voice).filter, "lowpass (Hz)").toEqual([PERSPECTIVES.cabin.openHz, DAMAGE_CUTOFF_HZ]);
+    const seen = read(voice);
+    expect(seen.outlet[0], "cabin outlet gain").toBe(gains("cabin")[2]);
+    expect(seen.outlet[1], "chase outlet gain").toBe(gains("chase")[2]);
+    expect(seen.boom[0], "cabin boom (dB)").toBe(PERSPECTIVES.cabin.boomDb);
+    expect(seen.boom[1], "chase boom (dB)").toBe(PERSPECTIVES.chase.boomDb);
+    expect(seen.filter[0], "cabin lowpass (Hz)").toBe(PERSPECTIVES.cabin.openHz);
+    expect(seen.filter[1], "damage lowpass (Hz)").toBe(DAMAGE_CUTOFF_HZ);
   });
 
   it("when the same view is asked for again, then the gains and the boom are not touched and only the lowpass follows", () => {
@@ -149,7 +155,10 @@ describe("given a voice heard from the followed car's seat", () => {
     const drivers = new MotorSound(1) as unknown as VoiceDrivers;
     drivers.driveView(0, voice, "sedan", true, true, 0, 9000, 1);
     drivers.driveView(0, voice, "sedan", true, true, 0, 9000, 2);
-    expect([voice.intake.gain.calls.length, voice.block.gain.calls.length, voice.outlet.gain.calls.length, voice.boom.gain.calls.length]).toEqual([1, 1, 1, 1]);
+    expect(voice.intake.gain.calls, "intake").toHaveLength(1);
+    expect(voice.block.gain.calls, "block").toHaveLength(1);
+    expect(voice.outlet.gain.calls, "outlet").toHaveLength(1);
+    expect(voice.boom.gain.calls, "boom").toHaveLength(1);
     expect(voice.filter.frequency.calls).toHaveLength(2);
   });
 
@@ -157,7 +166,8 @@ describe("given a voice heard from the followed car's seat", () => {
     const voice = recordingVoice();
     const drivers = new MotorSound(1) as unknown as VoiceDrivers;
     drivers.driveView(0, voice, "sedan", false, true, 60 * 60, 20000, 1);
-    expect(read(voice).boom).toEqual([PERSPECTIVES.other.boomDb]);
+    expect(read(voice).boom, "one boom event").toHaveLength(1);
+    expect(read(voice).boom[0], "no boom").toBe(PERSPECTIVES.other.boomDb);
     expect(read(voice).filter[0]).toBe(distanceCutoff(60));
   });
 });

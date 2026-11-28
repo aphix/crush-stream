@@ -1,6 +1,6 @@
 
 // Voice layers on top of the wasm generator's three channels: firing-locked body thump, load-driven shaping of exhaust and intake,
-// induction whine, off-load pops and the gear-shift thump. Plain classes; nothing allocates after construction.
+// induction whine, off-load pops and the gear-shift thump. Plain classes; process() allocates nothing (configure() builds a fixed-shape tuning per retune).
 
 // The context's rate, read once: a global lookup per sample is slow in a worklet.
 const SR = sampleRate;
