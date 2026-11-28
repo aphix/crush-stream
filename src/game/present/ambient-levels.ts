@@ -26,7 +26,7 @@ const CHEER_SWELL_RMS = 0.025;
 const RUSH_SPEED = 60;
 const RUSH_RMS = 0.07;
 const WIND_CALM_HZ = 1200;
-const WIND_RUSH_HZ = 7000;
+const WIND_RUSH_HZ = 4800;
 /** Indoors or in a tunnel: the low-pass (Hz) and the gain left. */
 const INDOORS_HZ = 650;
 const INDOORS_GAIN = 0.55;

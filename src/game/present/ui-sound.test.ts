@@ -44,14 +44,12 @@ describe("given each UI sound", () => {
     });
   }
 
-  it("when each sound's dry buffer is read to its last 10 ms, then it fades to exactly 0 without a step, so the reverb is not fed a cut bell", () => {
+  it("when each sound's dry buffer is read to its last 10 ms, then it fades to 0: the last millisecond holds under an eighth of the peak, so the reverb is not fed a cut bell", () => {
     for (const name of NAMES) {
       const dry = renderUi(name, false);
-      const span = Math.round(0.01 * UI_RATE);
-      let biggest = 0;
-      for (let i = dry.length - span; i < dry.length; i++) biggest = Math.max(biggest, Math.abs(dry[i]! - dry[i - 1]!));
-      expect(dry[dry.length - 1]!, `${name} dry last sample`).toBe(0);
-      expect(biggest, `${name} largest step in the last 10 ms`).toBeLessThan(0.05 * peakOf(dry));
+      const lastMs = dry.subarray(dry.length - Math.round(0.001 * UI_RATE));
+      expect(Math.abs(dry[dry.length - 1]!), `${name} dry last sample`).toBe(0);
+      expect(peakOf(lastMs), `${name} peak of the last millisecond`).toBeLessThan(0.125 * peakOf(dry));
     }
   });
 

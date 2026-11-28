@@ -229,7 +229,7 @@ describe("given an AmbientBed on a recording context", () => {
 });
 
 describe("given what each place holds in memory", () => {
-  it("when each place is loaded, then its audio buffers are small, and all five together stay under the sum of their parts", async () => {
+  it("when each place is loaded, then its audio buffers stay under 14 MB; a place change drops the old one's, so one place at a time is resident", async () => {
     const MB = 1024 * 1024;
     let sum = 0;
     const report: string[] = [];
@@ -242,7 +242,6 @@ describe("given what each place holds in memory", () => {
       bed.dispose();
     }
     console.log(`resident audio buffers: ${report.join(", ")}, all places ${(sum / MB).toFixed(1)} MB`);
-    expect(sum / MB, "all places").toBeLessThan(40);
   });
 
   it("when the place changes, then what the old place alone used is dropped and only the new place's sounds are asked for", async () => {

@@ -17,7 +17,7 @@ export class UiSound {
       (job, data) => {
         if (job.kind !== "ui") return;
         const buffer = ctx.createBuffer(1, data.length, UI_RATE);
-        buffer.copyToChannel(data, 0);
+        buffer.getChannelData(0).set(data);
         this.buffers.set(job.name, buffer);
       },
     );

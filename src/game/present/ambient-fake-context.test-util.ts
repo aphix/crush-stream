@@ -41,8 +41,8 @@ export class FakeContext {
   createBufferSource = (): FakeNode => this.make();
   createStereoPanner = (): FakeNode => this.make();
 
-  createBuffer(_channels: number, length: number, sampleRate: number): { length: number; sampleRate: number; copyToChannel: () => void } {
-    const buffer = { length, sampleRate, copyToChannel: () => {} };
+  createBuffer(_channels: number, length: number, sampleRate: number): { length: number; sampleRate: number; getChannelData: () => Float32Array } {
+    const buffer = { length, sampleRate, getChannelData: () => new Float32Array(length) };
     this.buffers.push(buffer);
     return buffer;
   }

@@ -1,6 +1,6 @@
 import { nextDraw } from "./ambient-dsp.ts";
 import type { RenderJob } from "./ambient-jobs.ts";
-import { bedLevels, emitterRate, LEVEL, LEVEL_COUNT, placeEmitters, placeLayers, SCHEDULE_SEED, SHOT_GAIN, SHOT_GAP_S, SHOT_PAN, type AmbientPlace } from "./ambient-levels.ts";
+import { bedLevels, emitterRate, LEVEL_COUNT, placeEmitters, placeLayers, SCHEDULE_SEED, SHOT_GAIN, SHOT_GAP_S, SHOT_PAN, type AmbientPlace } from "./ambient-levels.ts";
 import { LAYER, LAYER_RATE, LAYERS } from "./ambient-loops.ts";
 import { EMITTERS, SHOT_RATE, SHOT_VARIANTS } from "./ambient-shots.ts";
 import { renderOffThread, type RenderHandle } from "./audio-render-remote.ts";
@@ -166,7 +166,7 @@ export class AmbientBed {
     this.waiting--;
     if (job.kind === "ui") return;
     const buffer = this.ctx.createBuffer(1, data.length, job.kind === "loop" ? LAYER_RATE[job.layer] : SHOT_RATE);
-    buffer.copyToChannel(data, 0);
+    buffer.getChannelData(0).set(data);
     if (job.kind === "loop") this.ears[LAYER[job.layer] * 2 + job.ear] = buffer;
     else this.shotBuffers[EMITTERS.indexOf(job.emitter) * SHOT_VARIANTS + job.variant] = buffer;
   }

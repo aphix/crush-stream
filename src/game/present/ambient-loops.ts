@@ -6,7 +6,7 @@ export type Layer = keyof typeof LAYER;
 export const LAYERS = Object.keys(LAYER) as Layer[];
 
 /** Each layer's own sample rate (Hz): the lowest its band needs, since the loops are rendered on the main thread. */
-export const LAYER_RATE: Record<Layer, number> = { rumble: 8000, hum: 8000, wind: 16000, murmur: 8000, roar: 8000, cheer: 11025, insects: 16000 };
+export const LAYER_RATE: Record<Layer, number> = { rumble: 8000, hum: 8000, wind: 11025, murmur: 8000, roar: 8000, cheer: 8000, insects: 11025 };
 /** Loop lengths (s) of a layer's left and right copies: unequal, so the pair repeats only every 26 x 31 s. */
 const LOOP_SECONDS = [26, 31] as const;
 /** Every loop is scaled to this RMS, so the layer gains in `bedLevels` are comparable. */
@@ -66,7 +66,7 @@ function hum(rate: number, seconds: number, rng: Rng): Float32Array {
 
 /** Open wind with a faint whistle; its band is wide on purpose, the bed's low-pass closes it with speed. */
 function wind(rate: number, seconds: number, rng: Rng): Float32Array {
-  const loop = seamlessLoop((n) => addInto(shaped(n, rng, 1, Biquad.high(160, rate), Biquad.low(6500, rate)), shaped(n, rng, 0.12, Biquad.band(900, 12, rate))), rate, seconds);
+  const loop = seamlessLoop((n) => addInto(shaped(n, rng, 1, Biquad.high(160, rate), Biquad.low(4800, rate)), shaped(n, rng, 0.12, Biquad.band(900, 12, rate))), rate, seconds);
   return swelled(loop, seconds, rate, rng, 0.5, [2, 14]);
 }
 
