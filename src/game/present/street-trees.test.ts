@@ -7,12 +7,13 @@ import { PARK, PARK_BLOCK } from "../world/openworld/openworld-constants.ts";
 import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { BAY, drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
 import { distanceToPath, faceAt, inClearPath, outOf } from "../world/openworld/openworld-greenery.test-util.ts";
-import type { StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import type { StreetTreeSkin } from "../world/openworld/openworld-tree-style.ts";
+import { fallFrom, FREE_FALL_SLACK } from "../contact/tree-canopy.test-util.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { parkProps } from "../world/openworld/openworld-park.ts";
 import { PLAZA_RADIUS } from "../world/openworld/openworld-plaza.ts";
 import { PREFAB } from "../world/constants.ts";
-import type { Placed } from "../world/placements.ts";
+import { propColliders, type Placed } from "../world/placements.ts";
 import { TREE_SCALE } from "../world/scenery.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { cyl, painted, type Piece } from "./prefab-pieces.ts";
@@ -35,6 +36,8 @@ const HEADROOM = 2.2;
 const BAY_CLEARANCE = 0.3;
 /** Float noise on a point's coordinates (m). */
 const EPSILON = 1e-6;
+/** One variation of each of the four drawn sizes (a variation is its size times four, plus its turn). */
+const SIZE_VARIATIONS = [0, 4, 8, 12] as const;
 const TRUNK_FACE_REACH = 4;
 const ROTATION_DIGITS = 5;
 /** What a park tree's low parts (under head height) keep clear of (m): a path's half width and a walker's shoulder, a bench's or lamp's reach, the pavilion's. */
@@ -125,6 +128,31 @@ describe("given the street trees' drawings", () => {
       }
       for (const lump of leaves.filter((piece) => !ivy.includes(piece))) expect(boundsOf(lump).min.y * TREE_SCALE, `${skin} canopy`).toBeGreaterThan(CANOPY_FROM);
     }
+  });
+
+  it("when each kind's collider is read at each drawn size, then it is a post no wider than the drawn trunk's root and no lower than the highest drawn leaf", () => {
+    for (const skin of skins) {
+      const pieces = streetTreePieces(skin);
+      const lowestBark = pieces.find((piece) => piece[2] === MAT.TREE_BARK)!;
+      const highestLeaf = Math.max(...pieces.filter((piece) => piece[2] === MAT.CONIFER_FOLIAGE).map((piece) => boundsOf(piece).max.y * TREE_SCALE));
+      for (const variation of SIZE_VARIATIONS) {
+        const style = `${skin}:north:${variation}`;
+        const size = treeOf({ prefab: PREFAB.tree, style })!.scale;
+        const trunk = propColliders([{ prefab: PREFAB.tree, x: 0, y: 0, z: 0, yaw: 0, sx: TREE_SCALE, sy: TREE_SCALE, sz: TREE_SCALE, style }]);
+        expect(trunk.length, `${style} colliders`).toBe(1);
+        expect(trunk[0]!.r, `${style} post radius (m)`).toBeLessThanOrEqual(boundsOf(lowestBark).max.z * TREE_SCALE * size + EPSILON);
+        expect(trunk[0]!.top, `${style} post top (m)`).toBeGreaterThanOrEqual(highestLeaf * size - EPSILON);
+      }
+    }
+  });
+
+  it("when a car falls from the highest leaf of the largest plane, then it falls as it does with no tree", () => {
+    const style = "street-tree:plane:north:15";
+    const pieces = streetTreePieces("street-tree:plane");
+    const crown = Math.max(...pieces.filter((piece) => piece[2] === MAT.CONIFER_FOLIAGE).map((piece) => boundsOf(piece).max.y * TREE_SCALE)) * treeOf({ prefab: PREFAB.tree, style })!.scale;
+    const bare = fallFrom(crown, undefined, false);
+    const withTree = fallFrom(crown, style);
+    expect(Math.max(...withTree.map((y, at) => Math.abs(y - bare[at]!))), "the most the fall differs from free fall (m)").toBeLessThan(FREE_FALL_SLACK);
   });
 
   it("when every street tree of the course is placed, then no part of it a walker can meet lies in the sidewalk's clear path and no part nears a bay's front", () => {

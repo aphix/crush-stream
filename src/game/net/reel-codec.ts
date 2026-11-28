@@ -605,9 +605,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 256: `PushBudget`'s per-slice `STEP_CEIL` is scaled by the slice's share of its step (`beginSlice(dt, share)`), so a multi-slice step's drift of the centroid stays under the cap; a replayed step where a crushed part handed its excess to the cell (`clampMass`'s door pack) plays differently; a clip of 255 or before no longer reads.
  * 257: a wheel's tread footprint reads only its five ring bottoms (and the hub) over ground whose slope turns by at most about 0.08 m/m within reach (sqrt(2 TREAD_MISS / R) at the platform tyre) (`TREAD_MISS` 0.1 mm to 1 mm: the arcs may rise over a ring bottom by up to a millimetre, it was 0.1 mm), so a wheel on gently bending ground rests up to 1 mm differently and a replayed car's ride height, and what follows, differs; a clip of 256 or before no longer reads.
  * 258: `Math.tan` is replaced by `detTan` (`kernel/det-tan-core.js`: fdlibm's tan from + - * / alone) in banked track heights, car-load caps, derby walls and the draft cone: SpiderMonkey's `Math.tan` differed from V8's in the last bit on 3.8 % of inputs, so the same bits now run in every browser; a clip of 257 or before no longer reads.
+ * 259: an open-world street tree's collider is its trunk's post (`streetTrunk`) in place of the conifer's crown steps, so a replayed car that fell or flew through a street tree's leaves, or met its trunk, plays differently; a clip of 258 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 258;
+const REPLAY_VERSION = 259;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

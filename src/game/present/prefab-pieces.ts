@@ -9,7 +9,7 @@ import { MATERIAL_ATTRIBUTE, SURFACE_REGION_ATTRIBUTE } from "../vehicle/materia
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import type { FacadeSkin, FacadeStyle } from "./facades.ts";
 import type { AssetFamily } from "../world/scenery-assets/types.ts";
-import type { StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import type { StreetTreeSkin } from "../world/openworld/openworld-tree-style.ts";
 import type { PARK_LAMP } from "../world/openworld/openworld-park.ts";
 
 /** Materials the prefabs draw with (shared with the track art where it says so). */

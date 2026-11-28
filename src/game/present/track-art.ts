@@ -33,7 +33,7 @@ import { foliageTint } from "./prefabs-foliage.ts";
 import { PARKED_PAINTS } from "./prefabs-car.ts";
 import { assetTint, disposeAssetMaterials, isAssetFamily } from "./scenery-assets-art.ts";
 import { SCENERY_ASSETS } from "../world/scenery-assets/index.ts";
-import { isStreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import { isStreetTreeSkin } from "../world/openworld/openworld-tree-style.ts";
 import { PARK_LAMP } from "../world/openworld/openworld-park.ts";
 import { treeOf } from "./street-trees.ts";
 import { backdropMesh, disposeBackdrop, type Backdrop } from "./sky-backdrop.ts";

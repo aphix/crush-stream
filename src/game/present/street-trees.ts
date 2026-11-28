@@ -3,7 +3,7 @@ import { MAT } from "../kernel/material-ids.ts";
 import { PREFAB } from "../world/constants.ts";
 import { mulberry32, type Placed } from "../world/placements.ts";
 import { TREE_SCALE } from "../world/scenery.ts";
-import { streetTreeKindOf, streetTreeOf, type StreetKind, type StreetTree, type StreetTreeKind, type StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import { streetTreeKindOf, streetTreeOf, type StreetKind, type StreetTree, type StreetTreeKind, type StreetTreeSkin } from "../world/openworld/openworld-tree-style.ts";
 import { LEAF_CELLS, type LeafSpecies } from "./leaf-atlas.ts";
 import { cyl, type Piece } from "./prefab-pieces.ts";
 import { detCos, detSin } from "../kernel/physics-core.js";
