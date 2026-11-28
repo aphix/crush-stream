@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 import { MATERIALS, MAT } from "../kernel/material-ids.ts";
 import { SURFACE_IDS } from "../world/catalog.ts";
@@ -9,6 +9,9 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { FakeContext, FakeNode, centroidOf, mixRecording, peakOf, ringSeconds, rmsOf } from "./hit-sound.test-util.ts";
 import { BANK_RATE, bankKey, hitGain, hitSamples, hitSize, HIT_MAX, renderHit, renderScrapeLoop, scrapeKind, scrapeSamples, SOUND_MATS, TICK_MAX, type HitSize } from "./hit-synth.ts";
 
+/** The frame budget (ms) the sound renders its bank within, and what a sample of it costs on the test's clock. */
+const BUILD_BUDGET_MS = 2;
+const MS_PER_SAMPLE = 0.0001;
 /** Calls a read drives, and the bytes a call may allocate: a hit passes a few non-integer numbers to the audio API, each a boxed double (16 B) the API's own calls need. */
 const CALLS = 4000;
 const HIT_BOUND_B = 128;
@@ -349,22 +352,33 @@ describe("given the scrape loops", () => {
 });
 
 describe("given the sound's frame-built bank", () => {
-  it("when the sound is made, then its constructor returns at once with nothing rendered, and frames fill the bank within a small budget each", () => {
-    const ctx = new FakeContext(true);
-    const started = performance.now();
-    const sound = new HitSound(ctx, new FakeNode(true));
-    expect(performance.now() - started, "ms in the constructor").toBeLessThan(50);
+  it("when the sound is made, then its constructor renders nothing, each frame renders within the budget, and once crash buffers begin each frame renders one alone", () => {
+    const sound = new HitSound(new FakeContext(true), new FakeNode(true));
     expect(sound.bankBytes, "bytes before any frame").toBe(0);
+    // A clock that moves only with the work done: a sample rendered costs a fixed time, whatever the box is doing.
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => (sound.bankBytes / 4) * MS_PER_SAMPLE);
+    const overshootSamples = BUILD_BUDGET_MS / MS_PER_SAMPLE + Math.max(hitSamples(1, BANK_RATE), scrapeSamples(BANK_RATE));
+    const crashBytes = hitSamples(2, BANK_RATE) * 4;
     let frames = 0;
-    let worst = 0;
-    while (!sound.bankReady) {
-      const t = performance.now();
-      sound.frame(0, 0, 0, 0);
-      worst = Math.max(worst, performance.now() - t);
-      frames++;
+    let crashFrames = 0;
+    try {
+      while (!sound.bankReady) {
+        const before = sound.bankBytes;
+        sound.frame(0, 0, 0, 0);
+        const delta = sound.bankBytes - before;
+        frames++;
+        if (crashFrames === 0 && delta !== crashBytes) {
+          expect(delta / 4, `samples rendered in frame ${frames}`).toBeLessThanOrEqual(overshootSamples);
+          continue;
+        }
+        crashFrames++;
+        expect(delta, `crash frame ${frames} renders one crash buffer and nothing else`).toBe(crashBytes);
+      }
+    } finally {
+      clock.mockRestore();
     }
     expect(frames, "frames to finish").toBeGreaterThan(20);
-    expect(worst, "ms of the slowest frame").toBeLessThan(8);
+    expect(crashFrames, "frames of one crash buffer each").toBeGreaterThan(40);
     expect(sound.bankBytes / 1e6, "MB of buffers").toBeLessThan(20);
   });
 

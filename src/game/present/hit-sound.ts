@@ -563,6 +563,7 @@ export class HitSound {
     this.scrapeRate[slot] = 1;
     this.scrapeCut[slot] = scrapeCutoff(kind);
     this.scrapeTouched[slot] = 0;
+    this.scrapeHeld[slot] = 0;
     this.scrapeIdle[slot] = 0;
     return slot;
   }
