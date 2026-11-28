@@ -8,6 +8,7 @@ import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
 import { assetScale } from "./scenery-assets/pick.ts";
 import { placeScenery } from "./scenery.ts";
 import { KNOCK, PROP, Surface, WALL } from "./surfaces.ts";
+import { streetTrunk } from "./openworld/openworld-trunks.ts";
 import { blankPoint, blankProjection, blankSegment, pointOn, projectPath, segmentAt, type Projection, type Track, type TrackPath } from "./track.ts";
 
 /**
@@ -402,7 +403,7 @@ export function propColliders(placed: readonly Placed[]): PropCollider[] {
     if (spec.body === "none") continue;
     const cos = detCos(p.yaw);
     const sin = detSin(p.yaw);
-    for (const c of spec.collider) {
+    for (const c of streetTrunk(p.style, p.sx) ?? spec.collider) {
       const ox = (c.x ?? 0) * p.sx;
       const oz = (c.z ?? 0) * p.sz;
       if (c.kind === "circle" && Math.abs(p.sx - p.sz) > ELLIPSE_FROM * Math.max(p.sx, p.sz)) {

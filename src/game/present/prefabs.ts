@@ -11,7 +11,7 @@ import { frontBumper, lyingWheel, parkedCar } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
 import { streetKitParts } from "./prefabs-street.ts";
 import { streetTreePieces } from "./street-trees.ts";
-import { isStreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import { isStreetTreeSkin } from "../world/openworld/openworld-tree-style.ts";
 import { PARK_LAMP } from "../world/openworld/openworld-park.ts";
 import { LAMP_FROM_CURB, LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMaterials } from "./scenery-assets-art.ts";
