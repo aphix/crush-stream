@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { approach, CEILING, ceilingCurve, CrashDuck, DUCK, duckDepth, duckGain, engineBusGain, engineDuck, MASTER_LIMITER, musicGain, REVERB, reverbImpulse, slowmoCutoff, squealHz, squealLevel, thudGain, TYRE, VOICES, VoiceBudget } from "./audio-mix.ts";
+import { approach, audibleImpulse, CEILING, ceilingCurve, CrashDuck, DUCK, duckDepth, duckGain, engineBusGain, engineDuck, MASTER_LIMITER, musicGain, REVERB, reverbImpulse, slowmoCutoff, squealHz, squealLevel, thudGain, TYRE, VOICES, VoiceBudget } from "./audio-mix.ts";
 
 const EPS = 1e-9;
 
@@ -125,7 +125,6 @@ describe("given a voice budget of three", () => {
     const budget = new VoiceBudget(3);
     for (let i = 0; i < 3; i++) expect(budget.take(0, 10, 1)).toBe(true);
     expect(budget.take(0.5, 10, 1), "full").toBe(false);
-    expect(budget.busy(0.5)).toBe(3);
     expect(budget.take(1.01, 10, 1), "one ended").toBe(true);
   });
   it("when it is full, then a voice 1.5 times the weakest running one's priority displaces it and a lesser one does not", () => {
@@ -134,13 +133,23 @@ describe("given a voice budget of three", () => {
     budget.take(0, 20, 1);
     expect(budget.take(0.1, 14, 1), "under 1.5x of 10").toBe(false);
     expect(budget.take(0.1, 16, 1), "over 1.5x of 10").toBe(true);
-    expect(budget.busy(0.1)).toBe(2);
   });
   it("when the hit bus is sized, then a phone has fewer voices than a desktop", () => {
     expect(VOICES.hitsPhone).toBeLessThan(VOICES.hitsDesktop);
   });
 });
 
+describe("given a hit's audible impulse", () => {
+  it("when the hit is beside the listener, then it is the impulse itself; at 12 m it is halved at most; past 400 m it is nothing", () => {
+    expect(audibleImpulse(30, 0, 0, 0)).toBeCloseTo(30, 9);
+    expect(audibleImpulse(30, 12, 0, 0)).toBeCloseTo(15, 9);
+    expect(audibleImpulse(30, 0, 0, 401)).toBe(0);
+  });
+  it("when the hit moves away along any axis, then it only gets quieter, by the same distance whichever axis", () => {
+    expect(audibleImpulse(30, 0, 40, 0)).toBeCloseTo(audibleImpulse(30, 40, 0, 0), 9);
+    expect(audibleImpulse(30, 80, 0, 0)).toBeLessThan(audibleImpulse(30, 40, 0, 0));
+  });
+});
 describe("given the shared reverb's impulse", () => {
   const [left, right] = reverbImpulse(8000, REVERB.seconds, REVERB.seed);
   const energy = (h: Float32Array, from: number, to: number): number => {

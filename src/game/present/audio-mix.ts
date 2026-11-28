@@ -52,7 +52,7 @@ export const VOICES = { hitsDesktop: 10, hitsPhone: 6, ui: 2, scrapes: 3 } as co
 const STEAL_RATIO = 1.5;
 
 /** A hit heard from further than this (m) is not admitted at all. */
-export const HEARD_MAX_M = 400;
+const HEARD_MAX_M = 400;
 /** Gain left of a sound heard from `distanceM`: the formula of `distanceGain` in hit-synth.ts, kept here until that module is merged, then imported from it (one place). */
 const DISTANCE_REFERENCE_M = 12;
 const DISTANCE_EXPONENT = 1.3;
