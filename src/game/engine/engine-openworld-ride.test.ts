@@ -95,7 +95,7 @@ describe("given the real engine in the open world, its player on foot with an em
     const car = rig.cars()[target]!;
     rig.getOut();
     rig.walkToDoor(car, PASSENGER_DOOR);
-    expect(rig.engine["onFoot"].prompt(), "the passenger door offers it too").toBe("Enter or Y: get in");
+    expect(rig.engine["onFoot"].prompt(), "the passenger door offers it too").toBe("F or Y: get in");
     rig.press("Enter");
     const [driversDoor, passengersDoor] = widest(car, CLIMB_IN_FRAMES);
     expect(passengersDoor, "the passenger door swung (rad)").toBeGreaterThan(WIDE_RAD);
@@ -209,7 +209,7 @@ describe("given the real engine in the open world, its player on foot with an em
     rig.press("Enter");
     rig.run(1);
     expect(table().driverOf(target), "he is at its wheel").toBe(HOST);
-    expect(rig.engine["onFoot"].prompt(), "and may get out of it").toBe("Enter or Y: get out");
+    expect(rig.engine["onFoot"].prompt(), "and may get out of it").toBe("F or Y: get out");
     const from = car.group.position.clone();
     rig.hold("KeyW", 2);
     expect(hypot2(car.group.position.x - from.x, car.group.position.z - from.z), "he drove it off (m)").toBeGreaterThan(DROVE_OFF_M);
