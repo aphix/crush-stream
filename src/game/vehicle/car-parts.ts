@@ -22,7 +22,7 @@ import type { DeformableCar } from "./car.ts";
 import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
 import { GLASS_NAMES } from "./car-glass.ts";
-import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, HIT_DOOR, HIT_HOOD, HIT_LID, HIT_MIRROR, HIT_PANEL, LATCH_CATCH_RATE, LATCH_POP_MPS, LATCH_REACH_M, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, MIRROR_BREAK_J, type PartNetState } from "./car-core.ts";
+import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassName, type GlassPane, type GlassPart, HIT_DOOR, HIT_HOOD, HIT_LID, HIT_MIRROR, HIT_PANEL, LATCH_CATCH_RATE, LATCH_POP_MPS, LATCH_REACH_M, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, MIRROR_BREAK_J, type PartNetState } from "./car-core.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_QUIET_S,
@@ -1174,6 +1174,25 @@ export abstract class CarParts extends CarGlass {
   strikeSlot(code: number): number {
     const p = this.struckPart(code);
     return p === null ? -1 : this.parts.indexOf(p);
+  }
+
+  /** Poses what was left owed and brings the meshes' world matrices up to date: a shot's ray meets the drawn parts, whoever sees the car. */
+  poseNow(): void {
+    if (!this.wait.owed) return;
+    this.poseOwed();
+    this.group.updateMatrixWorld(true);
+  }
+
+  /** A door pane rides its door's drawn pose: settled first, whoever sees the car (the ejection places a driver from it). */
+  override glassWorld(name: GlassName, out: THREE.Vector3): THREE.Vector3 {
+    if (this.wait.owed) this.poseOwed();
+    return super.glassWorld(name, out);
+  }
+
+  /** Shards burst from the pane's drawn place, which rides its door: settled first. */
+  protected override shatterGlass(g: GlassPane): void {
+    if (this.wait.owed) this.poseOwed();
+    super.shatterGlass(g);
   }
 
   /** Part `slot`'s drawn box in its own frame into `out`; returns its object, its world matrix current: the dummies' world's stand-in for it. */

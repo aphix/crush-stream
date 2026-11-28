@@ -1189,7 +1189,10 @@ export class CrashEngine extends EngineGarage {
     this.raycaster.far = range;
     const cars = this.live();
     _carGroups.length = cars.length;
-    for (let at = 0; at < cars.length; at++) _carGroups[at] = cars[at]!.group;
+    for (let at = 0; at < cars.length; at++) {
+      cars[at]!.poseNow();
+      _carGroups[at] = cars[at]!.group;
+    }
     _carHit.find(this.raycaster, _carGroups);
     this.raycaster.far = Infinity;
     for (let o: THREE.Object3D | null = _carHit.object; o; o = o.parent) {

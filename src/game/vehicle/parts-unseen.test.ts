@@ -95,3 +95,42 @@ describe("given a wreck whose door moved while no camera saw it and whose mirror
     assertSameNumbers(leave(true), seen, "the torn mirror's pose", POSE_TOLERANCE);
   });
 });
+
+describe("given a wreck whose door moved while no camera saw it", () => {
+  // mutation: sed -i '/this.wait.owed) this.poseOwed();/{N;/return super.glassWorld/s/^[^\n]*\n//}' src/game/vehicle/car-parts.ts
+  it("when the door pane's centre is read, as the ejection places a thrown driver from it, then it is where the seen car has it", () => {
+    for (const pane of ["doorL", "doorR"] as const) {
+      const seen = doorMovedWhileUnseen(false).glassWorld(pane, new THREE.Vector3());
+      const hidden = doorMovedWhileUnseen(true).glassWorld(pane, new THREE.Vector3());
+      assertSameNumbers(hidden.toArray(), seen.toArray(), `${pane} centre`, POSE_TOLERANCE);
+    }
+  });
+
+  // mutation: sed -i '/this.wait.owed) this.poseOwed();/{N;/super.shatterGlass/s/^[^\n]*\n//}' src/game/vehicle/car-parts.ts
+  it("when its door pane shatters, then the shards burst from where the seen car's pane bursts them", () => {
+    const burst = (unseen: boolean): number[] => {
+      const car = doorMovedWhileUnseen(unseen);
+      const out: number[] = [];
+      car["onGlass"] = (origin, vel) => void out.push(origin.x, origin.y, origin.z, vel.x, vel.y, vel.z);
+      car.smashGlass("doorL");
+      return out;
+    };
+    const seen = burst(false);
+    expect(seen.length, "shards burst").toBeGreaterThan(0);
+    assertSameNumbers(burst(true), seen, "shard origin and velocity", POSE_TOLERANCE);
+  });
+});
+
+describe("given a wreck whose door moved while no camera saw it and a shot's ray is cast at it", () => {
+  // mutation: sed -i '/^    this.poseOwed();$/{N;/updateMatrixWorld(true)/s/^[^\n]*\n//}' src/game/vehicle/car-parts.ts
+  it("when the car is made ready for the ray, then every part's world matrix is the seen car's", () => {
+    const seen = doorMovedWhileUnseen(false);
+    seen.group.updateMatrixWorld(true);
+    const hidden = doorMovedWhileUnseen(true);
+    hidden.poseNow();
+    for (const [i, o] of seen.partObjects().entries()) {
+      if (!seen.partOn(i)) continue;
+      assertSameNumbers(hidden.partObjects()[i]!.matrixWorld.elements, o.matrixWorld.elements, `part ${i} matrixWorld`, POSE_TOLERANCE);
+    }
+  });
+});
