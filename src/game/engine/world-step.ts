@@ -35,6 +35,8 @@ export type World = {
   beforeSlice: ((h: number) => boolean) | null;
   /** Each SAT pair hit, before it is offered to `strongest`. */
   pairHit: ((a: number, b: number, hit: ContactHit) => void) | null;
+  /** Each slab hit on car `car` (a slice it touched the slab), before it is offered to `strongest`. */
+  barrierHit: ((car: number, hit: ContactHit) => void) | null;
   /** A door, mirror or panel of one car met the other (`partContactPair`), a mass of one met a mass of the other (`collideWith`), or one stood on or touched the other's top (`CarSurfaces.met`): they touched without a SAT hit. */
   partTouch: ((a: number, b: number) => void) | null;
   /** A torn part or popped wheel of car `own` met car `top`'s top (`CarSurfaces.partMet`): `top` moved it, so a clip that keeps `own` keeps `top`. */
@@ -102,6 +104,7 @@ export function newWorld(cars: readonly DeformableCar[], barrier: JerseyBarrier 
     loners: 0,
     planLoners: 0,
     pairHit: null,
+    barrierHit: null,
     partTouch: null,
     partMet: undefined,
     afterCar: null,
@@ -421,6 +424,7 @@ export function stepWorld(w: World, dt: number): void {
         const hit = barrier.resolve(cars[ci]!, true, true, h);
         if (hit) {
           w.barrierHits[ci] = true;
+          w.barrierHit?.(ci, hit);
           strongest.offer(hit);
         }
       }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { approach, CEILING, ceilingCurve, crashDuck, engineBusGain, engineDuck, IMPACT, MASTER_LIMITER, musicGain, slowmoCutoff, squealHz, squealLevel, thudGain, TYRE } from "./audio-mix.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { approach, CEILING, ceilingCurve, CrashDuck, DUCK, duckDepth, duckGain, engineBusGain, engineDuck, MASTER_LIMITER, musicGain, REVERB, reverbImpulse, slowmoCutoff, squealHz, squealLevel, thudGain, TYRE, VOICES, VoiceBudget } from "./audio-mix.ts";
 
 const EPS = 1e-9;
 
@@ -71,19 +73,91 @@ describe("given the engine duck of the music", () => {
   }
 });
 
-describe("given the crash duck of the music", () => {
+describe("given the depth of a crash duck by the hit's impulse", () => {
   const testCases = [
-    { name: "the moment of impact", sinceS: 0, expected: 0.4 },
-    { name: "the end of the hold (0.3 s)", sinceS: 0.3, expected: 0.4 },
-    { name: "one time constant after the hold (0.8 s)", sinceS: 0.8, expected: 1 - 0.6 * Math.exp(-1) },
-    { name: "long after", sinceS: 20, expected: 1 },
-    { name: "no crash yet", sinceS: Infinity, expected: 1 },
+    { name: "a touch (2 m/s)", impulse: 2, expected: 0 },
+    { name: "the duck's floor (4 m/s)", impulse: DUCK.minImpulse, expected: 0 },
+    { name: "half way (22 m/s)", impulse: 22, expected: 0.5 },
+    { name: "the full duck (40 m/s)", impulse: DUCK.fullImpulse, expected: 1 },
+    { name: "a harder hit than full", impulse: 120, expected: 1 },
   ];
   for (const c of testCases) {
-    it(`when it is ${c.name}, then the duck is ${c.expected}`, () => {
-      expect(Math.abs(crashDuck(c.sinceS) - c.expected)).toBeLessThan(1e-6);
+    it(`when the hit is ${c.name}, then the depth is ${c.expected}`, () => {
+      expect(Math.abs(duckDepth(c.impulse) - c.expected)).toBeLessThan(EPS);
     });
   }
+  it("when the duck is at full depth, then the music sits 6 dB under and the ambience 4.5 dB under; at none, unity", () => {
+    expect(duckGain(1, DUCK.musicDb)).toBeCloseTo(10 ** (-6 / 20), 9);
+    expect(duckGain(1, DUCK.ambientDb)).toBeCloseTo(10 ** (-4.5 / 20), 9);
+    expect(duckGain(0, DUCK.musicDb)).toBe(1);
+  });
+});
+
+describe("given the crash duck's level over time", () => {
+  /** The duck's level after a hit of `impulse` and `seconds` of 1/60 s steps. */
+  function levelAfter(impulse: number, seconds: number): number {
+    const duck = new CrashDuck();
+    duck.hit(impulse);
+    for (let t = 0; t < seconds - 1e-9; t += 1 / FRAME_HZ) duck.step(1 / FRAME_HZ);
+    return duck.level;
+  }
+  it("when a big hit lands, then the duck is full at once and still full 0.4 s on, then recovers: under a tenth of it by 1.5 s, gone by 4 s", () => {
+    expect(levelAfter(40, 0)).toBe(1);
+    expect(levelAfter(40, 0.4)).toBe(1);
+    expect(levelAfter(40, 1.5), "1.5 s").toBeLessThan(0.1);
+    expect(levelAfter(40, 4), "4 s").toBe(0);
+  });
+  it("when a hit is half as hard, then its duck is half as deep and lets go sooner than a full one", () => {
+    expect(levelAfter(22, 0)).toBeCloseTo(0.5, 9);
+    expect(levelAfter(22, 0.7)).toBeLessThan(levelAfter(40, 0.7));
+  });
+  it("when a touch hits, then nothing ducks; when a weaker hit follows a strong one, then the strong duck stays", () => {
+    expect(levelAfter(2, 0)).toBe(0);
+    const duck = new CrashDuck();
+    duck.hit(40);
+    duck.hit(10);
+    expect(duck.level).toBe(1);
+  });
+});
+
+describe("given a voice budget of three", () => {
+  it("when three voices are booked and a fourth of the same priority asks, then it is refused until one has ended", () => {
+    const budget = new VoiceBudget(3);
+    for (let i = 0; i < 3; i++) expect(budget.take(0, 10, 1)).toBe(true);
+    expect(budget.take(0.5, 10, 1), "full").toBe(false);
+    expect(budget.busy(0.5)).toBe(3);
+    expect(budget.take(1.01, 10, 1), "one ended").toBe(true);
+  });
+  it("when it is full, then a voice 1.5 times the weakest running one's priority displaces it and a lesser one does not", () => {
+    const budget = new VoiceBudget(2);
+    budget.take(0, 10, 1);
+    budget.take(0, 20, 1);
+    expect(budget.take(0.1, 14, 1), "under 1.5x of 10").toBe(false);
+    expect(budget.take(0.1, 16, 1), "over 1.5x of 10").toBe(true);
+    expect(budget.busy(0.1)).toBe(2);
+  });
+  it("when the hit bus is sized, then a phone has fewer voices than a desktop", () => {
+    expect(VOICES.hitsPhone).toBeLessThan(VOICES.hitsDesktop);
+  });
+});
+
+describe("given the shared reverb's impulse", () => {
+  const [left, right] = reverbImpulse(8000, REVERB.seconds, REVERB.seed);
+  const energy = (h: Float32Array, from: number, to: number): number => {
+    let e = 0;
+    for (let i = Math.floor(from * h.length); i < Math.floor(to * h.length); i++) e += h[i]! * h[i]!;
+    return e;
+  };
+  it("when it is made twice from its seed, then it is the same, and the two ears differ", () => {
+    const again = reverbImpulse(8000, REVERB.seconds, REVERB.seed);
+    expect(firstMismatch(again[0].subarray(0, 64), left.subarray(0, 64))).toBeUndefined();
+    expect(firstMismatch(left.subarray(100, 164), right.subarray(100, 164))).toBeDefined();
+  });
+  it("when it is measured, then each ear has unit energy and the last tenth holds under a thousandth of the first tenth's", () => {
+    expect(energy(left, 0, 1)).toBeCloseTo(1, 4);
+    expect(energy(right, 0, 1)).toBeCloseTo(1, 4);
+    expect(energy(left, 0.9, 1)).toBeLessThan(energy(left, 0, 0.1) * 1e-3);
+  });
 });
 
 describe("given the slow-mo cutoff of the engine bus", () => {
@@ -113,25 +187,6 @@ describe("given a first-order lag", () => {
   });
 });
 
-describe("given the crash hit (owner: 'a cereal bag'; wanted lower, roomier, a little quieter than 900 Hz / 0.6 / dry / 0.28 s)", () => {
-  it("when the noise is tuned, then it is dark (centre at most 400 Hz) and not an instant pop", () => {
-    expect(IMPACT.noiseHz).toBeLessThanOrEqual(400);
-    expect(IMPACT.noiseAttackS >= 0.008 && IMPACT.noiseAttackS <= 0.015).toBeTruthy();
-  });
-  it("when the thump is tuned, then it starts where ordinary speakers play it (60-70 Hz)", () => {
-    expect(IMPACT.thumpStartHz >= 60 && IMPACT.thumpStartHz <= 70).toBeTruthy();
-  });
-  it("when the bus is set, then it is quieter than the old 0.6", () => {
-    expect(IMPACT.busGain).toBeLessThan(0.6);
-  });
-  it("when the hit decays, then it rings at least 0.4 s", () => {
-    expect(IMPACT.noiseDecayS).toBeGreaterThanOrEqual(0.4);
-  });
-  it("when the room is set, then it sends a wet reverb about a second long", () => {
-    expect(IMPACT.roomWet).toBeGreaterThan(0);
-    expect(IMPACT.roomS).toBeGreaterThanOrEqual(1);
-  });
-});
 
 describe("given the tyre squeal level (slide, lock, spin, ground speed, wheels down)", () => {
   const testCases = [

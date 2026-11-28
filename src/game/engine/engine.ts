@@ -36,13 +36,18 @@ import { makeRenderer } from "./engine-renderer.ts";
 import { checkUploads, uploadCheckAsked } from "./upload-check.ts";
 import { DebrisSystem, SparkSystem, GlassDotSystem, TireSmokeSystem } from "../present/engine-fx.ts";
 import { Fountains } from "./engine-fountains.ts";
-import { GameAudio } from "../present/game-audio.ts";
+import { GameAudio, type AmbientScene } from "../present/game-audio.ts";
+import { propSoundMat } from "../present/hit-sound.ts";
+import { AudioFeed, STEEL } from "./engine-audio-feed.ts";
+import { coursePlace, DEFAULT_PLACE, hourOfDay, UiCues } from "./engine-audio-cues.ts";
 import { ShotFx } from "../present/shot-fx.ts";
 import { gunModel } from "../present/weapon-models.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
-import { MAT } from "../kernel/material-ids.ts";
+import { MAT, MATERIALS } from "../kernel/material-ids.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { HandGuns } from "./engine-hand-gun.ts";
+import type { RacePhase } from "../match/types.ts";
+import { COUNTDOWN } from "../match/session.ts";
 import { RemoteGuns } from "./engine-remote-guns.ts";
 import { slotOfWeapon } from "./engine-onfoot-arms.ts";
 import type { CarPick, DollPick } from "./engine-openworld.ts";
@@ -454,6 +459,14 @@ export class CrashEngine extends EngineGarage {
     this.quality.pinFromPage(knobValue(DRAW_DISTANCES, query.get(QUALITY_QUERY.draw)), knobValue(RENDER_SCALES, query.get(QUALITY_QUERY.scale)), knobValue(SHADOW_QUALITIES, query.get(QUALITY_QUERY.shadow)));
     this.audio = new GameAudio(this.camera, desktop);
     this.audio.setVolumes(this.musicVolume, this.engineVolume);
+    this.audioFeed = new AudioFeed(
+      {
+        hit: (e) => this.audio.hit(e),
+        scrape: (id, speed, force, x, y, z, a, b) => this.audio.scrape(id, speed, force, x, y, z, a, b),
+      },
+      () => this.live(),
+    );
+    this.uiCues = new UiCues((name) => this.uiSound(name));
     this.trace = new TraceRecorder({
       barrier: this.barrier,
       balls: this.balls,
@@ -839,6 +852,7 @@ export class CrashEngine extends EngineGarage {
       dress: (car) => this.dressCar(car),
       setPaused: (on) => {
         this.playing = !on;
+        this.uiSound(on ? "open" : "close");
         this.emitHud();
       },
       leave: () => this.setScene("fleet"),
@@ -851,6 +865,10 @@ export class CrashEngine extends EngineGarage {
       throwPassenger: (car, look) => this.ragdolls.throwPassenger(car, look),
       throwFigure: (strike) => this.ragdolls.throwFigure(strike, this.live()),
       hit: (i, closing) => this.noteHit(i, closing),
+      heard: (car, impulse, x, z, material) => {
+        const struck = this.live()[car];
+        if (this.audioOn && struck) this.audioFeed.wall(struck, impulse, x, struck.group.position.y, z, propSoundMat(MATERIALS[material]![0]));
+      },
       knockProp: (index, car, vx, vy, vz) => this.ragdolls.knockProp(index, car, vx, vy, vz),
       buildArt: (track, placed, drawn, arm) => {
         this.queueWarm();
@@ -881,7 +899,10 @@ export class CrashEngine extends EngineGarage {
       clock: this.clock,
       crash: (contact, normal, source) => this.cine.beginCrashCam(contact, normal, this.crashSight(), this.clock.hold, source),
       impact: (contact, normal, closing) => this.beginCinematic(contact, normal, closing, false),
-      hit: this.hitFx,
+      hit: (contact, normal, impulse) => {
+        this.hitFx(contact, normal, impulse);
+        if (this.audioOn) this.audioFeed.wall(this.nearestCar(contact), impulse, contact.x, contact.y, contact.z, STEEL);
+      },
       fudge: (at, normal, strength) => this.fudgeContact(at, normal, strength),
       eject: (e, ride) => {
         this.ragdolls.launch(e, this.live(), ride);
@@ -1472,7 +1493,11 @@ export class CrashEngine extends EngineGarage {
     lapPart(PART.rest);
     this.lampLights.update(this.showShowcase ? this.drawnCars() : this.live(), this.camera, this.followedCar(), performance.now() / 1000, this.highlights.playing ? this.highlights.cars() : undefined, wallDt);
     lapPart(PART.scenery);
-    if (this.audioOn) this.audio.frame(wallDt, this.highlights.playing ? this.highlights.cars() : this.live(), this.highlights.playing ? this.highlights.focus() : this.followedCar(), this.clock.timeScale * this.cine.timeWarp, this.playing && !held);
+    if (this.audioOn) {
+      this.audioFeed.frame(wallDt);
+      this.uiCues.frame(this.cuePhase(), this.cueTime(), this.cueWrecked(), this.onFoot.armed() ? this.onFoot.arms.weapon : null);
+      this.audio.frame(wallDt, this.highlights.playing ? this.highlights.cars() : this.live(), this.highlights.playing ? this.highlights.focus() : this.followedCar(), this.clock.timeScale * this.cine.timeWarp, this.playing && !held, this.ambientScene());
+    } else this.audioFeed.clear();
     lapPart(PART.audio);
     if (this.stage.night) this.stage.syncPools(this.poles);
     lapPart(PART.scenery);
@@ -1584,7 +1609,54 @@ export class CrashEngine extends EngineGarage {
     else if (this.sceneId === "fleet") this.fleetHit(a, b, hit);
     this.noteHit(a, hit.impulse);
     this.noteHit(b, hit.impulse);
+    if (this.audioOn) this.audioFeed.pair(this.cars[a]!, this.cars[b]!, hit);
   };
+
+  /** The slab met a car: concrete against steel. */
+  private readonly barrierHeard = (car: number, hit: ContactHit): void => {
+    if (this.audioOn) this.audioFeed.wall(this.cars[car]!, hit.impulse, hit.contact.x, hit.contact.y, hit.contact.z, "concrete");
+  };
+
+  private readonly ambientNow: AmbientScene = { place: DEFAULT_PLACE, hour: 13, speed: 0, indoors: false };
+  private uiCues!: UiCues;
+
+  /** What the ambient bed is told each frame: where the player is, the hour, how fast the followed car goes, and whether he is under a roof. */
+  private ambientScene(): AmbientScene {
+    const s = this.ambientNow;
+    const followed = this.followedCar();
+    s.speed = followed ? followed.velocity.length() : 0;
+    s.indoors = false;
+    if (this.showOpenWorld) {
+      s.place = "openworld";
+      s.hour = hourOfDay(this.openWorld.gameMinute());
+    } else if (this.race.active) {
+      s.place = coursePlace(this.race.courseId);
+      s.hour = hourOfDay(null, this.race.timeOfDay);
+      s.indoors = followed !== null && this.race.inTunnel(this.seat.carIndex);
+    } else {
+      s.place = this.derbyMode ? "arena" : DEFAULT_PLACE;
+      s.hour = hourOfDay(null);
+      s.indoors = this.showGarage || this.showShowcase || this.showLab;
+    }
+    return s;
+  }
+
+  /** The race phase the UI cues follow: a race's, or a derby's read from its clock (null: neither is running). */
+  private cuePhase(): RacePhase | null {
+    if (this.race.active) return this.race.phase;
+    if (!this.derbyMode || !this.derby.active) return null;
+    if (this.derby.winnerId !== null) return "finished";
+    return this.derby.time < -COUNTDOWN ? "grid" : this.derby.time < 0 ? "countdown" : "racing";
+  }
+
+  private cueTime(): number {
+    return this.race.active ? this.race.time : this.derby.time;
+  }
+
+  /** The followed car, driven by the player, is wrecked. */
+  private cueWrecked(): boolean {
+    return this.seat.mode === "drive" && (this.followedCar()?.crashed ?? false);
+  }
 
   /** Before each slice: a rig scene's or the Lab's own step; true when it stepped the slice itself. */
   private readonly beforeSlice = (h: number): boolean => {
@@ -1685,6 +1757,7 @@ export class CrashEngine extends EngineGarage {
     w.partTouch = this.partTouch;
     w.partMet = this.partMet;
     w.collide = this.collide;
+    w.barrierHit = this.barrierHeard;
     w.lone = this.race.active;
     w.restSleep = this.showOpenWorld;
     if (!this.race.active && !this.showLab) this.syncRigs();

@@ -85,5 +85,7 @@ function sceneToggle(engine: RefObject<CrashEngine | null>, id: Exclude<SceneId,
 export function pickScene(engine: RefObject<CrashEngine | null>, inPlay: SceneId, picked: SceneId): void {
   if (picked === inPlay) return;
   const toggled = picked === SCENE.fleet ? inPlay : picked;
-  if (toggled !== SCENE.fleet) sceneToggle(engine, toggled);
+  if (toggled === SCENE.fleet) return;
+  sceneToggle(engine, toggled);
+  engine.current?.uiSound(picked === SCENE.fleet ? "select" : "confirm");
 }

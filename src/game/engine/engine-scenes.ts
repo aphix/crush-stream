@@ -3,6 +3,8 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { BOOST, carRuns } from "../vehicle/car-drive.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 import { PISTON_ORBIT_RATE, pistonBearing } from "../present/engine-pistons.ts";
+import type { SoundMat } from "../present/hit-sound.ts";
+import { STEEL } from "./engine-audio-feed.ts";
 import { carFellOffRim, edgeAction, fleetEmptied, layoutFleet, layoutDerby, MAX_CARS, respawnSlot } from "../scenes/fleet.ts";
 import { RANGE, RANGE_GROUND } from "../scenes/range.ts";
 import { LAB_PRESET } from "../scenes/constants.ts";
@@ -775,7 +777,10 @@ export abstract class EngineScenes extends EngineMinigames {
       this.debris.burst(at, n, Math.min(48, 10 + closing) * this.fxDensity);
       this.sparks.poof(at, n, Math.min(28, 6 + closing * 0.5) * this.fxDensity);
     },
-    wall: (_index, i, closing) => this.noteHit(i, closing),
+    wall: (_index, i, closing, x, z) => {
+      this.noteHit(i, closing);
+      this.heardSolid(i, closing, x, z, "concrete");
+    },
   };
 
   protected readonly raceCollide = (car: DeformableCar, i: number, h: number): void => this.race.collide(car, i, h);
@@ -783,8 +788,9 @@ export abstract class EngineScenes extends EngineMinigames {
   /** Reused: `strongest.offer` copies the vectors out. */
   private readonly wallHit: ContactHit = { impulse: 0, contact: new THREE.Vector3(), normal: new THREE.Vector3() };
 
-  private offerWall(i: number, closing: number, x: number, z: number, nx: number, nz: number): void {
+  private offerWall(i: number, closing: number, x: number, z: number, nx: number, nz: number, mat: SoundMat = "concrete"): void {
     this.noteHit(i, closing);
+    this.heardSolid(i, closing, x, z, mat);
     this.wallHit.impulse = Math.max(closing, 0.5);
     this.wallHit.contact.set(x, this.world.cars[i]!.group.position.y, z);
     this.wallHit.wall = true;
@@ -792,10 +798,16 @@ export abstract class EngineScenes extends EngineMinigames {
     this.world.strongest.offer(this.wallHit);
   }
 
+  /** A solid of `mat` hit car `i` at (x, z): audio hears it. */
+  private heardSolid(i: number, closing: number, x: number, z: number, mat: SoundMat): void {
+    const car = this.world.cars[i];
+    if (this.audioOn && car) this.audioFeed.wall(car, closing, x, car.group.position.y, z, mat);
+  }
+
   private readonly rampHits: PropHits = {
     knock: () => {},
     fx: () => {},
-    wall: (_index, i, closing, x, z, nx, nz) => this.offerWall(i, closing, x, z, nx, nz),
+    wall: (_index, i, closing, x, z, nx, nz) => this.offerWall(i, closing, x, z, nx, nz, STEEL),
   };
 
   protected readonly rampCollide = (car: DeformableCar, _i: number, h: number): void => {
@@ -817,7 +829,7 @@ export abstract class EngineScenes extends EngineMinigames {
       this.sparks.poof(at, n, Math.min(28, 6 + closing * 0.5) * this.fxDensity);
     },
     wall: (index, carIndex, closing, x, z, nx, nz) => {
-      this.offerWall(carIndex, closing, x, z, nx, nz);
+      this.offerWall(carIndex, closing, x, z, nx, nz, index >= RIG_BALL_FIRST ? "plastic" : index >= RIG_POLE_FIRST ? STEEL : "concrete");
       if (index < RIG_BALL_FIRST || !shatterBall(this.balls[index - RIG_BALL_FIRST]!, this.world.cars[carIndex]!, closing)) return;
       this.trace.ballHits.push({ t: this.elapsedWall, ball: index - RIG_BALL_FIRST, closing, broken: true });
     },

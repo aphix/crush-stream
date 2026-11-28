@@ -156,6 +156,7 @@ export function makeWorld(survivalCourse?: unknown): World {
     hitFx: () => {},
     shotFx: () => {},
     hit: () => {},
+    heard: () => {},
     knockProp: (index, car, vx, vy, vz) => w.onKnock?.(index, car, vx, vy, vz),
     buildArt: () => null,
     drawsFar: () => false,

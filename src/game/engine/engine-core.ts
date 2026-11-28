@@ -41,7 +41,8 @@ import type { DetailGovernor } from "../present/detail-governor.ts";
 import type { PlayerQuality } from "../present/player-quality.ts";
 import { DebrisSystem, SparkSystem, GlassDotSystem, TireSmokeSystem } from "../present/engine-fx.ts";
 import type { Fountains } from "./engine-fountains.ts";
-import type { GameAudio } from "../present/game-audio.ts";
+import type { GameAudio, UiName } from "../present/game-audio.ts";
+import { STEEL, type AudioFeed } from "./engine-audio-feed.ts";
 import { FX_REACH, Witness } from "../present/witness.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import type { OnFootDirector } from "./engine-onfoot.ts";
@@ -312,6 +313,8 @@ export abstract class EngineCore {
   /** The player's grappling cable (aim, fire, retract, cut): the HUD's touch buttons call it. */
   tether!: TetherDirector;
   protected audio!: GameAudio;
+  /** The sim's hits, slides and panes as sound events: what the scenes report here, `GameAudio` plays. */
+  protected audioFeed!: AudioFeed;
   protected hudAcc = 0;
   protected resizeObs!: ResizeObserver;
   private ring!: THREE.Mesh;
@@ -437,6 +440,11 @@ export abstract class EngineCore {
 
   protected tryUnlockAudio(): void {
     if (this.audioOn) this.audio.unlock();
+  }
+
+  /** A menu or HUD cue (select, confirm, back, open, close, pickup, alert): a sound when audio is on and unlocked. */
+  uiSound(name: UiName): void {
+    if (this.audioOn) this.audio.playUi(name);
   }
 
 
@@ -812,7 +820,8 @@ export abstract class EngineCore {
       if (car.crashed && car !== src) this.armEngineSmoke(car, 4.5);
     }
     this.fxPoofed = true;
-    if (this.audioOn) this.audio.impact(impulse);
+    // The rig scenes' hits come as this one cinematic; every other scene's reach the feed contact by contact.
+    if (this.audioOn && rigScene) this.audioFeed.wall(src, impulse, contact.x, contact.y, contact.z, source.wall ? "concrete" : STEEL);
     this.emitHud();
   }
 
