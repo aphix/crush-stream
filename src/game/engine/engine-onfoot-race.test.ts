@@ -72,6 +72,7 @@ describe("given the real engine in a race on the oval, the player at the wheel o
     expect(row().status, "and he is still racing").toBe("racing");
   });
 
+  // Last: it advances the race and gets out and in, which moves the rival's run-down in the row above.
   it("when he is out in the race and B is pressed, then the on-foot view cycles; when Back is pressed, then the race pauses and the view stays", () => {
     const spot = rig.cars()[race().self]!.group.position;
     rig.place(race().self, spot.x, spot.z);

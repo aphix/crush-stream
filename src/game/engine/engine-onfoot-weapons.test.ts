@@ -310,15 +310,18 @@ describe("given the real engine in the open world, its player on foot", () => {
     arms.frame(0.3);
     arms.pad(lbPad(true, 0.95, -0.31), noTouch);
     expect(arms.wheelPick, "the pistol picked").toBe(1);
-    rig.engine["playing"] = false;
+    rig.engine.togglePlay();
     try {
-      rig.engine["onFoot"].frame(FRAME);
+      rig.run(FRAME);
       expect(arms.wheelOpen, "shut by the pause").toBe(false);
       expect(arms.weapon, "the pick was not equipped").toBe("rifle");
       wheel(100);
       expect(arms.weapon, "no scroll while paused").toBe("rifle");
+      rig.engine.togglePlay();
+      rig.run(FRAME);
+      expect(arms.weapon, "resuming equips nothing").toBe("rifle");
     } finally {
-      rig.engine["playing"] = true;
+      if (!rig.engine["playing"]) rig.engine.togglePlay();
     }
   });
 

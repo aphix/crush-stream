@@ -282,6 +282,7 @@ describe("given a raw pad connected before a standard one", () => {
       pads[1] = standard;
       input.poll();
       expect(input.mapped, "the standard pad wins").toBe(true);
+      expect(input.label, "no sticks-only note").not.toContain("sticks only");
     } finally {
       vi.unstubAllGlobals();
     }

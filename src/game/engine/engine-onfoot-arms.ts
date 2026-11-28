@@ -211,7 +211,7 @@ export class OnFootArms {
   }
 
   /** The game stopped offering the walk (a pause): the wheel is dropped without equipping its pick. */
-  private shutWheel(): void {
+  shutWheel(): void {
     if (!this.wheelOpen && !this.wheelDown) return;
     this.wheelOpen = false;
     this.wheelDown = false;

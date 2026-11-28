@@ -1316,6 +1316,8 @@ export class CrashEngine extends EngineGarage {
     const p = this.race.phase;
     if (this.highlights.hasReel && (!this.race.active || p === null || p === "grid" || p === "countdown")) this.stopReel();
     // The sim hears the dummies' world (a worker) at a fixed frame: it does not run one until the answer it is to hear is in.
+    // A pause stops the director's frame below, so the wheel is dropped here.
+    if (!this.onFootOffered()) this.onFoot.arms.shutWheel();
     if (this.playing && !held && !this.ragdolls.waiting) {
       this.elapsedWall += wallDt;
       const reelDt = this.highlights.frame(now / 1000);
