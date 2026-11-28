@@ -43,9 +43,24 @@ import type { FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import { type RoadSpot, roadSpotNear } from "../world/road-spot.ts";
 import { punchGap } from "../ai/civilians/civilian-contact.ts";
 import type { LookRay } from "../ai/civilians/civilian-look.ts";
+import { PREFABS } from "../world/catalog.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 
 /** The name a clip gives a car that is no racer (traffic, and the cops past it: `entrants` has no row for them). */
 export const TRAFFIC_NAME = "Traffic";
+
+/** How far (m) the point (x, z) lies outside collider `c` (0 on or inside it). */
+function colliderGap(c: PropCollider, x: number, z: number): number {
+  const dx = x - c.x;
+  const dz = z - c.z;
+  if (c.kind === "circle") return Math.max(0, hypot2(dx, dz) - c.r);
+  const lx = dx * detCos(c.yaw) - dz * detSin(c.yaw);
+  const lz = dx * detSin(c.yaw) + dz * detCos(c.yaw);
+  return hypot2(Math.max(0, Math.abs(lx) - c.hx), Math.max(0, Math.abs(lz) - c.hz));
+}
+
+/** A knocked prop's speed (m/s) is about this share of the closing speed it took from the car. */
+const KNOCK_HEARD = 0.7;
 
 /** What the director needs from `CrashEngine`. */
 interface RaceHost {
@@ -80,6 +95,8 @@ interface RaceHost {
   shotFx(contact: THREE.Vector3, normal: THREE.Vector3): void;
   /** A wall or prop hit car `i`, closing at `closing` m/s: its view shakes if it is the watched car. */
   hit(i: number, closing: number): void;
+  /** A course solid or knocked prop (`index` into `walls` or `placed`; `knocked`: a prop) hit car `car` at (x, z), closing at `impulse` m/s: audio hears it, resolving the material itself (headless: nothing). */
+  heard(car: number, impulse: number, x: number, z: number, index: number, knocked: boolean): void;
   /** Knockable prop `index` knocked off its spot by car `car` at (vx, vy, vz) m/s: drawn flying and tumbling (cosmetic; headless: nothing). */
   knockProp(index: number, car: number, vx: number, vy: number, vz: number): void;
   /** The course's art (null headless: rules, AI, contacts and physics run without it), and the dummies' world dressed under the same bench scenery `arm`. */
@@ -206,13 +223,41 @@ export abstract class RaceField {
     knock: (index, car, vx, vy, vz) => {
       this.recorder.knock(index, car);
       this.host.knockProp(index, car, vx, vy, vz);
+      this.host.heard(car, hypot2(vx, vz) * KNOCK_HEARD, 0, 0, index, true);
     },
     fx: (at, n, closing) => this.host.hitFx(at, n, closing),
-    wall: (_index, i, closing, x, z) => {
+    wall: (index, i, closing, x, z) => {
       this.onWallHit(i, closing, x, z);
       this.host.hit(i, closing);
+      this.host.heard(i, closing, x, z, index, false);
     },
   };
+
+  /** The material of what a hit met: a knocked prop `index`'s own, else the course solid `index` a hit at (x, z) met: wall pieces and props number from 0 each (`solidsOf`), so the one that stands nearer the point. */
+  heardMaterial(index: number, x: number, z: number, knocked: boolean): MaterialId {
+    const prop = this.placed[index];
+    if (knocked) return prop ? PREFABS[prop.prefab].material : MAT.TRACK_WALL;
+    const wall = this.walls[index];
+    const wallGap = wall ? colliderGap(wall, x, z) : Infinity;
+    const propGap = prop ? Math.max(0, hypot2(x - prop.x, z - prop.z) - PREFABS[prop.prefab].foot) : Infinity;
+    return prop && propGap < wallGap ? PREFABS[prop.prefab].material : MAT.TRACK_WALL;
+  }
+
+  /** The course in play, null when none. */
+  get courseId(): string | null {
+    return this.track?.id ?? null;
+  }
+
+  /** The race's light. */
+  get timeOfDay(): TimeOfDay {
+    return this.rules.timeOfDay;
+  }
+
+  /** Whether car `i`'s last road projection is under a tunnel roof. */
+  inTunnel(i: number): boolean {
+    const segment = this.seg[i] ?? -1;
+    return this.track !== null && segment >= 0 && this.track.path.tunnel[segment] === 1;
+  }
   private readonly observers: AiCar[] = [];
   private readonly viewProj = new THREE.Matrix4();
   private readonly frustum = new THREE.Frustum();

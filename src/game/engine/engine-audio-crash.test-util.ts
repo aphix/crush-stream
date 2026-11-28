@@ -1,0 +1,90 @@
+import "../kernel/rapier-node.test-util.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
+import type { HitEvent } from "../present/hit-sound.ts";
+import type { CrashEngine } from "./engine.ts";
+import { simCounters, simDigest } from "./engine-bench-headless.test-util.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
+
+const FRAME = 1 / FRAME_HZ;
+const CRASH_SECONDS = 10;
+/** Speed (m/s) of the head-on pair and of the car sent at the slab. */
+const HEAD_ON_SPEED = 12;
+const SLAB_RUN_SPEED = 14;
+/** How far (m) the head-on cars start from each other's meeting point, and from the slab. */
+const HEAD_ON_START = 6;
+const SLAB_RUN_START = 14;
+/** The head-on pair meets this far (m) along z from the slab, which stands at the origin. */
+const PAIR_Z = -40;
+/** The seed every entry of the fleet is laid out from. */
+const FLEET_SEED = 7;
+
+export interface CrashRun {
+  hits: HitEvent[];
+  scrapes: number;
+  digest: string;
+}
+
+/** The run each engine is recording into: the wrappers installed at boot append here. */
+const recording = new WeakMap<CrashEngine, CrashRun>();
+
+/** The one engine of a file (a second `CrashEngine` in the same process never resolves `ready`); its audio's `hit` and `scrape` run as they are, then record. */
+export async function bootCrashEngine(): Promise<CrashEngine> {
+  stubBrowser();
+  const engine = await bootEngine({ pacer: true });
+  engine.pace.pin = true;
+  engine["looping"] = false;
+  engine.fadeScenes = false;
+  engine["pinnedSeed"] = FLEET_SEED;
+  const audio = engine["audio"];
+  const hit = audio.hit.bind(audio);
+  const scrape = audio.scrape.bind(audio);
+  audio.hit = (e) => {
+    hit(e);
+    recording.get(engine)?.hits.push({ ...e });
+  };
+  audio.scrape = (...args) => {
+    scrape(...args);
+    const run = recording.get(engine);
+    if (run) run.scrapes++;
+  };
+  return engine;
+}
+
+/**
+ * The fleet laid out again from its seed (`reset`), cars 0 and 1 head-on far from the slab and car 2 driven at the slab, run for `CRASH_SECONDS`; with `audioOn` the audio's hit and scrape
+ * calls are recorded. The digest is of the sim from the reset on.
+ */
+export function runCrash(engine: CrashEngine, audioOn: boolean): CrashRun {
+  engine.audioOn = false;
+  engine.reset();
+  engine.audioOn = audioOn;
+  const run: CrashRun = { hits: [], scrapes: 0, digest: "" };
+  recording.set(engine, run);
+  const since = simCounters(engine);
+  const cars = engine["live"]();
+  for (const [k, car] of cars.entries()) {
+    car.spawnFacing(8 * k - 16, 60 + 8 * k, 0, 0);
+    car.speed = 0;
+    car.spawnSpeed = 0;
+  }
+  // A reset re-aims the slab at car A where the layout put it; the toggle off and on aims it again at where this row parks car A.
+  if (engine.barrierUp) engine.toggleBarrier();
+  engine.toggleBarrier();
+  const slab = engine["barrier"].group.position;
+  for (const k of [0, 1]) {
+    const dir = k === 0 ? 1 : -1;
+    const car = cars[k]!;
+    car.spawnFacing(-dir * HEAD_ON_START, PAIR_Z, (dir * Math.PI) / 2, 0);
+    car.velocity.set(dir * HEAD_ON_SPEED, 0, 0);
+    car.speed = HEAD_ON_SPEED;
+    car.spawnSpeed = HEAD_ON_SPEED;
+  }
+  const runner = cars[2]!;
+  runner.spawnFacing(slab.x - SLAB_RUN_START, slab.z, Math.PI / 2, 0);
+  runner.velocity.set(SLAB_RUN_SPEED, 0, 0);
+  runner.speed = SLAB_RUN_SPEED;
+  runner.spawnSpeed = SLAB_RUN_SPEED;
+  for (let f = 0; f < CRASH_SECONDS * FRAME_HZ; f++) engine.advance(FRAME, { frameDt: FRAME });
+  run.digest = simDigest(engine, since);
+  return run;
+}
