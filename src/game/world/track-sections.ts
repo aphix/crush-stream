@@ -1,3 +1,4 @@
+import { detTan } from "../kernel/det-tan-core.js";
 import { detAtan2, hypot2 } from "../kernel/physics-core.js";
 import { clamp } from "../kernel/scalar.ts";
 import type { PropCollider } from "./placements.ts";
@@ -31,7 +32,7 @@ const WALL_STEP = 0.1;
 /** Path height at lateral `lat` of sample k (banked plane, dished, flat beyond the road edge): the ground layer hint. */
 export function levelAt(p: TrackPath, k: number, lat: number): number {
   const h = p.half[k]!;
-  const y = p.y[k]! - clamp(lat, -h, h) * Math.tan(p.bank[k]!);
+  const y = p.y[k]! - clamp(lat, -h, h) * detTan(p.bank[k]!);
   return p.dish[k] === 0 ? y : y + dishRise(p.dish[k]!, lat, h);
 }
 
@@ -67,7 +68,7 @@ export function sections(p: TrackPath, period: number): number[] {
     const b = p.closed ? (k + 1) % n : Math.min(n - 1, k + 1);
     const crest = Math.abs(p.y[b]! - 2 * p.y[k]! + p.y[a]!) / (ds * ds);
     bend = Math.max(bend, Math.abs(p.curv[a]!), Math.abs(p.curv[k]!), crest);
-    twist = Math.max(twist, (p.half[k]! * Math.abs(Math.tan(p.bank[b]!) - Math.tan(p.bank[a]!))) / (2 * ds));
+    twist = Math.max(twist, (p.half[k]! * Math.abs(detTan(p.bank[b]!) - detTan(p.bank[a]!))) / (2 * ds));
     const step = Math.min(MAX_STEP, Math.max(ds, Math.sqrt(0.16 / Math.max(bend, 1e-6))));
     // Twist: end the quad here if one more sample would take it past 2 cm (twist × length / 2).
     const twisted = (run + ds) * twist > 0.04;

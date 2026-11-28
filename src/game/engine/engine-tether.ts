@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { LookRay, type Meeting } from "../ai/civilians/civilian-look.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { rigidCentre } from "../vehicle/car-air.ts";
+import { detTan } from "../kernel/det-tan-core.js";
 import { MAX_TETHERS } from "../kernel/constants.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { RAPIER, THING, TETHER_RANGE, thingCode, thingIndex, thingKind, WORLD, type TetherSet } from "../contact/tether.ts";
@@ -308,7 +309,7 @@ export class TetherDirector {
   private cameraRay(): void {
     const matrix = this.host.camera.matrixWorld;
     _eye.setFromMatrixPosition(matrix);
-    const rise = this.host.chase() ? CHASE_RETICLE_NDC * Math.tan(THREE.MathUtils.degToRad(this.host.camera.getEffectiveFOV()) / 2) : 0;
+    const rise = this.host.chase() ? CHASE_RETICLE_NDC * detTan(THREE.MathUtils.degToRad(this.host.camera.getEffectiveFOV()) / 2) : 0;
     _point.set(0, rise, -1).transformDirection(matrix);
     const sight = this.sight;
     sight.eyeX = _eye.x;

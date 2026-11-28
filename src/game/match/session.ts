@@ -1,3 +1,4 @@
+import { detTan } from "../kernel/det-tan-core.js";
 import { detAtan2, hypot2 } from "../kernel/physics-core.js";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { clamp } from "../kernel/scalar.ts";
@@ -54,7 +55,7 @@ const RESPAWN_TRIES = 12;
  * Every `every` s unbroken earns `bonus` of a boost meter; while it lasts top speed is × `top` (`applyDrive`'s `topScale`).
  * `range` 3 car lengths: the owner's sketch, research 2.5-3. `fan` tan 18°: a 36° wake, inside the owner's 35-45° and the research's 12-18° half angle. `align` cos 45°: the research's heading check. Research: `.extraResearch/perplexity/2026-10-13-arcade-draft-zone-values.md`, `2026-10-13-slipstream-zone-around-corners.md`.
  */
-export const DRAFT = { range: 3, fan: Math.tan((18 * Math.PI) / 180), align: Math.SQRT1_2, speed: 15, every: 2, bonus: 0.05, top: 1.02 };
+export const DRAFT = { range: 3, fan: detTan((18 * Math.PI) / 180), align: Math.SQRT1_2, speed: 15, every: 2, bonus: 0.05, top: 1.02 };
 
 /** 0 off, 1 red, 2 yellow, 3 green (held 1.5 s after the start). */
 export function startLights(time: number): 0 | 1 | 2 | 3 {

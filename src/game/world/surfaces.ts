@@ -1,3 +1,4 @@
+import { detTan } from "../kernel/det-tan-core.js";
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { SURFACE_IDS, SURFACES } from "./catalog.ts";
 import { MAT, SCRATCH_CUT, type MaterialId } from "../kernel/material-ids.ts";
@@ -487,7 +488,7 @@ export class Surface {
     P[o + D_HALF] = half;
     P[o + D_RUNL] = runL;
     P[o + D_RUNR] = runR;
-    P[o + D_TAN] = Math.tan(bank);
+    P[o + D_TAN] = detTan(bank);
     P[o + P_REACH] = reach;
     this.q[qo + Q_SURF] = surface;
     this.q[qo + Q_SURF2] = runSurface;

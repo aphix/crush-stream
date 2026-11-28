@@ -35,5 +35,5 @@
   "include": [
     "src"
   ],
-  "exclude": ["src/game/kernel/physics-core.js", "src/game/kernel/shape-match-core.js"]
+  "exclude": ["src/game/kernel/physics-core.js", "src/game/kernel/shape-match-core.js", "src/game/kernel/det-tan-core.js"]
 }

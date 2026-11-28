@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Ground, STEP_UP } from "./ground.ts";
+import { detTan } from "../kernel/det-tan-core.js";
 import { detAtan2, detCos, hypot2 } from "../kernel/physics-core.js";
 import { clamp01, wrapPi } from "../kernel/scalar.ts";
 import { SURFACE_IDS, type SurfaceId } from "./catalog.ts";
@@ -458,7 +459,7 @@ function roadHeight(p: TrackPath, x: number, z: number): number {
   const half = p.half[k]! + (p.half[b]! - p.half[k]!) * f;
   const bank = p.bank[k]! + (p.bank[b]! - p.bank[k]!) * f;
   const dish = p.dish[k]! + (p.dish[b]! - p.dish[k]!) * f;
-  const y = p.y[k]! + (p.y[b]! - p.y[k]!) * f - Math.max(-half, Math.min(half, lat)) * Math.tan(bank);
+  const y = p.y[k]! + (p.y[b]! - p.y[k]!) * f - Math.max(-half, Math.min(half, lat)) * detTan(bank);
   return dish === 0 ? y : y + dishRise(dish, lat, half);
 }
 
@@ -608,7 +609,7 @@ export class Track {
   private checkStartLine(): void {
     const p = this.path;
     const n = p.count;
-    const h = (k: number, side: number) => p.y[k]! - side * p.half[k]! * Math.tan(p.bank[k]!) + side * side * p.dish[k]!;
+    const h = (k: number, side: number) => p.y[k]! - side * p.half[k]! * detTan(p.bank[k]!) + side * side * p.dish[k]!;
     for (const side of [-1, 0, 1]) {
       const bend = Math.abs(h(n - 1, side) - 2 * h(0, side) + h(1, side));
       if (bend > START_BEND) throw new Error(`${this.id}: the road bends ${bend.toFixed(2)} m across the start line (side ${side}): its height, bank or width at node 0 breaks from the nodes beside it`);
@@ -844,7 +845,7 @@ export class TrackGround extends Ground {
           // A dished road's rise rides the crease's centre: piecewise linear between 1 m nodes (2 mm off the parabola at 1 m of dish on 22 m).
           const dish = dishK + dDish * f;
           const yc = (dish === 0 ? yk + dy * f : yk + dy * f + dishRise(dish, lat, half)) - pitSink(this.pits, x, z);
-          const edge = yc - Math.max(-half, Math.min(half, lat)) * Math.tan(bank);
+          const edge = yc - Math.max(-half, Math.min(half, lat)) * detTan(bank);
           if (!side) {
             gap[c] = Math.max(0, out);
             level[c] = edge;
