@@ -61,16 +61,26 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(rig.phase(), "Y got him back in").toBe("inCar");
   });
 
-  it("when he is out and B is pressed, then the on-foot view cycles over his shoulder, to his eyes and back to the follow, and Y does not cycle it", () => {
+  it("when he is out and Back is pressed, then the on-foot view cycles over his shoulder, to his eyes and back to the follow, and B does not cycle it", () => {
     tap(PAD_BUTTON.north);
     rig.run(SETTLE_S);
     expect(rig.engine["onFoot"].footView).toBe("follow");
     tap(PAD_BUTTON.east);
-    expect(rig.engine["onFoot"].footView, "B: over his shoulder").toBe("shoulder");
-    tap(PAD_BUTTON.east);
-    expect(rig.engine["onFoot"].footView, "B again: his eyes").toBe("first");
-    tap(PAD_BUTTON.east);
-    expect(rig.engine["onFoot"].footView, "B again: the follow").toBe("follow");
+    expect(rig.engine["onFoot"].footView, "B: no change").toBe("follow");
+    tap(PAD_BUTTON.back);
+    expect(rig.engine["onFoot"].footView, "Back: over his shoulder").toBe("shoulder");
+    tap(PAD_BUTTON.back);
+    expect(rig.engine["onFoot"].footView, "Back again: his eyes").toBe("first");
+    tap(PAD_BUTTON.back);
+    expect(rig.engine["onFoot"].footView, "Back again: the follow").toBe("follow");
+  });
+
+  it("when the touch strip's View button (B) is held while he is out, then the on-foot view cycles", () => {
+    rig.engine.touch.held = 1 << PAD_BUTTON.east;
+    rig.run(2 * FRAME);
+    rig.engine.touch.held = 0;
+    rig.run(CLIMB_S);
+    expect(rig.engine["onFoot"].footView).toBe("shoulder");
   });
 
   it("when D is pressed while W is held, then his heading has turned by less than 0.6 rad three frames later, and by 0.7 rad or more half a second later", () => {

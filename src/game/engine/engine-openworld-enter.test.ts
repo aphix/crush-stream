@@ -66,6 +66,16 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(rig.engine["race"].self, "it is the car this browser drives").toBe(target);
   });
 
+  it("when F is pressed at the wheel in the open world, then he gets out, and F at his own car's door gets him back in, and the prompt names F", () => {
+    rig.press("KeyF");
+    rig.run(2);
+    expect(rig.phase(), "F got him out").toBe("onFoot");
+    expect(rig.engine["onFoot"].prompt(), "the prompt").toBe("F or Y: get in");
+    rig.press("KeyF");
+    rig.run(2);
+    expect(rig.phase(), "F got him back in").toBe("inCar");
+  });
+
   it("when the car at the door has a driver on a trip of the traffic's, then Enter does nothing: he stays out and is told it is not his", () => {
     const target = nearestEmptyCar();
     const traffic = world()["traffic"]!;

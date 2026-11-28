@@ -746,7 +746,9 @@ export abstract class EngineInput extends EngineRigs {
   }
   /** Mouse look (pointer lock on the canvas): raw movement looks round like a held drag; any loss of the lock pauses a run. */
   protected readonly mouseLook = new MouseLook({
-    move: (dx, dy) => this.view.lookBy(dx, dy),
+    move: (dx, dy) => {
+      if (!this.onFoot.arms.wheelOpen) this.view.lookBy(dx, dy);
+    },
     changed: () => {
       this.view.locked = this.mouseLook.on;
       this.emitHud();
@@ -793,7 +795,7 @@ export abstract class EngineInput extends EngineRigs {
     const driving = this.seat.mode === "drive";
     if ((this.seat.mode !== "global" || this.view.flying) && (e.code.startsWith("Arrow") || e.code === SEAT_KEYS.flyUp || e.code === SEAT_KEYS.flyDown)) e.preventDefault();
     // Every Space keydown, repeats included: an unprevented repeat arms a focused HUD button and the release clicks it.
-    if (e.code === "Space") e.preventDefault();
+    if (e.code === "Space" || (e.code === "Tab" && this.onFoot.armed())) e.preventDefault();
     if (e.repeat) return;
     if (this.tetherKey(e)) return;
     if (this.onFoot.key(e)) return;

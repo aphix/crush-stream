@@ -7,18 +7,32 @@ knocks them over ([The showcase](#the-showcase)).
 
 ## Controls
 
-| Action | Keyboard and mouse | Controller |
+| Action | Keyboard and mouse | Controller (Xbox / PlayStation) |
 |---|---|---|
-| Get out of your car (driving, stopped or under 3 m/s, driver door clear); get back in (on foot, at your own car's driver door) | Enter | Y / Triangle |
+| Get out of your car (driving, stopped or under 3 m/s, driver door clear); get back in (on foot, at your own car's driver door) | F or Enter in the open world; Enter elsewhere | Y / Triangle |
 | Walk, relative to the camera (stick: slower for a lighter push, 0.8 m/s to a run, past the pad reader's one 0.15 dead zone and curve 1.7, `gamepad.ts`) | W A S D, the arrows | left stick |
 | Run (a key is a full push, the stick walks up to it) | W A S D, the arrows | left stick pushed all the way |
-| Sprint (7 m/s) | Shift | A / Cross, or RT past halfway |
-| Hold to a walk (1.5 m/s) | Space | X / Square |
-| Look round (the same orbit as everywhere) | mouse drag, `;` mouse look, scroll | right stick |
+| Sprint (7 m/s) | Shift | A / Cross (RT / R2 too, except in the open world, where it fires) |
+| Walk slowly (1.5 m/s), GTA's stealth | Space (GTA's Ctrl is a browser shortcut) | left stick click (L3) |
+| Look round (the same orbit as everywhere) | mouse drag, `;` mouse look | right stick |
+| Camera view: follow, over the shoulder, his eyes (the drive views at the wheel) | V, C, T | View / Back (Create on PlayStation); B when a race is on (Back pauses it) |
 | Get up after a fall | any walking control | any walking control |
 
-Nothing on foot is a new control: the keys, sticks and buttons that steer, gas, boost and handbrake the car walk, run, sprint and hold to a walk
-(`engine-walk-input.ts` reads the same `DRIVE_KEYS` and `PadState`; its rows pair every walking control with its driving twin).
+The open world adds fire, aim and weapons (`OnFootArms`), laid out as GTA V lays them out on foot:
+
+| Action | Keyboard and mouse | Controller |
+|---|---|---|
+| Fire (fists: punch) | left click | RT / R2 |
+| Aim | right button held | LT / L2 held |
+| Choose a weapon: fists, pistol, shotgun, rifle, hook | scroll wheel (a notch a weapon; while aiming it zooms), or 1 2 3 4 0 | hold LB / L1: the weapon wheel |
+| Weapon wheel | hold Tab, the mouse picks | hold LB / L1, the right stick picks; let go to equip |
+| Put the weapon away, or draw the last one again | tap Tab | tap LB / L1 |
+| Hook: reel in (held), cut every cable | `]` (held), Delete or middle click | D-pad right (held), D-pad left |
+
+No jump, cover, reload, phone or character wheel exists, so their GTA buttons (X, RB, the right stick's click, D-pad up, Q) are free on foot, except where the game already had a job for the key: R and D-pad down put him back in a fresh car (`resetsToCar`), C is a camera key.
+A pad whose `mapping` is not `"standard"` (a Steam Controller or Steam Deck without Steam Input's virtual Xbox pad) numbers its buttons as it pleases, so `readPad` reads only its sticks: it walks and looks, but every button and trigger is ignored and its HUD label reads "(sticks only)"; the keyboard and mouse work beside it.
+The touch HUD has no wheel: its Weapon button (it raises RB, which a real pad's RB does not act on) steps to the next weapon, its Fire button raises RT, its View button B.
+F (get in or out in the open world) takes the key the quality tier used (`KeyF`) there; `SEAT_KEYS.onFootOpenWorld` in `engine-keys.ts`.
 Enter and Y were free in the driving seat (`SEAT_KEYS.onFoot` in `engine-keys.ts`; `engine-keys.test.ts` keeps it clear of the scene keys).
 While he is out, the seat's own keys (Space, R, Esc, Q, E, V, C, T and the pad's Back, LB, RB, B and D-pad down) do nothing, so a stray press
 cannot pause, reset or switch the car under him; Escape and Back still end mouse look and a menu as everywhere.
@@ -148,7 +162,7 @@ On foot in the open world, solo, as a room's host or as a guest, fire throws a p
 
 ## Guns
 
-The number keys choose the weapon in hand on foot in the open world (`OnFootArms.weapon`; LB / RB step through them): 1 fists, 2 pistol, 3 shotgun, 4 rifle (`WEAPONS`, `engine-onfoot-arms.ts`). A shot is a ray to the first thing it meets and a speed added there, as a click on a showcase dummy is, sized by the gun:
+The number keys, the scroll wheel and the weapon wheel choose the weapon in hand on foot in the open world (`OnFootArms.weapon`): 1 fists, 2 pistol, 3 shotgun, 4 rifle (`WEAPONS`, `engine-onfoot-arms.ts`). Holding LB (Tab) for 0.2 s opens the weapon wheel (`WeaponWheel`, `components/weapon-wheel.tsx`): one spoke a weapon, fists at twelve o'clock and clockwise, the right stick or the mouse's travel (a full push is 100 px) picks the one it points at past half a push, and letting go equips it; a shorter press is a tap that puts the weapon in hand away or draws the last one again. While the wheel is open the camera's stick and mouse look are held. A shot is a ray to the first thing it meets and a speed added there, as a click on a showcase dummy is, sized by the gun:
 
 |Gun|Speed a hit adds (m/s)|Range (m)|Rays a shot|Scatter (rad)|Between shots (s)|Held fire repeats|Push on a car (N·s)|Prop knocked at (m/s)|
 |---|---|---|---|---|---|---|---|---|
@@ -162,7 +176,7 @@ A building's walls stop a shot from both sides (`placeMet` asked as a bullet ask
 
 ## The hook
 
-`0` takes the grappling hook in hand, weapon 0 of `OnFootArms` (LB / RB step to it), on foot in the open world, solo, as a room's host or as a guest. Fire with it places an end (`TetherDirector`, `engine-tether.ts`): the first holds the thing under the reticle (a car, a ragdoll or body, a knockable prop, a box, or a point on a wall or the ground within 80 m; a civilian the crowd draws with no body is given one there and hooked), the second ties it to the thing then under the reticle. It aims along the view's centre, where `TetherArt` draws its ring, also with a free cursor. `MAX_TETHERS` (6) cables at once in all; a seventh drops the oldest. `]` held (D-pad right, the touch Reel) reels the player's own cables in; `Delete` (D-pad left, a middle click, the touch Cut) cuts them. Cables stay when he changes weapon and are cut once he is no longer on foot in the open world. There is no hook from a car. Every cable belongs to the actor who fired it (`TetherSet.owner`), and the host carries out each fire, cut and reel for an actor through `TetherDirector.fireFor(actor, ray)`, `cutFor(actor)` and `reelFor(actor, on)`, its own player's too; a guest aims its own reticle and sends the fire, cut and reel as acts (kinds 2 to 5, through `sendAct`), so the host holds every cable. Controls in [`CONTROLS.md`](CONTROLS.md).
+`0` takes the grappling hook in hand, weapon 0 of `OnFootArms` (the scroll wheel and the weapon wheel reach it too), on foot in the open world, solo, as a room's host or as a guest. Fire with it places an end (`TetherDirector`, `engine-tether.ts`): the first holds the thing under the reticle (a car, a ragdoll or body, a knockable prop, a box, or a point on a wall or the ground within 80 m; a civilian the crowd draws with no body is given one there and hooked), the second ties it to the thing then under the reticle. It aims along the view's centre, where `TetherArt` draws its ring, also with a free cursor. `MAX_TETHERS` (6) cables at once in all; a seventh drops the oldest. `]` held (D-pad right, the touch Reel) reels the player's own cables in; `Delete` (D-pad left, a middle click, the touch Cut) cuts them. Cables stay when he changes weapon and are cut once he is no longer on foot in the open world. There is no hook from a car. Every cable belongs to the actor who fired it (`TetherSet.owner`), and the host carries out each fire, cut and reel for an actor through `TetherDirector.fireFor(actor, ray)`, `cutFor(actor)` and `reelFor(actor, on)`, its own player's too; a guest aims its own reticle and sends the fire, cut and reel as acts (kinds 2 to 5, through `sendAct`), so the host holds every cable. Controls in [`CONTROLS.md`](CONTROLS.md).
 
 The hook takes any drawn person; the reticle lights them all and each ends as a roped dummy at its drawn spot. A civilian gets a body wherever she is and whatever she does (a counter, a seat, a stoop, a room, an arrest: `OpenWorldBodies.stand` skips the activity, street and building checks for the hook), and the interior she stands in keeps its floor boxes for the physics while the hook holds her (`DoorOpeners.pinned`), however far the eye is. A suspect in a cop's hands, or fleeing, is let out of them: the host logs a `spared` event (`OpenWorldLaw.releaseSuspect`) and every peer's law lets her go at that crowd second (`CrimeScene.hearSpared`, `FootLaw.spare`); the arrest is broken off, and the society still holds the offence. A foot cop is downed where he stands (`CrimeScene.hookCop`, the knock path of a shot or a car: `copDown` is raised for peers, a suspect he held is let go, the player has fought the law and a chase of him opens) and thrown with no speed, and the rope ties to that dummy; he is up and about again after `COP_DOWN_SECONDS` whether or not the rope holds the dummy. A kneeling medic is thrown the same way and not drawn at that scene again; the law takes no notice of him. A guest sees a hooked civilian where the host's body for her is: her record rides `MSG.bodies` with its `roped` bit and every machine draws it (`OpenWorldShared`). The interior's floor boxes are handed to the physics before her body is stood (`InteriorSet.holdFloorAt`), so a body 25 to 80 m off does not sink to the street. The dummy thrown for a cop goes when he gets up and is drawn again (`COP_DOWN_SECONDS`), a medic's when the ambulance has left, and a roped dummy is the last the pool gives a new throw's slot to. The sight line looks through a facade to a person when a built room's own meshes lie right behind it: through a window's opening (the glass is passed) she is hooked, through a solid wall of the room she is not, and a facade with no room built is a wall (`FACADE_WALL_M`). The reticle lights only what the fire can take: no cat or dog (hooking animals is out of scope; their meshes are passed through), and no civilian while every body is roped, pinned or down (`OpenWorldBodies.canStand`, which asks the pool for a free slot as `give` does).
 
@@ -192,7 +206,7 @@ the right stick, mouse look, the wheel and a pinch work as everywhere, and place
   his head it hides his head and torso as his eyes do, and the near plane comes in to the eye's distance from his head less 0.3 m (not under 0.05 m).
 - **Recentre**: only a pad's: while the left stick walks him faster than 1 m/s, 1 s without look input brings the view back behind him when his facing is within 0.9 rad of
   straight away from it (0.4 s damped yaw, slower the farther round: it does not chase a sidestep). The keys and the mouse never have it come back by itself.
-- **View and the wheel**: View (V, C, T, the pad's B, the HUD's View) steps follow, shoulder, his eyes, and round; at the wheel it cycles the drive views as ever. The wheel
+- **View and the wheel**: View (V, C, T, the pad's View / Back, the HUD's View) steps follow, shoulder, his eyes, and round; at the wheel it cycles the drive views as ever. In the open world on foot the scroll wheel steps weapons instead (it zooms while aiming); everywhere else the wheel
   (its line and page modes read as the same notch) and a pinch zoom on a level boom from 0.7 m (his eyes) out, the shown boom gliding to it over 0.1 s; a notch in while a wall
   holds the eye in zooms from where the eye stands, so the wheel has no dead stretch. The car's zoom range, orbit, pitch range and near plane are kept when he gets out and given
   back when he sits down again.

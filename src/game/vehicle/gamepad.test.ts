@@ -249,3 +249,22 @@ describe("given the touch pedals", () => {
     expect(s.rt + s.lt).toBe(0);
   });
 });
+
+describe("given a pad whose mapping is not the standard one", () => {
+  it("when every button and trigger is down, then only its sticks are read: no button, no trigger, no press", () => {
+    const state = blankPad();
+    const all = Array.from({ length: 17 }, (_, i) => i);
+    readPad({ ...pad([0.8, 0, 0, -0.8], all, 1, 1), mapping: "" }, state);
+    expect(state.connected, "still a pad").toBe(true);
+    expect(state.lx, "left stick").toBeGreaterThan(0.5);
+    expect(state.ry, "right stick").toBeLessThan(-0.5);
+    expect([state.held, state.pressed, state.lt, state.rt], "buttons and triggers ignored").toEqual([0, 0, 0, 0]);
+  });
+
+  it("when the same buttons are down on the standard mapping, then they all read", () => {
+    const state = blankPad();
+    readPad({ ...pad([0, 0, 0, 0], [PAD_BUTTON.lb], 1, 1), mapping: "standard" }, state);
+    expect(state.held & (1 << PAD_BUTTON.lb), "LB").not.toBe(0);
+    expect(state.rt, "RT").toBe(1);
+  });
+});

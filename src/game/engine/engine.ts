@@ -398,6 +398,7 @@ export class CrashEngine extends EngineGarage {
       shootRay: (aim, gun) => this.acts.shootLocal(aim, gun),
       shotFired: (ray, far) => this.shotFired(ray, far),
       hook: () => this.tether.fire(),
+      changed: () => this.emitHud(),
     });
     this.view.click = () => {
       if (!this.onFoot.armed()) return false;
@@ -405,6 +406,7 @@ export class CrashEngine extends EngineGarage {
       this.onFoot.arms.release();
       return true;
     };
+    this.view.scroll = (px) => this.onFoot.arms.scroll(px);
     this.tether = new TetherDirector({
       tethers: this.world.tethers,
       camera: this.camera,
@@ -531,6 +533,7 @@ export class CrashEngine extends EngineGarage {
     canvas.addEventListener("pointerup", this.onArmsUp);
     canvas.addEventListener("pointercancel", this.onArmsUp);
     canvas.addEventListener("contextmenu", this.onArmsMenu);
+    canvas.addEventListener("pointermove", this.onArmsMove);
     try {
       // Applies the page's `#` as this first reset, so the first run already uses it.
       this.attachShare();
@@ -971,6 +974,7 @@ export class CrashEngine extends EngineGarage {
     this.canvas.removeEventListener("pointerup", this.onArmsUp);
     this.canvas.removeEventListener("pointercancel", this.onArmsUp);
     this.canvas.removeEventListener("contextmenu", this.onArmsMenu);
+    this.canvas.removeEventListener("pointermove", this.onArmsMove);
     this.resizeObs.disconnect();
     for (const car of this.cars) car.dispose();
     this.podium.dispose();
@@ -1044,6 +1048,10 @@ export class CrashEngine extends EngineGarage {
   };
   private readonly onArmsMenu = (e: Event): void => {
     if (this.onFoot.armed()) e.preventDefault();
+  };
+  /** Mouse travel picks a spoke while the weapon wheel is open; the pointer is locked or free, `movementX` is the same. */
+  private readonly onArmsMove = (e: PointerEvent): void => {
+    this.onFoot.arms.wheelMove(e.movementX, e.movementY);
   };
 
   /** The canvas's place on the page as of its last resize (`cacheCanvasRect`), so a shot and the gun's pose read no layout. */

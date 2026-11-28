@@ -75,7 +75,7 @@ const HOT = {
   "src/game/engine/onfoot-doors.ts": ["doorAt", "gapToDoor", "exitSide", "doorBlocked"],
   "src/game/present/seat-riders.ts": ["refresh", "begin", "drives"],
   "src/game/present/seated-drivers.ts": ["sync", "figure", "shift"],
-  "src/game/engine/engine-onfoot-arms.ts": ["pad", "frame", "gunAt", "slotOfGun", "slotOfWeapon", "weaponAt"],
+  "src/game/engine/engine-onfoot-arms.ts": ["pad", "frame", "wheelHeld", "wheelAim", "wheelMove", "gunAt", "slotOfGun", "slotOfWeapon", "weaponAt"],
   "src/game/engine/engine.ts": ["tickInner", "fixedStep", "scheduleSkins", "flushVisibleSkins", "updateCamera", "pickCar", "pickDoll", "poseHandGun", "layGun", "aimRay", "bodyHand", "raiseBodyArm"],
   "src/game/engine/engine-hand-gun.ts": ["model", "pose", "layOn", "layOnRow", "keepLay", "place", "toward"],
   "src/game/engine/ray-nearest.ts": ["find", "visit", "mesh", "triangles", "offer"],

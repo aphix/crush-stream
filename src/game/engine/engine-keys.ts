@@ -11,6 +11,8 @@ export const SEAT_KEYS = {
   reset: "KeyR",
   /** Get out of the car, and into one: the walker's control (the pad's is Y). */
   onFoot: "Enter",
+  /** GTA's get in / get out, also the walker's control in the open world (the quality key `KeyF` goes there). */
+  onFootOpenWorld: "KeyF",
   stepOut: "Escape",
   lookBack: "Backquote",
   mouseLook: "Semicolon",

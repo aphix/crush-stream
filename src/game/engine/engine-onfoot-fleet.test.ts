@@ -104,6 +104,12 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     expect(rig.engine["seat"].carIndex, "he is in his own car").toBe(0);
   });
 
+  it("when F is pressed at the wheel in the fleet, then he stays in: F is the open world's control there, Enter is the fleet's", () => {
+    rig.press("KeyF");
+    rig.run(1);
+    expect(rig.phase()).toBe("inCar");
+  });
+
   /** The driver's door's widest angle (rad) over the 54 frames of getting out of car 0; he is out once they are run. */
   function widestOverGettingOut(): number {
     const car = rig.cars()[0]!;

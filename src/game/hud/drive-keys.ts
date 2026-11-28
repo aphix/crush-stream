@@ -1,14 +1,29 @@
+import { PAD_BUTTON, padButtonName, type PadFamily } from "../vehicle/gamepad.ts";
+
 const WEAPON_KEYS_HINT = ["1 Fists", "2 Pistol", "3 Shotgun", "4 Rifle", "0 Hook"] as const;
 
+/** The shoulder, trigger and View buttons as each pad family names them (the face buttons come from `padButtonName`); a generic pad is named as the standard mapping's Xbox layout. */
+const XBOX_PARTS = { lb: "LB", lt: "LT", rt: "RT", view: "View" };
+const PAD_PARTS: Record<PadFamily, { lb: string; lt: string; rt: string; view: string }> = {
+  xbox: XBOX_PARTS,
+  playstation: { lb: "L1", lt: "L2", rt: "R2", view: "Create" },
+  generic: XBOX_PARTS,
+};
+
 /**
- * The walker's controls as the HUD's key line, behind `prompt` (what the control does now, or why it refused) when there is one: the same keys and
- * sticks that drive the car, and the control that gets him out and in. `arms`: the weapon in hand, marked `▸` on a keyboard; with it on a pad, RT fires and A alone runs. `cables`: the hook's cables out, shown on the marked hook.
+ * The walker's controls as the HUD's key line, behind `prompt` (what the control does now, or why it refused) when there is one: GTA's on-foot layout.
+ * `pad`: the connected pad's family (null: keyboard and mouse), named in its own glyphs. `arms`: the weapon in hand, marked `▸` on a keyboard; with it
+ * RT fires, hold LB opens the weapon wheel and A alone runs. `cables`: the hook's cables out, shown on the marked hook.
  */
-export function footKeys(pad: boolean, prompt: string | null, arms: { slot: number } | null = null, cables = 0): string {
-  const parts = pad
-    ? ["left stick walk", arms === null ? "A or RT run" : "A run", "right stick look", "Y get in at your car's driver door"]
-    : ["W/A/S/D walk", "Shift run", "drag look", "; mouse look", "Enter get in at your car's driver door"];
-  const weapons = arms === null ? [] : pad ? ["LB/RB weapon", "LT aim", "RT fire"] : WEAPON_KEYS_HINT.map((hint, slot) => (slot === arms.slot ? `▸${hint}` : hint)).map((hint) => (hint === "▸0 Hook" ? `▸0 Hook ${cables}/6` : hint));
+export function footKeys(pad: PadFamily | null, prompt: string | null, arms: { slot: number } | null = null, cables = 0): string {
+  const names = pad === null ? null : PAD_PARTS[pad];
+  const sprint = pad === null ? "" : padButtonName(pad, PAD_BUTTON.south);
+  const getIn = pad === null ? "" : padButtonName(pad, PAD_BUTTON.north);
+  const parts = names
+    ? ["left stick walk", arms === null ? `${sprint} or ${names.rt} run` : `${sprint} run`, "left stick click walk slowly", "right stick look", `${names.view} camera`, `${getIn} get in at your car's driver door`]
+    : ["W/A/S/D walk", "Shift run", "Space walk slowly", "drag look", "; mouse look", "V camera", `${arms === null ? "Enter" : "F"} get in at your car's driver door`];
+  const marked = WEAPON_KEYS_HINT.map((hint, slot) => (slot === arms?.slot ? `▸${hint}` : hint)).map((hint) => (hint === "▸0 Hook" ? `▸0 Hook ${cables}/6` : hint));
+  const weapons = arms === null ? [] : names ? [`hold ${names.lb} weapon wheel`, `tap ${names.lb} arm / put away`, `${names.lt} aim`, `${names.rt} fire`] : [...marked, "scroll or hold Tab weapons", "right button aim", "left click fire"];
   const all = [...parts, ...weapons];
   return (prompt === null ? all : [prompt, ...all]).join(" · ");
 }

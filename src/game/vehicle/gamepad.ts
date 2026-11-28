@@ -47,6 +47,8 @@ export type PadSource = {
   readonly connected: boolean;
   readonly axes: readonly number[];
   readonly buttons: readonly { readonly pressed: boolean; readonly value: number }[];
+  /** The DOM's `mapping`; absent (a test's source) counts as "standard". */
+  readonly mapping?: string;
 };
 
 export type PadState = {
@@ -108,6 +110,13 @@ export function readPad(src: PadSource | null, out: PadState): void {
   const rs = stickScale(rx, ry);
   out.rx = rx * rs;
   out.ry = ry * rs;
+  // Any other mapping numbers its buttons as its maker pleased, so only its sticks are read.
+  if (src.mapping !== undefined && src.mapping !== "standard") {
+    out.lt = out.rt = 0;
+    out.held = 0;
+    out.pressed = 0;
+    return;
+  }
   const b = src.buttons;
   out.lt = triggerValue(b[PAD_BUTTON.lt]?.value ?? 0);
   out.rt = triggerValue(b[PAD_BUTTON.rt]?.value ?? 0);
@@ -221,6 +230,7 @@ export class GamepadInput {
   label: string | null = null;
   /** The active pad's family, null when none is connected (the face buttons' names: `padButtonName`). */
   family: PadFamily | null = null;
+  private mapped = true;
   private index = -1;
   /** The active pad's haptics as of the last poll; null when no pad is connected or the browser has none. */
   private actuator: HapticSource | null = null;
@@ -262,9 +272,11 @@ export class GamepadInput {
     // A browser without haptics (Firefox) has no actuator; no pad, no actuator: `rumble` then sends nothing.
     this.actuator = pad ? (pad.vibrationActuator ?? null) : null;
     const family = pad ? padFamily(pad.id) : null;
-    if (family !== this.family) {
+    const mapped = pad === null || pad.mapping === "standard";
+    if (family !== this.family || mapped !== this.mapped) {
       this.family = family;
-      this.label = pad ? padLabel(pad.id) : null;
+      this.mapped = mapped;
+      this.label = pad ? padLabel(pad.id) + (mapped ? "" : " (sticks only)") : null;
       this.onChange();
     }
     return this.state;
