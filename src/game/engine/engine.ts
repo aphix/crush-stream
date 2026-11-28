@@ -118,6 +118,7 @@ import { PodiumDirector } from "./engine-podium.ts";
 import { TrackArt } from "../present/track-art.ts";
 import { reliefForTier } from "../present/surface-relief.ts";
 import { EngineGarage } from "./engine-garage.ts";
+import { detTan } from "../kernel/det-tan-core.js";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { SHOT_SPARK_IMPULSE, SMOKE_PUFF_HZ, SPARK_MIN_IMPULSE } from "./constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -1559,7 +1560,7 @@ export class CrashEngine extends EngineGarage {
     const d = _v.setFromMatrixPosition(this.camera.matrixWorld).distanceTo(_lodCenter);
     if (d <= LOD_RADIUS) return 1;
     const halfHeightPx = (this.renderer.domElement.height / this.renderer.getPixelRatio()) * 0.5;
-    const px = (LOD_RADIUS / (d * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)))) * halfHeightPx;
+    const px = (LOD_RADIUS / (d * detTan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)))) * halfHeightPx;
     return px >= LOD_SMALL_PX ? 1 : px >= LOD_TINY_PX ? 2 : 4;
   }
 

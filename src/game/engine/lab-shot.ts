@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { detTan } from "../kernel/det-tan-core.js";
 import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 
 /** The wide screens' lens (deg). */
@@ -38,7 +39,7 @@ type LabShotSpec = { toFocus: number; turn: number; fit: number; pitch: number; 
 export function planLabShot(thrower: THREE.Vector3, setMiddle: THREE.Vector3, items: readonly { x: number; z: number }[], shot: LabShotSpec, aspect: number, flat: boolean, look: THREE.Vector3): { bearing: number; radius: number } {
   look.lerpVectors(thrower, setMiddle, shot.toFocus).setY(setMiddle.y + (flat ? 0 : shot.lift));
   const bearing = detAtan2(thrower.x - setMiddle.x, thrower.z - setMiddle.z) + shot.turn;
-  const halfHeightPerMetre = Math.tan(THREE.MathUtils.degToRad(shot.fov) / 2);
+  const halfHeightPerMetre = detTan(THREE.MathUtils.degToRad(shot.fov) / 2);
   const halfWidthPerMetre = halfHeightPerMetre * aspect;
   let radius = 0;
   for (const item of items) {

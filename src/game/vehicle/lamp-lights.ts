@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { detTan } from "../kernel/det-tan-core.js";
 import { hypot2 } from "../kernel/physics-core.js";
 import { store3f } from "../kernel/store.ts";
 import { lampEmissiveMap, makeLampUnit, type LampKind } from "./car-materials.ts";
@@ -534,7 +535,7 @@ export class LampLights {
     } else {
       l.position.set(_pos.x, _pos.y + SIREN.out, _pos.z);
       l.target.position.copy(l.position).add(_dir);
-      l.target.position.y -= Math.tan(SIREN.dip);
+      l.target.position.y -= detTan(SIREN.dip);
     }
     l.angle = tail ? TAIL.angle : SIREN.angle;
     l.color.setHex(tail ? TAIL.color : kind === "red" ? SIREN.red : SIREN.blue);

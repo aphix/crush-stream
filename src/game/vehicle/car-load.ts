@@ -1,5 +1,6 @@
 import type { CarFrame } from "./car-rig.ts";
 import { CLASSES, gearAt, type VehicleClassId } from "./vehicle-classes.ts";
+import { detTan } from "../kernel/det-tan-core.js";
 import { detSin } from "../kernel/physics-core.js";
 
 /** tanh from `Math.exp` (the same bits in every engine; `Math.tanh` rounds differently in Chromium): saturated past |x| = 20, where it is ±1 in doubles. */
@@ -151,8 +152,8 @@ export class LoadTransfer {
     // Per wheel a spring k m/4 carries ΔF = m a h / (2 L) (axle) or m a h / (2 T) (side): Δ = 2 a h / (L k) with
     // L the wheelbase and T the track; the springs' own scale is saturated at the class's limit.
     const { halfBase, halfTrack } = this.frame;
-    const capP = halfBase * Math.tan(c.pitch * RAD);
-    const capR = halfTrack * Math.tan(c.roll * RAD * (1 + LOAD_FEEL.driftLean * slide));
+    const capP = halfBase * detTan(c.pitch * RAD);
+    const capR = halfTrack * detTan(c.roll * RAD * (1 + LOAD_FEEL.driftLean * slide));
     const squatLoad = alongRoad(capP * tanh((along * cg) / (halfBase * k * capP)), e[9]!, c.pitch * RAD);
     const leanLoad = alongRoad(capR * tanh((side * cg) / (halfTrack * k * capR)), e[1]!, c.roll * RAD);
     const damping = 2 * LOAD_ZETA * Math.sqrt(k);
@@ -184,6 +185,6 @@ export class LoadTransfer {
   private kick(dt: number): number {
     this.age += dt;
     if (this.age > SHIFT_END) return 0;
-    return -this.dir * LOAD_FEEL.shiftKick * this.frame.halfBase * Math.tan(SHIFT_DEG * RAD) * detSin(2 * Math.PI * SHIFT_HZ * this.age) * Math.exp(-this.age / SHIFT_TAU);
+    return -this.dir * LOAD_FEEL.shiftKick * this.frame.halfBase * detTan(SHIFT_DEG * RAD) * detSin(2 * Math.PI * SHIFT_HZ * this.age) * Math.exp(-this.age / SHIFT_TAU);
   }
 }

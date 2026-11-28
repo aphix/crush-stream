@@ -3,6 +3,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { PODIUM_BLOCKS, type PodiumPlace } from "../match/podium.ts";
 import type { PodiumHud } from "../match/types.ts";
 import { PodiumStage } from "../present/podium-stage.ts";
+import { detTan } from "../kernel/det-tan-core.js";
 import { sinCosAt } from "../kernel/physics-core.js";
 import type { CarDamage } from "./car-damage.ts";
 
@@ -191,7 +192,7 @@ export class PodiumDirector {
     if (lens[0] !== camera.fov || lens[1] !== camera.aspect) {
       lens[0] = camera.fov;
       lens[1] = camera.aspect;
-      lens[2] = STAND_HALF_WIDTH / (Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect);
+      lens[2] = STAND_HALF_WIDTH / (detTan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect);
     }
     const radius = Math.max(RADIUS_START + (RADIUS_SETTLED - RADIUS_START) * ease, lens[2]!);
     // The sweep's sine, then the sine and cosine of half the swing: the swing's own are their double angle, and the camera's yaw quaternion is the half angle itself.

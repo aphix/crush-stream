@@ -604,9 +604,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 255: the skin cluster tables (`skinXf`, `skinW`) change at a wheel arch: an arch point between the axles takes the sill's cluster share in full at the plant's edge, fading to 0 over `ARCH_SILL_BLEND` (0.3 m), where the sill rule hard-switched there (`skinZones.cellOnly` became `cellShare`), and a point's 4 strongest clusters are blended by `strongest`; the cage is skinned by the tables and the contact reads the cage, so a replayed hit on a wheel arch plays differently (a standing muscle car's right front and rear corner at 40 km/h: the arch lip's height no longer changes by more than 0.4 of its rest length); a clip of 254 or before no longer reads.
  * 256: `PushBudget`'s per-slice `STEP_CEIL` is scaled by the slice's share of its step (`beginSlice(dt, share)`), so a multi-slice step's drift of the centroid stays under the cap; a replayed step where a crushed part handed its excess to the cell (`clampMass`'s door pack) plays differently; a clip of 255 or before no longer reads.
  * 257: a wheel's tread footprint reads only its five ring bottoms (and the hub) over ground whose slope turns by at most about 0.08 m/m within reach (sqrt(2 TREAD_MISS / R) at the platform tyre) (`TREAD_MISS` 0.1 mm to 1 mm: the arcs may rise over a ring bottom by up to a millimetre, it was 0.1 mm), so a wheel on gently bending ground rests up to 1 mm differently and a replayed car's ride height, and what follows, differs; a clip of 256 or before no longer reads.
+ * 258: `Math.tan` is replaced by `detTan` (`kernel/det-tan-core.js`: fdlibm's tan from + - * / alone) in banked track heights, car-load caps, derby walls and the draft cone: SpiderMonkey's `Math.tan` differed from V8's in the last bit on 3.8 % of inputs, so the same bits now run in every browser; a clip of 257 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 257;
+const REPLAY_VERSION = 258;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

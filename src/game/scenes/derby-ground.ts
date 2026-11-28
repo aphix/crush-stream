@@ -1,6 +1,7 @@
 import type { DeformableCar } from "../vehicle/car.ts";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { propContact, type PropHits } from "../contact/prop-contact.ts";
+import { detTan } from "../kernel/det-tan-core.js";
 import { detAtan2, detCos, detSin, hypot2, PART_FAMILY } from "../kernel/physics-core.js";
 import { SURFACE_IDS } from "../world/catalog.ts";
 import { SURFACE } from "../world/constants.ts";
@@ -142,7 +143,7 @@ function polar(kind: DerbyPropKind, bearing: number, distance: number, lateral: 
 /** The ring wall: `wallPieces` boxes about the middle, each mitred `wallMitre` m into the next, inner faces `radius` m out, `thickness` m thick and `height` high. */
 function wallBoxes(thickness: number, height: number): DerbyBox[] {
   const centre = radius + thickness / 2;
-  const hz = centre * Math.tan(Math.PI / wallPieces) + wallMitre;
+  const hz = centre * detTan(Math.PI / wallPieces) + wallMitre;
   return Array.from({ length: wallPieces }, (_, k) => {
     const angle = (2 * Math.PI * k) / wallPieces;
     return box(DERBY_PROP.wall, detSin(angle) * centre, detCos(angle) * centre, angle + Math.PI / 2, { hx: thickness / 2, hz, height });
