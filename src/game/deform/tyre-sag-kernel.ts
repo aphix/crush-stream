@@ -122,10 +122,10 @@ export class TyreSagArena {
       if (this.loaded?.deref() !== skin) this.loaded = new WeakRef(skin);
       this.loadedSerial = skin.serial;
     }
-    for (let k = 0; k < n; k++) this.tris.view[k] = tris[k]!;
+    this.tris.view.set(tris.subarray(0, n));
     this.lift.view.set(skin.lift);
     this.dirty.view.set(skin.dirty);
-    if (again) for (let k = 0; k < n; k++) this.read.view[k] = skin.sagRead[wheel]![k]!;
+    if (again) this.read.view.set(skin.sagRead[wheel]!.subarray(0, n));
     const job = this.job.view;
     for (let k = 0; k < HELD_LENGTH; k++) job[SAG_JOB.held + k] = skin.heldAt[wheel * HELD_LENGTH + k]!;
     job[SAG_JOB.tyreR] = tyre.r;
