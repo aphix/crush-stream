@@ -57,7 +57,7 @@ function gridDb(cls: VehicleClassId, rpmFrac: number, full: boolean): number {
 }
 
 /** The class voice's own level (dB) at `rpmFrac` and `load` (0..1, interpolated between the no-load and full-load grids), relative to its level at the redline at full load. */
-export function naturalDb(cls: VehicleClassId, rpmFrac: number, load: number): number {
+function naturalDb(cls: VehicleClassId, rpmFrac: number, load: number): number {
   const l = Math.min(1, Math.max(0, load));
   return gridDb(cls, rpmFrac, false) * (1 - l) + gridDb(cls, rpmFrac, true) * l - gridDb(cls, 1, true);
 }
