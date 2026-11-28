@@ -20,9 +20,10 @@ describe("given the driven car's key line", () => {
 
 describe("given the walker's key line", () => {
   const testCases = [
-    { it: "when a keyboard walks him with nothing to say, then the keys that drive the car walk, run and look, and Enter gets in", pad: false, prompt: null, expectedKeys: "W/A/S/D walk · Shift run · drag look · ; mouse look · Enter get in at your car's driver door" },
-    { it: "when a controller walks him with nothing to say, then the stick walks, A or RT runs, and Y gets in", pad: true, prompt: null, expectedKeys: "left stick walk · A or RT run · right stick look · Y get in at your car's driver door" },
-    { it: "when he stands at a driver door, then the prompt leads the line", pad: false, prompt: "Enter or Y: get in", expectedKeys: "Enter or Y: get in · W/A/S/D walk · Shift run · drag look · ; mouse look · Enter get in at your car's driver door" },
+    { it: "when a keyboard walks him with nothing to say, then the keys that drive the car walk, run and look, Space walks slowly, V is the camera and Enter gets in", pad: null, prompt: null, expectedKeys: "W/A/S/D walk · Shift run · Space walk slowly · drag look · ; mouse look · V camera · Enter get in at your car's driver door" },
+    { it: "when an Xbox controller walks him with nothing to say, then the stick walks, A or RT runs, its click walks slowly, View is the camera and Y gets in", pad: "xbox", prompt: null, expectedKeys: "left stick walk · A or RT run · left stick click walk slowly · right stick look · View camera · Y get in at your car's driver door" },
+    { it: "when a PlayStation controller walks him, then the line names its own buttons", pad: "playstation", prompt: null, expectedKeys: "left stick walk · Cross or R2 run · left stick click walk slowly · right stick look · Create camera · Triangle get in at your car's driver door" },
+    { it: "when he stands at a driver door, then the prompt leads the line", pad: null, prompt: "Enter or Y: get in", expectedKeys: "Enter or Y: get in · W/A/S/D walk · Shift run · Space walk slowly · drag look · ; mouse look · V camera · Enter get in at your car's driver door" },
   ] as const;
   for (const testCase of testCases) {
     it(testCase.it, () => {
@@ -31,12 +32,30 @@ describe("given the walker's key line", () => {
   }
 
   it("when he holds the shotgun, then the key line lists the four weapons with the shotgun marked", () => {
-    expect(footKeys(false, null, { slot: 2 })).toContain("1 Fists · 2 Pistol · ▸3 Shotgun · 4 Rifle");
-    expect(footKeys(false, null)).not.toContain("Pistol");
+    expect(footKeys(null, null, { slot: 2 })).toContain("1 Fists · 2 Pistol · ▸3 Shotgun · 4 Rifle");
+    expect(footKeys(null, null)).not.toContain("Pistol");
   });
 
   it("when he holds the hook with two cables out, then the key line reads 0 Hook 2/6, marked", () => {
-    expect(footKeys(false, null, { slot: 4 }, 2)).toContain("▸0 Hook 2/6");
+    expect(footKeys(null, null, { slot: 4 }, 2)).toContain("▸0 Hook 2/6");
+  });
+
+  it("when he walks on a pad in a race, then B (Circle) is the camera, because View pauses the race", () => {
+    expect(footKeys("xbox", null, null, 0, true)).toContain("B camera");
+    expect(footKeys("playstation", null, null, 0, true)).toContain("Circle camera");
+    expect(footKeys("xbox", null)).toContain("View camera");
+  });
+
+  it("when he is armed on a keyboard, then the line names the scroll, the Tab wheel, F to get in, aim and fire", () => {
+    const line = footKeys(null, null, { slot: 0 });
+    for (const text of ["scroll or hold Tab weapons", "right button aim", "left click fire", "F get in at your car's driver door"]) expect(line, text).toContain(text);
+  });
+
+  it("when he is armed on a pad, then the line names the wheel on LB (L1), aim on LT (L2) and fire on RT (R2), and no RB weapon step", () => {
+    const xbox = footKeys("xbox", null, { slot: 0 });
+    expect(xbox).toContain("hold LB weapon wheel · tap LB arm / put away · LT aim · RT fire");
+    expect(xbox).not.toContain("RB");
+    expect(footKeys("playstation", null, { slot: 0 })).toContain("hold L1 weapon wheel · tap L1 arm / put away · L2 aim · R2 fire");
   });
 });
 

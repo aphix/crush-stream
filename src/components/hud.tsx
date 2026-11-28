@@ -45,6 +45,7 @@ import { benchHoldsCommand } from "@/game/hud/submit-rules";
 import { MinigamePanel } from "@/components/minigame-panel";
 import { GameClock } from "@/components/game-clock";
 import { Crosshair } from "@/components/crosshair";
+import { WeaponWheel } from "@/components/weapon-wheel";
 import { cn } from "@/lib/utils";
 
 export type HudProps = {
@@ -116,27 +117,30 @@ const CAMERA_KEYS: [string, string][] = [
   ["V", "Camera view (also C, T): chase, far, hood / trackside, wheel, orbit, auto, free fly"],
   ["Free fly · V", "Detached camera: W A S D · Space or PgUp up · Ctrl or PgDn down · Shift fast · wheel speed · drag look · V or Esc back"],
   ["Open world · Num + / Num −", "Skip the light to the next or the previous game hour, at once (this machine's light only: the crowd keeps its own hour)"],
+  ["Open world · on foot", "F or Y get in / out · Space or left-stick click walk slowly · scroll or hold Tab or LB: weapons · tap Tab or LB: arm / put away · right button or LT aim · left click or RT fire · V or Back view"],
   ["Open world · Auto camera · Q / E", "Previous or next person, foot cop or driver; drag or mouse look turns the view round them; Auto cuts on again 30 s after the last pick or turn"],
   ["Showcase · 1 to 9 · 0", "Throw a cone, crate, tyre stack, hay bale, muscle car bumper, monster truck wheel, car wheel, man or woman at the point under the cursor (the number pad too); 0 clears everything thrown"],
 ];
 
 function seatHint(state: CrashHudState): { title: string; keys: string } {
-  if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad !== null, state.foot.prompt, state.foot.arms, state.tether?.count ?? 0) };
+  // A pad that is not the standard mapping reads only its sticks: its buttons have no hints, the keyboard's do.
+  const buttons = state.pad !== null && state.padMapped;
+  if (state.foot?.out) return { title: "On foot", keys: footKeys(buttons ? (state.padFamily ?? "generic") : null, state.foot.prompt, state.foot.arms, state.tether?.count ?? 0, state.race !== null) };
   if (state.race && state.seat === "drive") {
-    const keys = state.pad
+    const keys = buttons
       ? "RT gas · LT brake, then reverse · left stick steer · X handbrake · A boost · B view · R3 look back · D-pad ↓ respawn · hold D-pad ↓ back on the road, damage kept · Start pause"
       : "W gas · S brake, then reverse · A/D steer · Space handbrake · Shift boost · V view · ` look back · R respawn · hold R back on the road, damage kept · Esc pause";
     return { title: `Racing · ${CAM_LABEL[state.cam ?? state.view]}`, keys: state.foot?.prompt ? `${keys} · ${state.foot.prompt}` : keys };
   }
   if (state.seat === "drive") {
-    const keys = driveKeys(state.pad !== null, state.minigame?.bail == null);
+    const keys = driveKeys(buttons, state.minigame?.bail == null);
     return { title: `Driving · ${CAM_LABEL[state.cam ?? state.view]}`, keys: state.foot?.prompt ? `${keys} · ${state.foot.prompt}` : keys };
   }
   if (state.cam === "free") return { title: `${state.seat === "global" ? "Whole field" : "Watching"} · ${CAM_LABEL.free}`, keys: freeHelp(state.pad !== null, false) };
   if (state.seat === "follow") {
     return {
       title: state.cam ? `Watching · ${CAM_LABEL[state.cam]}` : "Watching",
-      keys: state.pad
+      keys: buttons
         ? "RT, LT or left stick to drive · LB/RB switch car · B camera · right stick look · R3 look back · Back exit"
         : "W/A/S/D to drive · Q/E switch car · V camera · drag look · ` look back · Esc back",
     };
@@ -168,6 +172,7 @@ export function Hud({ store, engine, onlineShown }: Omit<HudProps, "state"> & { 
   return (
     <>
       <Crosshair arms={state.foot?.arms ?? null} mouseLook={state.mouseLook} />
+      <WeaponWheel wheel={state.foot?.wheel ?? null} />
       {touch ? <PhoneHud {...shell} /> : <DesktopHud {...shell} />}
     </>
   );

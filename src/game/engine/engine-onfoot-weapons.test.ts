@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { hypot2 } from "../kernel/physics-core.js";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { driverLook } from "../present/driver-look.ts";
-import { PAD_BUTTON } from "../vehicle/gamepad.ts";
+import { blankPad, PAD_BUTTON, type PadState, type TouchPad } from "../vehicle/gamepad.ts";
 import { activeGround } from "../world/ground.ts";
 import { WEAPONS } from "./engine-onfoot-arms.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
@@ -172,16 +172,157 @@ describe("given the real engine in the open world, its player on foot", () => {
     }
   });
 
-  it("when 2 is pressed on foot in the open world, then the HUD's weapon reads Pistol; LB steps back to Fists and RB on to Shotgun", () => {
+  /** The pad with LB held (or not) and the right stick at (`rx`, `ry`). */
+  const lbPad = (held: boolean, rx = 0, ry = 0): PadState => ({ ...blankPad(), connected: true, held: held ? 1 << PAD_BUTTON.lb : 0, rx, ry });
+  const noTouch: TouchPad = { x: 0, y: 0, gas: 0, brake: 0, held: 0, tapped: 0 };
+  const wheel = (deltaY: number): void => rig.engine["view"]["onWheel"](Object.assign(new Event("wheel"), { deltaY, deltaMode: 0 }) as WheelEvent);
+
+  it("when 2 is pressed and LB is tapped, then the pistol is put away and a second tap draws it again; RB on a pad steps nothing, RB from the touch strip steps to the next weapon", () => {
     rig.getOut();
     const onFoot = rig.engine["onFoot"];
     rig.press("Digit2");
     expect(onFoot.hud()!.arms, "after 2").toEqual({ slot: 1, name: "Pistol" });
-    onFoot.padPress(1 << PAD_BUTTON.lb);
-    expect(onFoot.hud()!.arms, "after LB").toEqual({ slot: 0, name: "Fists" });
+    for (const slot of [0, 1]) {
+      onFoot.arms.pad(lbPad(true), noTouch);
+      onFoot.arms.pad(lbPad(false), noTouch);
+      expect(onFoot.hud()!.arms!.slot, `after tap ${slot + 1}`).toBe(slot);
+    }
     onFoot.padPress(1 << PAD_BUTTON.rb);
+    expect(onFoot.hud()!.arms, "RB on a pad").toEqual({ slot: 1, name: "Pistol" });
+    rig.engine.touch.held = 1 << PAD_BUTTON.rb;
     onFoot.padPress(1 << PAD_BUTTON.rb);
-    expect(onFoot.hud()!.arms, "after RB twice").toEqual({ slot: 2, name: "Shotgun" });
+    rig.engine.touch.held = 0;
+    expect(onFoot.hud()!.arms, "RB from the touch strip").toEqual({ slot: 2, name: "Shotgun" });
+  });
+
+  it("when LB is held for 0.3 s, then the weapon wheel opens on the weapon in hand, the right stick picks a spoke without turning the camera, and letting go equips it", () => {
+    rig.getOut();
+    const { arms } = rig.engine["onFoot"];
+    rig.press("Digit4");
+    arms.pad(lbPad(true), noTouch);
+    arms.frame(0.1);
+    expect(arms.wheelHud(), "not yet open at 0.1 s").toBe(null);
+    arms.frame(0.2);
+    expect(arms.wheelHud()!.pick, "open on the rifle").toBe(3);
+    const nudge = lbPad(true, 0.3, 0);
+    arms.pad(nudge, noTouch);
+    expect(arms.wheelHud()!.pick, "a nudge under half picks nothing new").toBe(3);
+    const stick = lbPad(true, 0.95, -0.31);
+    arms.pad(stick, noTouch);
+    expect(arms.wheelHud()!.pick, "up and right: the pistol").toBe(1);
+    expect([stick.rx, stick.ry], "the camera's stick is zeroed while the wheel is open").toEqual([0, 0]);
+    arms.pad(lbPad(false), noTouch);
+    expect(arms.wheelHud(), "shut").toBe(null);
+    expect(arms.weapon, "equipped on release").toBe("pistol");
+  });
+
+  it("when Tab is held, then the wheel opens and the mouse picks a spoke; letting go equips it", () => {
+    rig.getOut();
+    const { arms } = rig.engine["onFoot"];
+    rig.press("Digit4");
+    rig.engine["keys"].add("Tab");
+    rig.run(0.3);
+    expect(arms.wheelOpen, "open").toBe(true);
+    expect(arms.wheelMove(0, 0), "the wheel takes the mouse").toBe(true);
+    rig.engine["onArmsMove"](Object.assign(new Event("pointermove"), { movementX: 100, movementY: 0 }) as PointerEvent);
+    expect(arms.wheelPick, "a full push right: the pistol").toBe(1);
+    rig.engine["keys"].delete("Tab");
+    rig.run(2 * FRAME);
+    expect(arms.wheelOpen, "shut").toBe(false);
+    expect(arms.weapon, "equipped on release").toBe("pistol");
+  });
+
+  it("when the mouse wheel turns on foot in the open world, then a notch steps the weapon and the zoom stays; while aiming the wheel zooms", () => {
+    rig.getOut();
+    const { arms } = rig.engine["onFoot"];
+    const radius = (): number => rig.engine["view"]["radius"];
+    rig.press("Digit2");
+    const rest = radius();
+    wheel(100);
+    expect(arms.weapon, "a notch down: the shotgun").toBe("shotgun");
+    expect(radius(), "the zoom stays").toBe(rest);
+    wheel(-100);
+    wheel(-100);
+    wheel(-100);
+    expect(arms.weapon, "three notches up: past fists to the hook").toBe("hook");
+    wheel(40);
+    wheel(40);
+    expect(arms.weapon, "a trackpad's 80 px is not a notch yet").toBe("hook");
+    wheel(40);
+    expect(arms.weapon, "120 px is one: wrapped to fists").toBe("fists");
+    rightButton(true);
+    try {
+      wheel(100);
+      expect(radius(), "aiming: the zoom").not.toBe(rest);
+      expect(arms.weapon, "aiming: the weapon stays").toBe("fists");
+    } finally {
+      rightButton(false);
+    }
+  });
+
+  it("when the mouse wheel turns at the wheel of the car, then it zooms and takes no weapon", () => {
+    rig.sit(0);
+    const rest = rig.engine["view"]["radius"];
+    wheel(100);
+    expect(rig.engine["view"]["radius"], "zoomed").not.toBe(rest);
+    expect(rig.engine["onFoot"].arms.weapon).toBe("fists");
+  });
+
+  it("when a real pad's right trigger is 0.2 pulled and its pressed bit is up, then no punch is thrown; pulled past half it is; the touch Fire button (the RT bit of the touch pad) throws one", () => {
+    rig.getOut();
+    const { arms } = rig.engine["onFoot"];
+    const punched = vi.spyOn(rig.engine["ragdolls"].walker, "punch");
+    const trigger = (rt: number, held: number): PadState => ({ ...blankPad(), connected: true, rt, held });
+    arms.pad(trigger(0.2, 1 << PAD_BUTTON.rt), noTouch);
+    arms.pad(trigger(0, 0), noTouch);
+    expect(punched, "a light pull").not.toHaveBeenCalled();
+    arms.pad(trigger(0.8, 1 << PAD_BUTTON.rt), noTouch);
+    arms.pad(trigger(0, 0), noTouch);
+    expect(punched, "a hard pull").toHaveBeenCalledTimes(1);
+    rig.run(1);
+    arms.pad(trigger(0, 0), { ...noTouch, held: 1 << PAD_BUTTON.rt });
+    arms.pad(trigger(0, 0), noTouch);
+    expect(punched, "the touch Fire button").toHaveBeenCalledTimes(2);
+    punched.mockRestore();
+  });
+
+  it("when the weapon wheel is open, then fire throws nothing; once it is shut, it does", () => {
+    rig.getOut();
+    const { arms } = rig.engine["onFoot"];
+    const punched = vi.spyOn(rig.engine["ragdolls"].walker, "punch");
+    arms.pad(lbPad(true), noTouch);
+    arms.frame(0.3);
+    expect(arms.wheelOpen, "open").toBe(true);
+    fire();
+    expect(punched, "fire with the wheel open").not.toHaveBeenCalled();
+    arms.pad(lbPad(false), noTouch);
+    arms.frame(1);
+    fire();
+    expect(punched, "fire with it shut").toHaveBeenCalledTimes(1);
+    punched.mockRestore();
+  });
+
+  it("when the game is paused with the wheel open, then the wheel shuts without equipping its pick, and the scroll wheel steps nothing", () => {
+    rig.getOut();
+    const { arms } = rig.engine["onFoot"];
+    rig.press("Digit4");
+    arms.pad(lbPad(true), noTouch);
+    arms.frame(0.3);
+    arms.pad(lbPad(true, 0.95, -0.31), noTouch);
+    expect(arms.wheelPick, "the pistol picked").toBe(1);
+    rig.engine.togglePlay();
+    try {
+      rig.run(FRAME);
+      expect(arms.wheelOpen, "shut by the pause").toBe(false);
+      expect(arms.weapon, "the pick was not equipped").toBe("rifle");
+      wheel(100);
+      expect(arms.weapon, "no scroll while paused").toBe("rifle");
+      rig.engine.togglePlay();
+      rig.run(FRAME);
+      expect(arms.weapon, "resuming equips nothing").toBe("rifle");
+    } finally {
+      if (!rig.engine["playing"]) rig.engine.togglePlay();
+    }
   });
 
   it("when a digit is pressed at the wheel, then no weapon is taken: the weapon in hand stays fists", () => {

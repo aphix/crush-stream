@@ -170,6 +170,8 @@ export class ChaseCamera {
   private taking = false;
   /** A left click on the canvas that is a shot (the arms, on foot in the open world): returns true when it took the click. */
   click: (() => boolean) | null = null;
+  /** The wheel turned `px` pixels and the arms took it (it steps a weapon on foot in the open world) instead of the zoom: returns true when it did. */
+  scroll: ((px: number) => boolean) | null = null;
   /** Where the pointer last moved over the canvas (client px; NaN: not yet): what a key aims at (the showcase's thrown props). */
   hoverX = NaN;
   hoverY = NaN;
@@ -718,8 +720,9 @@ export class ChaseCamera {
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
-    this.userFramed = true;
     const px = wheelPixels(e);
+    if (!this.flying && this.scroll?.(px)) return;
+    this.userFramed = true;
     // Free view: the wheel is the flight speed, not a zoom.
     if (this.flying) {
       this.free.speedBy(px);

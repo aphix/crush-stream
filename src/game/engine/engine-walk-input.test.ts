@@ -36,7 +36,8 @@ const cases: readonly {
   { it: "when the stick is pushed right, then he steps right as the car would steer right", keys: [], stickX: 0.8, stickY: 0, triggerRight: 0, heldButton: 0, connected: true, expectedForward: 0, expectedStrafe: 0.8, expectedSprint: false, expectedWalk: false, drivingField: "wheel", drivingValue: -0.8 },
   { it: "when the stick is pushed up, then he goes forward in proportion", keys: [], stickX: 0, stickY: -0.6, triggerRight: 0, heldButton: 0, connected: true, expectedForward: 0.6, expectedStrafe: 0, expectedSprint: false, expectedWalk: false, drivingField: null, drivingValue: 0 },
   { it: "when A on the pad is held, then he sprints as the car would boost", keys: [], stickX: 0, stickY: 0, triggerRight: 0, heldButton: 1 << PAD_BUTTON.south, connected: true, expectedForward: 0, expectedStrafe: 0, expectedSprint: true, expectedWalk: false, drivingField: "boost", drivingValue: true },
-  { it: "when X on the pad is held, then he is held to a walk as the car would handbrake", keys: [], stickX: 0, stickY: 0, triggerRight: 0, heldButton: 1 << PAD_BUTTON.west, connected: true, expectedForward: 0, expectedStrafe: 0, expectedSprint: false, expectedWalk: true, drivingField: "handbrake", drivingValue: true },
+  { it: "when the left stick is clicked, then he is held to a walk (GTA's stealth)", keys: [], stickX: 0, stickY: 0, triggerRight: 0, heldButton: 1 << PAD_BUTTON.l3, connected: true, expectedForward: 0, expectedStrafe: 0, expectedSprint: false, expectedWalk: true, drivingField: null, drivingValue: 0 },
+  { it: "when X on the pad is held, then he is not held to a walk: X is free on foot (the car's handbrake still reads it)", keys: [], stickX: 0, stickY: 0, triggerRight: 0, heldButton: 1 << PAD_BUTTON.west, connected: true, expectedForward: 0, expectedStrafe: 0, expectedSprint: false, expectedWalk: false, drivingField: "handbrake", drivingValue: true },
   { it: "when the throttle trigger is pulled hard, then he sprints as the car would take gas", keys: [], stickX: 0, stickY: 0, triggerRight: 1, heldButton: 0, connected: true, expectedForward: 0, expectedStrafe: 0, expectedSprint: true, expectedWalk: false, drivingField: "gas", drivingValue: 1 },
   { it: "when the throttle trigger is pulled lightly, then he does not sprint", keys: [], stickX: 0, stickY: 0, triggerRight: 0.3, heldButton: 0, connected: true, expectedForward: 0, expectedStrafe: 0, expectedSprint: false, expectedWalk: false, drivingField: "gas", drivingValue: 0.3 },
   { it: "when a pad is not connected, then its stale stick reads nothing", keys: [], stickX: 1, stickY: -1, triggerRight: 1, heldButton: (1 << PAD_BUTTON.south) | (1 << PAD_BUTTON.west), connected: false, expectedForward: 0, expectedStrafe: 0, expectedSprint: false, expectedWalk: false, drivingField: "gas", drivingValue: 0 },
@@ -118,5 +119,12 @@ describe("given each touch scheme with the player on foot", () => {
   it("when Easy's player is on foot, then the controls draw the Pedals strip, and at the wheel Easy's own", () => {
     expect(drawnScheme("autogas", true)).toBe("pedals");
     expect(drawnScheme("autogas", false)).toBe("autogas");
+  });
+});
+
+describe("given the touch pad's Hand button on foot", () => {
+  it("when it is held, then he is held to a walk; released, he is not", () => {
+    expect(readWalkIntent(new Set(), blankPad(), { ...blankTouch(), held: 1 << PAD_BUTTON.west }, blankWalkIntent()).walk, "held").toBe(true);
+    expect(readWalkIntent(new Set(), blankPad(), blankTouch(), blankWalkIntent()).walk, "released").toBe(false);
   });
 });

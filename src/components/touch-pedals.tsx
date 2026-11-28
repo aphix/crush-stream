@@ -124,7 +124,7 @@ function OnFootTap({ engine, foot, mirror, className }: Pick<HudProps, "engine">
   return (
     <div className="flex flex-col items-center gap-2">
       {foot.arms !== null ? (
-        <PadButton engine={engine} button={PAD_BUTTON.l3} name="fire" label="Fire (hold)" caption="Fire" showCaption className={className}>
+        <PadButton engine={engine} button={PAD_BUTTON.rt} name="fire" label="Fire (hold)" caption="Fire" showCaption className={className}>
           <Target />
         </PadButton>
       ) : null}

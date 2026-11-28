@@ -73,7 +73,15 @@ export type GarageHud = { car: Record<CarPart, number>; person: DriverLook; pick
 export type SprayTool = { on: boolean; radius: number; colour: number; mirror: boolean };
 
 /** The trip out of the car as the HUD reads it: `out` while he is on foot, the line under the view (what the control does now, or why it refused), and `refusal`, that why alone while it shows. */
-export type FootHud = { out: boolean; prompt: string | null; refusal: string | null; /** The weapon in hand on foot in the open world; null where he has none. */ arms: { slot: number; name: string } | null };
+export type FootHud = {
+  out: boolean;
+  prompt: string | null;
+  refusal: string | null;
+  /** The weapon in hand on foot in the open world; null where he has none. */
+  arms: { slot: number; name: string } | null;
+  /** The weapon wheel while it is open: its spokes' names and the one picked. */
+  wheel: { pick: number; spokes: readonly string[] } | null;
+};
 
 /** Police chasing the viewed car as the pursuit strip shows them (`RaceView.chase`): the open world's hold and countdown to a bust, the Survival strip's own. */
 export type ChaseHud = NonNullable<RaceView["chase"]>;
@@ -231,6 +239,8 @@ export type CrashHudState = {
   pad: string | null;
   /** The connected gamepad's family (what its face buttons are called), null when none. */
   padFamily: PadFamily | null;
+  /** The connected gamepad's buttons are readable (the standard mapping); false: only its sticks are, so no button hint applies. */
+  padMapped: boolean;
   /** Arcade (0) ↔ realistic (1) handling and damage. */
   realism: number;
   /** Gamepad rumble on hits, hard landings and slides (a setting; on by default). */
@@ -382,6 +392,7 @@ export const INITIAL_HUD: CrashHudState = {
   cam: null,
   pad: null,
   padFamily: null,
+  padMapped: true,
   realism: DEFAULT_REALISM,
   rumble: true,
   boostZoom: true,

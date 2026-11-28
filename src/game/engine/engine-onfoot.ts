@@ -73,20 +73,26 @@ interface OnFootHost {
   shotFired(ray: LookRay, far: number, gun: Gun): void;
   /** Fire with the hook in hand. */
   hook(): void;
+  /** The weapon in hand or the weapon wheel changed: the HUD is told now, not at its next beat. */
+  changed(): void;
   /** The ragdoll pool as the open world's bodies see it: the host's cable moves his lying walker through it. */
   bodyHost: BodyHost;
 }
 
-/** The control that gets him out and in: Enter on the keyboard (`SEAT_KEYS.onFoot`), Y (Triangle) on the pad. Neither drives, steers or switches a scene. */
+/** The control that gets him out and in: F or Enter on the keyboard (F only in the open world; `SEAT_KEYS.onFoot`), Y (Triangle) on the pad. Neither drives, steers or switches a scene. */
 const ON_FOOT_BUTTON = 1 << PAD_BUTTON.north;
 /** Keys the car's seat uses that mean nothing on foot (and would pause, reset or switch cars under his feet). */
 const SWALLOWED_KEYS: readonly string[] = ["Space", SEAT_KEYS.reset, SEAT_KEYS.stepOut, SEAT_KEYS.previousCar, SEAT_KEYS.nextCar, ...SEAT_KEYS.camera];
 const BACK_BUTTON = 1 << PAD_BUTTON.back;
-/** The pad's View button (B, Circle): the drive views in the seat, the on-foot views out of it. */
-const VIEW_BUTTON = 1 << PAD_BUTTON.east;
+/** The pad's View button (Back, Share, Create: GTA's): the on-foot views out of the seat. In a race Back pauses, so there B (Circle) is View. */
+const VIEW_BUTTON = 1 << PAD_BUTTON.back;
+const RACE_VIEW_BUTTON = 1 << PAD_BUTTON.east;
 /** The pad's reset (D-pad down, the touch Respawn): in the open world it puts him back in a fresh car (`resetsToCar`). */
 const RESET_BUTTON = 1 << PAD_BUTTON.down;
-const SWALLOWED_BUTTONS = BACK_BUTTON | VIEW_BUTTON | (1 << PAD_BUTTON.lb) | (1 << PAD_BUTTON.rb) | RESET_BUTTON;
+const SWALLOWED_BUTTONS = BACK_BUTTON | RACE_VIEW_BUTTON | (1 << PAD_BUTTON.lb) | (1 << PAD_BUTTON.rb) | RESET_BUTTON;
+/** The touch strip's View and Weapon buttons raise B and RB; no pad is asked for them. */
+const TOUCH_VIEW_BUTTON = RACE_VIEW_BUTTON;
+const TOUCH_WEAPON_BUTTON = 1 << PAD_BUTTON.rb;
 
 /** Seconds a refusal stays on the prompt. */
 const REFUSAL_SECONDS = 2;
@@ -112,7 +118,7 @@ const _aimRay = new LookRay();
  */
 export class OnFootDirector {
   readonly flow = new OnFootFlow();
-  readonly arms = new OnFootArms({ armed: () => this.armed(), punch: () => this.punch(), land: () => this.landPunch(), captured: () => this.host.mouseCaptured(), capture: (on) => this.host.captureMouse(on), shoot: (gun) => this.shoot(gun), hook: () => this.host.hook() });
+  readonly arms = new OnFootArms({ armed: () => this.armed(), punch: () => this.punch(), land: () => this.landPunch(), captured: () => this.host.mouseCaptured(), capture: (on) => this.host.captureMouse(on), shoot: (gun) => this.shoot(gun), hook: () => this.host.hook(), changed: () => this.host.changed() });
   private readonly host: OnFootHost;
   private readonly sense: OnFootSense = { car: -1, speed: 0, doorBlocked: false };
   private readonly speed = new Float64Array(1);
@@ -323,7 +329,7 @@ export class OnFootDirector {
   key(e: KeyboardEvent): boolean {
     if (!this.host.available()) return false;
     if (this.armed() && this.arms.key(e.code)) return true;
-    if (e.code === SEAT_KEYS.onFoot) {
+    if (e.code === SEAT_KEYS.onFoot || (e.code === SEAT_KEYS.onFootOpenWorld && this.host.openWorld())) {
       e.preventDefault();
       this.press();
       return true;
@@ -340,11 +346,13 @@ export class OnFootDirector {
   /** The pad buttons that went down this poll: true when none is left for the seat (the control, and on foot the seat's buttons). */
   padPress(pressed: number): boolean {
     if (!this.host.available()) return false;
-    if (this.armed() && (pressed & (1 << PAD_BUTTON.lb)) !== 0) this.arms.cycle(-1);
-    if (this.armed() && (pressed & (1 << PAD_BUTTON.rb)) !== 0) this.arms.cycle(1);
+    // The poll has already consumed the touch pad's `tapped`: only a finger still down marks a press as the touch strip's.
+    const touched = this.host.touch.held;
+    if (this.armed() && (pressed & touched & TOUCH_WEAPON_BUTTON) !== 0) this.arms.cycle(1);
     if ((pressed & ON_FOOT_BUTTON) !== 0) this.press();
-    if (this.flow.active && (pressed & VIEW_BUTTON) !== 0) this.cycleView();
-    const swallowed = (this.host.racing() ? SWALLOWED_BUTTONS & ~BACK_BUTTON : SWALLOWED_BUTTONS) & (this.resetsToCar ? ~RESET_BUTTON : -1);
+    const racing = this.host.racing();
+    if (this.flow.active && ((pressed & (racing ? RACE_VIEW_BUTTON : VIEW_BUTTON)) !== 0 || (!racing && (pressed & touched & TOUCH_VIEW_BUTTON) !== 0))) this.cycleView();
+    const swallowed = (racing ? SWALLOWED_BUTTONS & ~BACK_BUTTON : SWALLOWED_BUTTONS) & (this.resetsToCar ? ~RESET_BUTTON : -1);
     return (pressed & ON_FOOT_BUTTON) !== 0 || (this.flow.active && (pressed & swallowed) !== 0);
   }
 
@@ -454,7 +462,7 @@ export class OnFootDirector {
   frame(wallDt: number): void {
     const flow = this.flow;
     this.refusalLeft = Math.max(0, this.refusalLeft - wallDt);
-    this.arms.pad(this.host.pad, this.host.touch);
+    this.arms.pad(this.host.pad, this.host.touch, this.host.keys.has("Tab"), this.host.available());
     this.arms.frame(wallDt);
     this.host.ragdolls.walker.holdGun(this.armed() && this.arms.heldOut());
     this.settle(wallDt);
@@ -548,6 +556,7 @@ export class OnFootDirector {
       prompt: this.prompt(),
       refusal: this.refusalText(),
       arms: this.arms.hud(),
+      wheel: this.arms.wheelHud(),
     };
   }
 
@@ -568,7 +577,8 @@ export class OnFootDirector {
     if (refused !== null) return refused;
     if (!this.host.available()) return null;
     if (this.flow.phase === "arrested") return "Under arrest";
-    if (this.flow.phase === "onFoot") return this.reach ? "Enter or Y: get in" : this.noCarText();
-    return this.seatedIndex() >= 0 ? "Enter or Y: get out" : null;
+    const key = this.host.openWorld() ? "F" : "Enter";
+    if (this.flow.phase === "onFoot") return this.reach ? `${key} or Y: get in` : this.noCarText();
+    return this.seatedIndex() >= 0 ? `${key} or Y: get out` : null;
   }
 }
