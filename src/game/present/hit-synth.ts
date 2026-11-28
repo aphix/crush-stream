@@ -259,18 +259,22 @@ function ringLayer(out: Float32Array, rate: number, spec: Spec, partnerHard: num
   }
 }
 
-function finish(out: Float32Array, rate: number): void {
+/** A soft pair's peak is this floor and a hard one's is the floor plus the span: hay on hay is not as loud as steel on steel. */
+const PAIR_LEVEL_FLOOR = 0.35;
+const PAIR_LEVEL_SPAN = 0.65;
+
+function finish(out: Float32Array, rate: number, level: number): void {
   let peak = 0;
   for (let i = 0; i < out.length; i++) peak = Math.max(peak, Math.abs(out[i]!));
   const fade = Math.max(Math.floor(0.012 * rate), Math.floor(out.length * 0.1));
-  const gain = peak > 0 ? 1 / peak : 0;
+  const gain = peak > 0 ? level / peak : 0;
   for (let i = 0; i < out.length; i++) {
     const left = out.length - i;
     out[i]! *= gain * (left < fade ? Math.sin((Math.PI / 2) * (left / fade)) : 1);
   }
 }
 
-/** Renders one hit of `a` on `b` into `out` (zeroed, `hitSamples(size, rate)` long), peak 1: crack, body thump, ring, then debris; glass adds a shatter. */
+/** Renders one hit of `a` on `b` into `out` (zeroed, `hitSamples(size, rate)` long), its peak set by how hard the pair is: crack, body thump, ring, then debris; glass adds a shatter. */
 export function renderHit(a: SoundMat, b: SoundMat, size: HitSize, variation: number, rate: number, out: Float32Array): void {
   const first = SPEC[a];
   const second = SPEC[b];
@@ -293,7 +297,7 @@ export function renderHit(a: SoundMat, b: SoundMat, size: HitSize, variation: nu
   if (first.debris !== null) debrisLayer(out, rate, first.debris, size, rng);
   if (second.debris !== null) debrisLayer(out, rate, second.debris, size, rng);
   if ((a === "glass" || b === "glass") && size > 0) noiseBand(out, rate, 0.002, 0.12, 3000, 10000, 0.5 * (size === 2 ? 1 : 0.6), 0.04, rng, 0.4);
-  finish(out, rate);
+  finish(out, rate, PAIR_LEVEL_FLOOR + PAIR_LEVEL_SPAN * hard);
 }
 
 type ScrapeKind = number;

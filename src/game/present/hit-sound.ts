@@ -23,7 +23,6 @@ import {
   scrapeKind,
   scrapeSamples,
   SOUND_MATS,
-  type HitSize,
   type SoundMat,
 } from "./hit-synth.ts";
 
@@ -59,7 +58,6 @@ interface SoundSource extends SoundNode {
 }
 interface SoundContext {
   currentTime: number;
-  listener: { positionX?: { value: number }; positionY?: { value: number }; positionZ?: { value: number } };
   createBuffer(channels: number, length: number, sampleRate: number): SoundBuffer;
   createGain(): SoundGain;
   createBiquadFilter(): SoundFilter;
@@ -129,8 +127,13 @@ const ARG_START = 2;
 const ARG_DISTANCE = 3;
 const ARG_PRIORITY = 4;
 const ARG_NOW = 5;
+const ARG_HOLD = 6;
 const MAX_VOICES = 24;
 const MAX_SCRAPES = 6;
+/** Variations of each bank buffer on a phone: a third less memory and render time. */
+const PHONE_VARIATIONS = 2;
+/** `frame` renders bank buffers until this much time (ms) has gone, at least one a frame. */
+const BUILD_BUDGET_MS = 2;
 /** Below this peak (after distance) a hit is not worth a voice. */
 const AUDIBLE = 0.004;
 const HEARD_M = 400;
@@ -144,41 +147,49 @@ const SECOND_LAYER_PITCH = 0.8;
 const SECOND_LAYER_DELAY_S = 0.03;
 const SECOND_LAYER_SPREAD_S = 0.09;
 const SECOND_LAYER_PRIORITY = 0.4;
+/** A voice taken from another fades over about 2 ms (time constant) and the new sound starts 10 ms in, so the cut does not click. */
+const STEAL_TAU_S = 0.0007;
+const STEAL_HOLD_S = 0.01;
 const DEFLAM_SLOTS = 16;
 const DEFLAM_S = 0.04;
 const DEFLAM_GROWTH = 1.25;
 const DEFLAM_CELL_M = 1.5;
 const SCRAPE_FULL_SPEED = 15;
-/** Normal force (N) at which a scrape is at full level: a 1.2 t car on its side is ~12 kN. */
-const SCRAPE_FULL_FORCE = 6000;
 const SCRAPE_FADE_S = 0.25;
 const SCRAPE_TAU_S = 0.03;
 const SCRAPE_CHANGE = 0.05;
 const SCRAPE_RATE_MIN = 0.6;
 const SCRAPE_RATE_SPAN = 1;
 const SQUARES = SOUND_MATS.length * SOUND_MATS.length;
+const SCRAPE_STEPS = SCRAPE_KINDS * SCRAPE_VARIATIONS;
 
 /**
- * Impact and scrape sound by material pair, size and place. Every bank pair is rendered once at construction into mono buffers; a hit
- * picks one by pair, size and a seeded hash and plays it detuned, delayed by distance and filtered by it. Voices are a fixed pool with the
- * loudest kept; a scrape is a looping buffer per contact whose level and brightness follow speed and force.
+ * Impact and scrape sound by material pair, size and place. The bank of mono buffers is rendered a little each `frame` after construction (hits whose
+ * buffer is not ready yet are skipped); a hit picks one by pair, size and a seeded hash and plays it detuned, delayed by distance and filtered by it.
+ * Voices are a fixed pool ranked by peak times the share of the sound left; a scrape is a looping buffer per contact whose level and brightness follow speed and force (0-1).
  */
 export class HitSound {
-  /** Bytes of rendered buffers held, and the milliseconds that took. */
-  readonly bankBytes: number;
-  readonly bankMs: number;
   private readonly ctx: SoundContext;
-  private readonly bank: SoundBuffer[] = [];
-  private readonly scrapeBank: SoundBuffer[] = [];
-  /** Per (a, b) material pair, the first buffer of its bank row, and its scrape loop kind. */
+  private readonly variations: number;
+  private readonly rowStride: number;
+  private readonly bank: (SoundBuffer | null)[] = [];
+  private readonly scrapeBank: (SoundBuffer | null)[] = [];
+  /** The material pairs that have a row of buffers, and per (a, b) pair its row and scrape loop kind. */
+  private readonly rowKeys: (readonly [SoundMat, SoundMat])[] = [];
   private readonly rowOf = new Int32Array(SQUARES);
   private readonly kindOf = new Uint8Array(SQUARES);
+  private readonly total: number;
+  private built = 0;
+  private bytes = 0;
+  private renderMs = 0;
   private readonly voiceGain: SoundGain[] = [];
   private readonly voiceFilter: SoundFilter[] = [];
   private readonly voiceSource: (SoundSource | null)[] = [];
+  private readonly voiceStart = new Float64Array(MAX_VOICES);
   private readonly voiceEnd = new Float64Array(MAX_VOICES);
   private readonly voicePriority = new Float64Array(MAX_VOICES);
   private readonly scrapeId = new Int32Array(MAX_SCRAPES).fill(-1);
+  private readonly scrapeKindOf = new Uint8Array(MAX_SCRAPES);
   private readonly scrapeTouched = new Uint8Array(MAX_SCRAPES);
   private readonly scrapeIdle = new Float64Array(MAX_SCRAPES);
   private readonly scrapeLevel = new Float64Array(MAX_SCRAPES);
@@ -192,17 +203,19 @@ export class HitSound {
   private readonly deflamImpulse = new Float64Array(DEFLAM_SLOTS);
   private deflamNext = 0;
   /** The sound a hit hands to `play` and `claim`: doubles kept in an array are not boxed to cross each call. */
-  private readonly args = new Float64Array(6);
+  private readonly args = new Float64Array(7);
   private serial = 0;
   private listenerX = 0;
   private listenerY = 0;
   private listenerZ = 0;
 
-  constructor(ctx: SoundContext, out: SoundNode) {
+  /** Builds the voice pools and plans the bank; the buffers are rendered by `frame`. `desktop` false keeps a phone's bank smaller. */
+  constructor(ctx: SoundContext, out: SoundNode, desktop = true) {
     this.ctx = ctx;
-    const started = performance.now();
-    this.bankBytes = this.renderHitBank() + this.renderScrapeBank();
-    this.bankMs = performance.now() - started;
+    this.variations = desktop ? HIT_VARIATIONS : PHONE_VARIATIONS;
+    this.rowStride = HIT_SIZE_LIST.length * this.variations;
+    this.planBank();
+    this.total = SCRAPE_STEPS + this.rowKeys.length * this.rowStride;
     for (let voice = 0; voice < MAX_VOICES; voice++) {
       this.voiceGain.push(this.chain(out, this.voiceFilter));
       this.voiceSource.push(null);
@@ -215,6 +228,21 @@ export class HitSound {
     }
   }
 
+  /** Bytes of rendered buffers held so far. */
+  get bankBytes(): number {
+    return this.bytes;
+  }
+
+  /** Milliseconds `frame` has spent rendering the bank so far. */
+  get bankMs(): number {
+    return this.renderMs;
+  }
+
+  /** Whether every buffer of the bank is rendered. */
+  get bankReady(): boolean {
+    return this.built >= this.total;
+  }
+
   /** A gain into a lowpass into `out`: the filter is pushed on `filters`, the gain returned. */
   private chain(out: SoundNode, filters: SoundFilter[]): SoundGain {
     const gain = this.ctx.createGain();
@@ -225,45 +253,52 @@ export class HitSound {
     return gain;
   }
 
-  /** Renders every bank pair's buffers and maps each of the 256 material pairs to its row; bytes held. */
-  private renderHitBank(): number {
-    let bytes = 0;
+  /** Lists the bank's rows (steel first, as the first hits are steel's) and maps each of the 256 material pairs to its row and scrape kind. */
+  private planBank(): void {
     const rows = new Map<string, number>();
     for (let a = 0; a < SOUND_MATS.length; a++) {
       for (let b = 0; b < SOUND_MATS.length; b++) {
-        const [first, second] = bankKey(SOUND_MATS[a]!, SOUND_MATS[b]!);
-        const name = `${first}/${second}`;
+        const key = bankKey(SOUND_MATS[a]!, SOUND_MATS[b]!);
+        const name = `${key[0]}/${key[1]}`;
         let row = rows.get(name);
         if (row === undefined) {
-          row = this.bank.length;
+          row = this.rowKeys.length;
           rows.set(name, row);
-          for (const size of HIT_SIZE_LIST) {
-            for (let variation = 0; variation < HIT_VARIATIONS; variation++) {
-              const buffer = this.ctx.createBuffer(1, hitSamples(size, BANK_RATE), BANK_RATE);
-              renderHit(first, second, size, variation, BANK_RATE, buffer.getChannelData(0));
-              this.bank.push(buffer);
-              bytes += buffer.length * 4;
-            }
-          }
+          this.rowKeys.push(key);
+          for (let slot = 0; slot < this.rowStride; slot++) this.bank.push(null);
         }
         this.rowOf[a * SOUND_MATS.length + b] = row;
         this.kindOf[a * SOUND_MATS.length + b] = scrapeKind(SOUND_MATS[a]!, SOUND_MATS[b]!);
       }
     }
-    return bytes;
+    for (let step = 0; step < SCRAPE_STEPS; step++) this.scrapeBank.push(null);
   }
 
-  private renderScrapeBank(): number {
-    let bytes = 0;
-    for (let kind = 0; kind < SCRAPE_KINDS; kind++) {
-      for (let variation = 0; variation < SCRAPE_VARIATIONS; variation++) {
-        const buffer = this.ctx.createBuffer(1, scrapeSamples(BANK_RATE), BANK_RATE);
-        renderScrapeLoop(kind, variation, BANK_RATE, buffer.getChannelData(0));
-        this.scrapeBank.push(buffer);
-        bytes += buffer.length * 4;
-      }
+  /** Renders the next buffer of the plan: the scrape loops first, then each row's buffers by size and variation. */
+  private buildNext(): void {
+    const step = this.built++;
+    if (step < SCRAPE_STEPS) {
+      const buffer = this.ctx.createBuffer(1, scrapeSamples(BANK_RATE), BANK_RATE);
+      renderScrapeLoop(Math.floor(step / SCRAPE_VARIATIONS), step % SCRAPE_VARIATIONS, BANK_RATE, buffer.getChannelData(0));
+      this.scrapeBank[step] = buffer;
+      this.bytes += buffer.length * 4;
+      return;
     }
-    return bytes;
+    const at = step - SCRAPE_STEPS;
+    const within = at % this.rowStride;
+    const size = HIT_SIZE_LIST[Math.floor(within / this.variations)]!;
+    const [first, second] = this.rowKeys[Math.floor(at / this.rowStride)]!;
+    const buffer = this.ctx.createBuffer(1, hitSamples(size, BANK_RATE), BANK_RATE);
+    renderHit(first, second, size, within % this.variations, BANK_RATE, buffer.getChannelData(0));
+    this.bank[at] = buffer;
+    this.bytes += buffer.length * 4;
+  }
+
+  private buildSome(): void {
+    const started = performance.now();
+    do this.buildNext();
+    while (this.built < this.total && performance.now() - started < BUILD_BUDGET_MS);
+    this.renderMs += performance.now() - started;
   }
 
   /** A contact at `e` heard from (lx, ly, lz). */
@@ -276,39 +311,46 @@ export class HitSound {
     if (distance > HEARD_M) return;
     const peak = hitGain(e.impulse) * distanceGain(distance);
     if (peak < AUDIBLE) return;
+    const pair = MAT_INDEX[e.a] * SOUND_MATS.length + MAT_INDEX[e.b];
+    const size = hitSize(e.impulse);
+    const base = this.rowOf[pair]! * this.rowStride + size * this.variations;
+    if (this.bank[base] === null) return;
     const args = this.args;
     args[ARG_NOW] = this.ctx.currentTime;
-    const pair = MAT_INDEX[e.a] * SOUND_MATS.length + MAT_INDEX[e.b];
     if (this.deflam(pair, e)) return;
     const seed = hash32(this.serial++, hash32(((e.x * 4) | 0) ^ Math.imul((e.z * 4) | 0, 0x1f3d5b79), (e.impulse * 1024) | 0));
-    const size = hitSize(e.impulse);
     const spread = ((seed >>> 8) & 255) / 255 - 0.5;
     args[ARG_DISTANCE] = distance;
     args[ARG_PRIORITY] = peak;
     args[ARG_GAIN] = peak * (1 - (((seed >>> 24) & 255) / 255) * GAIN_SPREAD);
     args[ARG_RATE] = 1 + spread * 2 * DETUNE[size];
     args[ARG_START] = args[ARG_NOW]! + Math.min(distance / SPEED_OF_SOUND, MAX_DELAY_S) + (((seed >>> 16) & 255) / 255) * MAX_JITTER_S;
-    const row = this.rowOf[pair]! + size * HIT_VARIATIONS;
-    if (!this.play(this.bank[row + (seed % HIT_VARIATIONS)]!) || size !== 2) return;
+    if (!this.play(this.bank[base + (seed % this.variations)] ?? this.bank[base]!) || size !== 2) return;
+    const tick = this.rowOf[pair]! * this.rowStride;
     args[ARG_START] = args[ARG_START]! + SECOND_LAYER_DELAY_S + (((seed >>> 12) & 127) / 127) * SECOND_LAYER_SPREAD_S;
     args[ARG_GAIN] = args[ARG_GAIN]! * SECOND_LAYER_GAIN;
     args[ARG_RATE] = SECOND_LAYER_PITCH * (1 - spread * 0.1);
     args[ARG_PRIORITY] = peak * SECOND_LAYER_PRIORITY;
-    this.play(this.bank[this.rowOf[pair]! + ((seed >>> 4) % HIT_VARIATIONS)]!);
+    const echo = this.bank[tick + ((seed >>> 4) % this.variations)] ?? this.bank[tick];
+    if (echo) this.play(echo);
   }
 
-  /** A sliding contact `id`, called every frame it slides. */
+  /** A sliding contact `id`, called every frame it slides; `force` is 0 (no press) to 1 (hard). */
   scrape(id: number, speed: number, force: number, x: number, y: number, z: number, a: SoundMat, b: SoundMat): void {
-    const listener = this.ctx.listener;
-    const distance = hypot3(x - (listener.positionX?.value ?? this.listenerX), y - (listener.positionY?.value ?? this.listenerY), z - (listener.positionZ?.value ?? this.listenerZ));
+    if (id < 0) return;
+    const distance = hypot3(x - this.listenerX, y - this.listenerY, z - this.listenerZ);
     const pair = MAT_INDEX[a] * SOUND_MATS.length + MAT_INDEX[b];
     const kind = this.kindOf[pair]!;
     const speedShare = clamp01(speed / SCRAPE_FULL_SPEED);
-    const forceShare = clamp01(force / SCRAPE_FULL_FORCE);
+    const forceShare = clamp01(force);
     const level = distance > HEARD_M ? 0 : scrapeGain(kind) * distanceGain(distance) * Math.pow(speedShare, 0.8) * (0.25 + 0.75 * Math.sqrt(forceShare));
     const now = this.ctx.currentTime;
     let slot = -1;
     for (let at = 0; at < MAX_SCRAPES; at++) if (this.scrapeId[at] === id) slot = at;
+    if (slot >= 0 && this.scrapeKindOf[slot] !== kind) {
+      this.stopScrape(slot);
+      slot = -1;
+    }
     if (slot < 0) slot = this.startScrape(id, kind, level, now);
     if (slot < 0) return;
     this.scrapeTouched[slot] = 1;
@@ -330,8 +372,12 @@ export class HitSound {
     }
   }
 
-  /** Once a game frame: scrapes whose contact stopped sliding fade out and free their slot, spent hit voices are released. */
-  frame(dt: number): void {
+  /** Once a game frame, with the listener's place: renders a little of the bank until it is done, fades scrapes whose contact stopped sliding and frees their slot, releases spent hit voices. */
+  frame(dt: number, lx: number, ly: number, lz: number): void {
+    this.listenerX = lx;
+    this.listenerY = ly;
+    this.listenerZ = lz;
+    if (this.built < this.total) this.buildSome();
     const now = this.ctx.currentTime;
     for (let voice = 0; voice < MAX_VOICES; voice++) if (this.voiceEnd[voice]! <= now) this.release(voice);
     for (let slot = 0; slot < MAX_SCRAPES; slot++) {
@@ -396,24 +442,32 @@ export class HitSound {
     this.voiceSource[voice] = null;
   }
 
-  /** A voice for the sound in `args`: a free one, else the weakest sounding one if it is weaker; -1 when all outrank it. */
+  /**
+   * A voice for the sound in `args`: a free one, else the one with the least peak-times-share-left if that is under the new peak, faded out over a few ms (and `ARG_HOLD` says
+   * the new sound waits for it); -1 when all outrank it.
+   */
   private claim(): number {
     const now = this.args[ARG_NOW]!;
+    this.args[ARG_HOLD] = 0;
     let weakest = -1;
-    let weakestPriority = Infinity;
+    let weakestRank = Infinity;
     for (let voice = 0; voice < MAX_VOICES; voice++) {
-      if (this.voiceEnd[voice]! <= now) {
+      const end = this.voiceEnd[voice]!;
+      if (end <= now) {
         this.release(voice);
         return voice;
       }
-      if (this.voicePriority[voice]! < weakestPriority) {
+      const rank = this.voicePriority[voice]! * Math.min(1, (end - now) / (end - this.voiceStart[voice]!));
+      if (rank < weakestRank) {
         weakest = voice;
-        weakestPriority = this.voicePriority[voice]!;
+        weakestRank = rank;
       }
     }
-    if (weakestPriority >= this.args[ARG_PRIORITY]!) return -1;
-    this.voiceSource[weakest]!.stop(now);
-    this.release(weakest);
+    if (weakestRank >= this.args[ARG_PRIORITY]!) return -1;
+    this.voiceSource[weakest]!.stop(now + STEAL_HOLD_S);
+    this.voiceGain[weakest]!.gain.setTargetAtTime(0, now, STEAL_TAU_S);
+    this.voiceSource[weakest] = null;
+    this.args[ARG_HOLD] = STEAL_HOLD_S;
     return weakest;
   }
 
@@ -426,17 +480,22 @@ export class HitSound {
     source.buffer = buffer;
     source.playbackRate.value = args[ARG_RATE]!;
     source.connect(this.voiceGain[voice]!);
-    this.voiceGain[voice]!.gain.setValueAtTime(args[ARG_GAIN]!, args[ARG_NOW]!);
-    this.voiceFilter[voice]!.frequency.setValueAtTime(distanceCutoff(args[ARG_DISTANCE]!), args[ARG_NOW]!);
-    source.start(args[ARG_START]!);
+    const at = args[ARG_NOW]! + args[ARG_HOLD]!;
+    this.voiceGain[voice]!.gain.setValueAtTime(args[ARG_GAIN]!, at);
+    this.voiceFilter[voice]!.frequency.setValueAtTime(distanceCutoff(args[ARG_DISTANCE]!), at);
+    const start = args[ARG_START]! + args[ARG_HOLD]!;
+    source.start(start);
     this.voiceSource[voice] = source;
-    this.voiceEnd[voice] = args[ARG_START]! + buffer.duration / args[ARG_RATE]!;
+    this.voiceStart[voice] = start;
+    this.voiceEnd[voice] = start + buffer.duration / args[ARG_RATE]!;
     this.voicePriority[voice] = args[ARG_PRIORITY]!;
     return true;
   }
 
-  /** A slot for contact `id`: a free one, else the quietest if `level` beats it; starts its loop. -1 when none. */
+  /** A slot for contact `id`: a free one, else the quietest if `level` beats it; starts its loop. -1 when none, or when the loop is not rendered yet. */
   private startScrape(id: number, kind: number, level: number, now: number): number {
+    const buffer = this.scrapeBank[kind * SCRAPE_VARIATIONS + (id & (SCRAPE_VARIATIONS - 1))];
+    if (!buffer) return -1;
     let slot = -1;
     let quietest = Infinity;
     for (let at = 0; at < MAX_SCRAPES; at++) {
@@ -453,7 +512,6 @@ export class HitSound {
       if (quietest >= level) return -1;
       this.stopScrape(slot);
     }
-    const buffer = this.scrapeBank[kind * SCRAPE_VARIATIONS + (id & (SCRAPE_VARIATIONS - 1))]!;
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     source.loop = true;
@@ -463,6 +521,7 @@ export class HitSound {
     source.start(now, (hash32(id, kind) / 4294967296) * buffer.duration);
     this.scrapeSource[slot] = source;
     this.scrapeId[slot] = id;
+    this.scrapeKindOf[slot] = kind;
     this.scrapeLevel[slot] = 0;
     this.scrapeRate[slot] = 1;
     this.scrapeCut[slot] = scrapeCutoff(kind);

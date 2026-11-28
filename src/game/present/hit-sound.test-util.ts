@@ -115,7 +115,6 @@ export class FakeSource extends FakeNode {
 /** `record`: keep every source and automation event (for mixing); off, sources are recycled from a pool so a measured call allocates only what the code under test does. */
 export class FakeContext {
   currentTime = 0;
-  readonly listener = { positionX: { value: 0 }, positionY: { value: 0 }, positionZ: { value: 0 } };
   readonly sources: FakeSource[] = [];
   private readonly pool: FakeSource[] = [];
   private poolNext = 0;
@@ -143,10 +142,10 @@ export class FakeContext {
     this.sources.push(source);
     return source;
   }
-  /** Sources started and not yet over at the current time. */
+  /** Sources started, not told to stop (a stolen voice still fades for 10 ms) and not yet over at the current time. */
   sounding(): number {
     let count = 0;
-    for (const source of this.sources) if (source.startAt >= 0 && source.stopAt > this.currentTime && (source.loop || source.startAt + source.buffer!.duration / source.playbackRate.value > this.currentTime)) count++;
+    for (const source of this.sources) if (source.startAt >= 0 && source.stopAt === Infinity && (source.loop || source.startAt + source.buffer!.duration / source.playbackRate.value > this.currentTime)) count++;
     return count;
   }
 }
