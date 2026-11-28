@@ -1190,10 +1190,12 @@ export abstract class CarParts extends CarGlass {
     return super.glassWorld(name, out);
   }
 
-  /** A siren rides the light bar's drawn pose and lights what the player may see even when the car is not: settled first. */
+  /** A lit siren rides the light bar's drawn pose and lights what the player may see even when the car is not: settled once it is asked for. */
   override lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3, parentsCurrent = false): GlowKind | null {
-    if (this.wait.owed && i >= this.lamps.length) this.poseOwed();
-    return super.lampWorld(i, pos, dir, parentsCurrent);
+    const kind = super.lampWorld(i, pos, dir, parentsCurrent);
+    if (!this.wait.owed || (kind !== "red" && kind !== "blue")) return kind;
+    this.poseOwed();
+    return super.lampWorld(i, pos, dir, false);
   }
 
   /** Shards burst from the pane's drawn place, which rides its door: settled first. */

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { layOnGround } from "./car-air-points.ts";
 import type { DriveInput } from "./car-drive.ts";
+import { buildCar } from "./drawn-body.test-util.ts";
 import { assertSameNumbers } from "./test-support.ts";
 import { setGround } from "../world/ground.ts";
 
@@ -132,5 +133,57 @@ describe("given a wreck whose door moved while no camera saw it and a shot's ray
       if (!seen.partOn(i)) continue;
       assertSameNumbers(hidden.partObjects()[i]!.matrixWorld.elements, o.matrixWorld.elements, `part ${i} matrixWorld`, POSE_TOLERANCE);
     }
+  });
+});
+
+/** A police car driven into a wall at 50 km/h and on, its sirens on and showing red; `unseen` as for `drive`. */
+function policeDrive(unseen: boolean) {
+  const car = buildCar("police", "sedan");
+  launch(car, 6.2, 0, -Math.PI / 2, -50 * KPH, 0);
+  layOnGround(car);
+  const w = makeWorld([car], true, false, FREEWHEEL);
+  w.pedals.set(car, GAS);
+  car.setPartsUnseen(unseen);
+  for (let f = 0; f < FRAMES; f++) tickWorld(w);
+  car.setSirens(true);
+  car.flashSirens(0);
+  return car;
+}
+
+/** The first siren's index (`lampCount` ends with the bar's red and blue lenses). */
+const redSiren = (car: ReturnType<typeof policeDrive>): number => car.lampCount - 2;
+
+function sirenAt(car: ReturnType<typeof policeDrive>): number[] {
+  const pos = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  const kind = car.lampWorld(redSiren(car), pos, dir);
+  expect(kind, "the siren is lit").toBe("red");
+  return [...pos.toArray(), ...dir.toArray()];
+}
+
+function barWorld(car: ReturnType<typeof policeDrive>): number[] {
+  const bar = car["lightBar"]!;
+  bar.updateWorldMatrix(true, false);
+  return [...bar.matrixWorld.elements];
+}
+
+describe("given a police wreck whose light bar moved while no camera saw it", () => {
+  // mutation: sed -i '/^    this.poseOwed();$/{N;/return super.lampWorld(i, pos, dir, false);/s/^[^\n]*\n//}' src/game/vehicle/car-parts.ts
+  it("when its lit siren is placed, then it is where the seen car's is", () => {
+    const seen = policeDrive(false);
+    const hidden = policeDrive(true);
+    const before = barWorld(hidden);
+    const target = barWorld(seen);
+    expect(Math.max(...before.map((v, i) => Math.abs(v - target[i]!))), "control: the unseen bar stands elsewhere until it is settled").toBeGreaterThan(1e-3);
+    assertSameNumbers(sirenAt(hidden), sirenAt(seen), "siren place and axis", POSE_TOLERANCE);
+  });
+
+  // mutation: sed -i 's/    if (!this.wait.owed || (kind !== "red" \&\& kind !== "blue")) return kind;/    if (!this.wait.owed) return kind;/' src/game/vehicle/car-parts.ts
+  it("when its sirens are off and its siren lamps are asked for, then its poses stay owed", () => {
+    const hidden = policeDrive(true);
+    hidden.setSirens(false);
+    expect(hidden.partsOwed, "control: poses are owed").toBe(true);
+    for (const i of [redSiren(hidden), redSiren(hidden) + 1]) expect(hidden.lampWorld(i, new THREE.Vector3(), new THREE.Vector3()), "dark").toBe(null);
+    expect(hidden.partsOwed, "still owed").toBe(true);
   });
 });
