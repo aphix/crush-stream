@@ -5,7 +5,8 @@ import type { KnobId } from "../hud/knobs.ts";
 import { BENCH, QUICK, type BenchParts, type Tap } from "./bench-measure.ts";
 import { applySkyPin, frame, pinSky, type Beat, type FrameEngine } from "./bench-frame.ts";
 import { FRAME } from "./bench-hitch.ts";
-import { COARSE_LABEL, DETAIL_ARMS, FINE_LABEL, type SkyPin } from "./engine-bench-report.ts";
+import { DETAIL_ARMS, type SkyPin } from "./engine-bench-report.ts";
+import { COARSE_LABEL, FINE_LABEL } from "./sim-pace.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
 
 /** What the sweep puts in force: every setting the bench's window and A/Bs will later switch. */

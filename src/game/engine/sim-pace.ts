@@ -13,6 +13,9 @@ export const PACE_BUDGET_MS = 8;
 export const FINE_SLICE = 1 / FINE_HZ;
 /** The coarse floor: one step per `QUIET_HZ`, a whole number of fine slices, so a step cut for contact never takes shorter slices than the fine floor's. Handling is authored at it (`vehicle-classes.test.ts`). */
 const COARSE_SLICE = 1 / QUIET_HZ;
+/** The two step sizes as a bench card and a sweep stop name them. */
+export const FINE_LABEL = `1/${FINE_HZ} s`;
+export const COARSE_LABEL = `1/${QUIET_HZ} s`;
 /** Go coarse when a frame's fine steps are predicted to take more than this share of the budget; come back under this share. */
 const COARSE_ABOVE = 0.9;
 const FINE_BELOW = 0.5;

@@ -2,7 +2,7 @@ import { describeDepthProbe, type DepthProbe } from "../present/depth-probe.ts";
 import { FX_TIER_ULTRA } from "../present/constants.ts";
 import type { SkyDetail, SkyMode } from "../present/sky-dome.ts";
 import { labLine, stripLines, type StripResult } from "./engine-bench-plan.ts";
-import { FINE_HZ, QUIET_HZ } from "../kernel/constants.ts";
+import { COARSE_LABEL, FINE_LABEL } from "./sim-pace.ts";
 import type { HitchTable } from "./bench-hitch.ts";
 import { PHASE_NAMES, WORK, WORK_NAMES } from "./sim-phases.ts";
 import { NAME, type FrameStats, type PartCard } from "./bench-frames.ts";
@@ -10,10 +10,6 @@ import { EXTENDED_QUERY } from "./constants.ts";
 import { SCENERY_ARM, type SceneryArm } from "../world/constants.ts";
 import type { SwitchHitch } from "./bench-settle.ts";
 import { TIME_OF_DAY } from "../match/types.ts";
-
-/** The pacer's two step sizes as a card and a sweep stop name them, from the sim's own rates. */
-export const FINE_LABEL = `1/${FINE_HZ} s`;
-export const COARSE_LABEL = `1/${QUIET_HZ} s`;
 
 /** The detail A/B's arms: no cuts at all, then the ladder's rungs for 50 and 30 m (`DETAIL_LEVELS`). */
 export const DETAIL_ARMS: readonly { key: string; level: number | null }[] = [{ key: "off", level: null }, { key: "50 m", level: 2 }, { key: "30 m", level: 4 }];
