@@ -23,6 +23,7 @@ import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
 import { GLASS_NAMES } from "./car-glass.ts";
 import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassName, type GlassPane, type GlassPart, HIT_DOOR, HIT_HOOD, HIT_LID, HIT_MIRROR, HIT_PANEL, LATCH_CATCH_RATE, LATCH_POP_MPS, LATCH_REACH_M, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, MIRROR_BREAK_J, type PartNetState } from "./car-core.ts";
+import type { GlowKind } from "./lamp-lights.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_QUIET_S,
@@ -1187,6 +1188,12 @@ export abstract class CarParts extends CarGlass {
   override glassWorld(name: GlassName, out: THREE.Vector3): THREE.Vector3 {
     if (this.wait.owed) this.poseOwed();
     return super.glassWorld(name, out);
+  }
+
+  /** A siren rides the light bar's drawn pose and lights what the player may see even when the car is not: settled first. */
+  override lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3, parentsCurrent = false): GlowKind | null {
+    if (this.wait.owed && i >= this.lamps.length) this.poseOwed();
+    return super.lampWorld(i, pos, dir, parentsCurrent);
   }
 
   /** Shards burst from the pane's drawn place, which rides its door: settled first. */
