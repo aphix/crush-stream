@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { blankPad, mergeTouch, PAD_BUTTON, PAD_DEAD, padButtonName, padFamily, padLabel, readPad, stickScale, triggerValue, type PadSource } from "./gamepad.ts";
+import { describe, expect, it, vi } from "vitest";
+import { blankPad, GamepadInput, mergeTouch, PAD_BUTTON, PAD_DEAD, padButtonName, padFamily, padLabel, readPad, stickScale, triggerValue, type PadSource } from "./gamepad.ts";
 import { blankIntent, readIntent, shapeDrive } from "./drive-input.ts";
 import { idleDrive } from "./car-drive.ts";
 import { assertSameDigest } from "./test-support.ts";
@@ -266,5 +266,24 @@ describe("given a pad whose mapping is not the standard one", () => {
     readPad({ ...pad([0, 0, 0, 0], [PAD_BUTTON.lb], 1, 1), mapping: "standard" }, state);
     expect(state.held & (1 << PAD_BUTTON.lb), "LB").not.toBe(0);
     expect(state.rt, "RT").toBe(1);
+  });
+});
+
+describe("given a raw pad connected before a standard one", () => {
+  it("when both are connected, then the standard one is read from the next poll, and the label drops its sticks-only note", () => {
+    const standard = { ...pad([0, 0, 0, 0]), index: 1, id: "Xbox Controller", mapping: "standard" };
+    const raw = { ...pad([0, 0, 0, 0]), index: 0, id: "Raw Pad", mapping: "" };
+    const pads: unknown[] = [raw, null];
+    vi.stubGlobal("navigator", { getGamepads: () => pads });
+    try {
+      const input = new GamepadInput();
+      input.poll();
+      expect([input.mapped, input.label], "the raw pad alone").toEqual([false, "Controller (sticks only)"]);
+      pads[1] = standard;
+      input.poll();
+      expect(input.mapped, "the standard pad wins").toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -123,22 +123,24 @@ const CAMERA_KEYS: [string, string][] = [
 ];
 
 function seatHint(state: CrashHudState): { title: string; keys: string } {
-  if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad === null ? null : (state.padFamily ?? "generic"), state.foot.prompt, state.foot.arms, state.tether?.count ?? 0) };
+  // A pad that is not the standard mapping reads only its sticks: its buttons have no hints, the keyboard's do.
+  const buttons = state.pad !== null && state.padMapped;
+  if (state.foot?.out) return { title: "On foot", keys: footKeys(buttons ? (state.padFamily ?? "generic") : null, state.foot.prompt, state.foot.arms, state.tether?.count ?? 0, state.race !== null) };
   if (state.race && state.seat === "drive") {
-    const keys = state.pad
+    const keys = buttons
       ? "RT gas · LT brake, then reverse · left stick steer · X handbrake · A boost · B view · R3 look back · D-pad ↓ respawn · hold D-pad ↓ back on the road, damage kept · Start pause"
       : "W gas · S brake, then reverse · A/D steer · Space handbrake · Shift boost · V view · ` look back · R respawn · hold R back on the road, damage kept · Esc pause";
     return { title: `Racing · ${CAM_LABEL[state.cam ?? state.view]}`, keys: state.foot?.prompt ? `${keys} · ${state.foot.prompt}` : keys };
   }
   if (state.seat === "drive") {
-    const keys = driveKeys(state.pad !== null, state.minigame?.bail == null);
+    const keys = driveKeys(buttons, state.minigame?.bail == null);
     return { title: `Driving · ${CAM_LABEL[state.cam ?? state.view]}`, keys: state.foot?.prompt ? `${keys} · ${state.foot.prompt}` : keys };
   }
   if (state.cam === "free") return { title: `${state.seat === "global" ? "Whole field" : "Watching"} · ${CAM_LABEL.free}`, keys: freeHelp(state.pad !== null, false) };
   if (state.seat === "follow") {
     return {
       title: state.cam ? `Watching · ${CAM_LABEL[state.cam]}` : "Watching",
-      keys: state.pad
+      keys: buttons
         ? "RT, LT or left stick to drive · LB/RB switch car · B camera · right stick look · R3 look back · Back exit"
         : "W/A/S/D to drive · Q/E switch car · V camera · drag look · ` look back · Esc back",
     };

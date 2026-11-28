@@ -40,6 +40,12 @@ describe("given the walker's key line", () => {
     expect(footKeys(null, null, { slot: 4 }, 2)).toContain("▸0 Hook 2/6");
   });
 
+  it("when he walks on a pad in a race, then B (Circle) is the camera, because View pauses the race", () => {
+    expect(footKeys("xbox", null, null, 0, true)).toContain("B camera");
+    expect(footKeys("playstation", null, null, 0, true)).toContain("Circle camera");
+    expect(footKeys("xbox", null)).toContain("View camera");
+  });
+
   it("when he is armed on a keyboard, then the line names the scroll, the Tab wheel, F to get in, aim and fire", () => {
     const line = footKeys(null, null, { slot: 0 });
     for (const text of ["scroll or hold Tab weapons", "right button aim", "left click fire", "F get in at your car's driver door"]) expect(line, text).toContain(text);

@@ -406,7 +406,7 @@ export class CrashEngine extends EngineGarage {
       this.onFoot.arms.release();
       return true;
     };
-    this.view.scroll = (px) => this.onFoot.arms.scroll(px);
+    this.view.scroll = (px) => this.onFootOffered() && this.onFoot.arms.scroll(px);
     this.tether = new TetherDirector({
       tethers: this.world.tethers,
       camera: this.camera,

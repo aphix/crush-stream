@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { PAD_BUTTON } from "../vehicle/gamepad.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
@@ -69,5 +70,24 @@ describe("given the real engine in a race on the oval, the player at the wheel o
     rig.hold("KeyW", 3);
     expect(row().progress - progress, `he drove on: ${(row().progress - progress).toFixed(1)} m of the course`).toBeGreaterThan(DRIVES_OFF_M);
     expect(row().status, "and he is still racing").toBe("racing");
+  });
+
+  it("when he is out in the race and B is pressed, then the on-foot view cycles; when Back is pressed, then the race pauses and the view stays", () => {
+    const spot = rig.cars()[race().self]!.group.position;
+    rig.place(race().self, spot.x, spot.z);
+    rig.run(0.5);
+    rig.getOut();
+    rig.run(0.5);
+    const view = rig.engine["onFoot"].footView;
+    rig.engine.touch.tapped |= 1 << PAD_BUTTON.east;
+    rig.run(0.5);
+    expect(rig.engine["onFoot"].footView, "B cycled it").not.toBe(view);
+    const after = rig.engine["onFoot"].footView;
+    rig.engine.touch.tapped |= 1 << PAD_BUTTON.back;
+    rig.run(0.5);
+    expect(race().menuOpen, "Back paused the race").toBe(true);
+    expect(rig.engine["onFoot"].footView, "and did not cycle the view").toBe(after);
+    rig.engine.raceCommand({ type: "resume" });
+    rig.getIn();
   });
 });

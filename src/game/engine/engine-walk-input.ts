@@ -33,6 +33,6 @@ export function readWalkIntent(keys: ReadonlySet<string>, pad: PadState | null, 
   out.forward = stronger(heldAxis(keys, DRIVE_KEYS.gas, DRIVE_KEYS.brake), p ? stronger(-p.ly, touchForward) : 0);
   out.strafe = stronger(heldAxis(keys, DRIVE_KEYS.right, DRIVE_KEYS.left), p ? p.lx : 0);
   out.sprint = anyHeld(keys, DRIVE_KEYS.boost) || (p !== null && ((p.held & (1 << PAD_BUTTON.south)) !== 0 || (!armed && p.rt > Math.max(SPRINT_TRIGGER, touch.gas, -touch.y))));
-  out.walk = anyHeld(keys, DRIVE_KEYS.handbrake) || (p !== null && (p.held & (1 << PAD_BUTTON.l3)) !== 0);
+  out.walk = anyHeld(keys, DRIVE_KEYS.handbrake) || (p !== null && (p.held & (1 << PAD_BUTTON.l3)) !== 0) || (touch.held & (1 << PAD_BUTTON.west)) !== 0;
   return out;
 }

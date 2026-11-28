@@ -239,6 +239,8 @@ export type CrashHudState = {
   pad: string | null;
   /** The connected gamepad's family (what its face buttons are called), null when none. */
   padFamily: PadFamily | null;
+  /** The connected gamepad's buttons are readable (the standard mapping); false: only its sticks are, so no button hint applies. */
+  padMapped: boolean;
   /** Arcade (0) ↔ realistic (1) handling and damage. */
   realism: number;
   /** Gamepad rumble on hits, hard landings and slides (a setting; on by default). */
@@ -390,6 +392,7 @@ export const INITIAL_HUD: CrashHudState = {
   cam: null,
   pad: null,
   padFamily: null,
+  padMapped: true,
   realism: DEFAULT_REALISM,
   rumble: true,
   boostZoom: true,

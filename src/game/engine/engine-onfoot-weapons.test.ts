@@ -268,6 +268,60 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(rig.engine["onFoot"].arms.weapon).toBe("fists");
   });
 
+  it("when a real pad's right trigger is 0.2 pulled and its pressed bit is up, then no punch is thrown; pulled past half it is; the touch Fire button (the RT bit of the touch pad) throws one", () => {
+    rig.getOut();
+    const { arms } = rig.engine["onFoot"];
+    const punched = vi.spyOn(rig.engine["ragdolls"].walker, "punch");
+    const trigger = (rt: number, held: number): PadState => ({ ...blankPad(), connected: true, rt, held });
+    arms.pad(trigger(0.2, 1 << PAD_BUTTON.rt), noTouch);
+    arms.pad(trigger(0, 0), noTouch);
+    expect(punched, "a light pull").not.toHaveBeenCalled();
+    arms.pad(trigger(0.8, 1 << PAD_BUTTON.rt), noTouch);
+    arms.pad(trigger(0, 0), noTouch);
+    expect(punched, "a hard pull").toHaveBeenCalledTimes(1);
+    rig.run(1);
+    arms.pad(trigger(0, 0), { ...noTouch, held: 1 << PAD_BUTTON.rt });
+    arms.pad(trigger(0, 0), noTouch);
+    expect(punched, "the touch Fire button").toHaveBeenCalledTimes(2);
+    punched.mockRestore();
+  });
+
+  it("when the weapon wheel is open, then fire throws nothing; once it is shut, it does", () => {
+    rig.getOut();
+    const { arms } = rig.engine["onFoot"];
+    const punched = vi.spyOn(rig.engine["ragdolls"].walker, "punch");
+    arms.pad(lbPad(true), noTouch);
+    arms.frame(0.3);
+    expect(arms.wheelOpen, "open").toBe(true);
+    fire();
+    expect(punched, "fire with the wheel open").not.toHaveBeenCalled();
+    arms.pad(lbPad(false), noTouch);
+    arms.frame(1);
+    fire();
+    expect(punched, "fire with it shut").toHaveBeenCalledTimes(1);
+    punched.mockRestore();
+  });
+
+  it("when the game is paused with the wheel open, then the wheel shuts without equipping its pick, and the scroll wheel steps nothing", () => {
+    rig.getOut();
+    const { arms } = rig.engine["onFoot"];
+    rig.press("Digit4");
+    arms.pad(lbPad(true), noTouch);
+    arms.frame(0.3);
+    arms.pad(lbPad(true, 0.95, -0.31), noTouch);
+    expect(arms.wheelPick, "the pistol picked").toBe(1);
+    rig.engine["playing"] = false;
+    try {
+      rig.engine["onFoot"].frame(FRAME);
+      expect(arms.wheelOpen, "shut by the pause").toBe(false);
+      expect(arms.weapon, "the pick was not equipped").toBe("rifle");
+      wheel(100);
+      expect(arms.weapon, "no scroll while paused").toBe("rifle");
+    } finally {
+      rig.engine["playing"] = true;
+    }
+  });
+
   it("when a digit is pressed at the wheel, then no weapon is taken: the weapon in hand stays fists", () => {
     rig.sit(0);
     rig.press("Digit3");

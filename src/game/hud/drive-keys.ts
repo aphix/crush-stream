@@ -13,14 +13,14 @@ const PAD_PARTS: Record<PadFamily, { lb: string; lt: string; rt: string; view: s
 /**
  * The walker's controls as the HUD's key line, behind `prompt` (what the control does now, or why it refused) when there is one: GTA's on-foot layout.
  * `pad`: the connected pad's family (null: keyboard and mouse), named in its own glyphs. `arms`: the weapon in hand, marked `▸` on a keyboard; with it
- * RT fires, hold LB opens the weapon wheel and A alone runs. `cables`: the hook's cables out, shown on the marked hook.
+ * RT fires, hold LB opens the weapon wheel and A alone runs. `racing`: View pauses the race, so B (Circle) is the camera. `cables`: the hook's cables out, shown on the marked hook.
  */
-export function footKeys(pad: PadFamily | null, prompt: string | null, arms: { slot: number } | null = null, cables = 0): string {
+export function footKeys(pad: PadFamily | null, prompt: string | null, arms: { slot: number } | null = null, cables = 0, racing = false): string {
   const names = pad === null ? null : PAD_PARTS[pad];
   const sprint = pad === null ? "" : padButtonName(pad, PAD_BUTTON.south);
   const getIn = pad === null ? "" : padButtonName(pad, PAD_BUTTON.north);
   const parts = names
-    ? ["left stick walk", arms === null ? `${sprint} or ${names.rt} run` : `${sprint} run`, "left stick click walk slowly", "right stick look", `${names.view} camera`, `${getIn} get in at your car's driver door`]
+    ? ["left stick walk", arms === null ? `${sprint} or ${names.rt} run` : `${sprint} run`, "left stick click walk slowly", "right stick look", `${racing ? padButtonName(pad!, PAD_BUTTON.east) : names.view} camera`, `${getIn} get in at your car's driver door`]
     : ["W/A/S/D walk", "Shift run", "Space walk slowly", "drag look", "; mouse look", "V camera", `${arms === null ? "Enter" : "F"} get in at your car's driver door`];
   const marked = WEAPON_KEYS_HINT.map((hint, slot) => (slot === arms?.slot ? `▸${hint}` : hint)).map((hint) => (hint === "▸0 Hook" ? `▸0 Hook ${cables}/6` : hint));
   const weapons = arms === null ? [] : names ? [`hold ${names.lb} weapon wheel`, `tap ${names.lb} arm / put away`, `${names.lt} aim`, `${names.rt} fire`] : [...marked, "scroll or hold Tab weapons", "right button aim", "left click fire"];

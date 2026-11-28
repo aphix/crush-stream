@@ -31,10 +31,10 @@ The open world adds fire, aim and weapons (`OnFootArms`), laid out as GTA V lays
 
 No jump, cover, reload, phone or character wheel exists, so their GTA buttons (X, RB, the right stick's click, D-pad up, Q) are free on foot, except where the game already had a job for the key: R and D-pad down put him back in a fresh car (`resetsToCar`), C is a camera key.
 A pad whose `mapping` is not `"standard"` (a Steam Controller or Steam Deck without Steam Input's virtual Xbox pad) numbers its buttons as it pleases, so `readPad` reads only its sticks: it walks and looks, but every button and trigger is ignored and its HUD label reads "(sticks only)"; the keyboard and mouse work beside it.
-The touch HUD has no wheel: its Weapon button (it raises RB, which a real pad's RB does not act on) steps to the next weapon, its Fire button raises RT, its View button B.
+The touch HUD has no wheel: its Weapon button (it raises RB, which a real pad's RB does not act on) steps to the next weapon, its Fire button raises RT, its View button B, and its Hand / E-brake button (X) still holds him to a walk. A real pad's own RT never fires through its `pressed` bit (Chromium reports a trigger pressed at about 0.12), only past half a pull.
 F (get in or out in the open world) takes the key the quality tier used (`KeyF`) there; `SEAT_KEYS.onFootOpenWorld` in `engine-keys.ts`.
 Enter and Y were free in the driving seat (`SEAT_KEYS.onFoot` in `engine-keys.ts`; `engine-keys.test.ts` keeps it clear of the scene keys).
-While he is out, the seat's own keys (Space, R, Esc, Q, E, V, C, T and the pad's Back, LB, RB, B and D-pad down) do nothing, so a stray press
+While he is out, the seat's own actions for R, Esc, Q, E, V, C, T and the pad's Back, RB, B and D-pad down (pause, reset, switch car, drive views) are swallowed, so a stray press
 cannot pause, reset or switch the car under him; Escape and Back still end mouse look and a menu as everywhere.
 
 ## Where it is offered, and why

@@ -230,7 +230,8 @@ export class GamepadInput {
   label: string | null = null;
   /** The active pad's family, null when none is connected (the face buttons' names: `padButtonName`). */
   family: PadFamily | null = null;
-  private mapped = true;
+  /** The active pad's buttons are read (its mapping is the standard one, or none is connected). */
+  mapped = true;
   private index = -1;
   /** The active pad's haptics as of the last poll; null when no pad is connected or the browser has none. */
   private actuator: HapticSource | null = null;
@@ -257,8 +258,10 @@ export class GamepadInput {
     let pad: Gamepad | null = null;
     if (pads) {
       const held = this.index >= 0 ? pads[this.index] : null;
-      if (held && held.connected) pad = held;
+      if (held && held.connected && held.mapping === "standard") pad = held;
       else {
+        // An unmapped pad stays the one in use only while no standard one is connected: Steam Input's virtual pad wins over a raw one that came first.
+        pad = held && held.connected ? held : null;
         for (let i = 0; i < pads.length; i++) {
           const p = pads[i];
           if (p && p.connected && (pad === null || (p.mapping === "standard" && pad.mapping !== "standard"))) pad = p;

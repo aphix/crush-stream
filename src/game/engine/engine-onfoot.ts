@@ -462,7 +462,7 @@ export class OnFootDirector {
   frame(wallDt: number): void {
     const flow = this.flow;
     this.refusalLeft = Math.max(0, this.refusalLeft - wallDt);
-    this.arms.pad(this.host.pad, this.host.touch, this.host.keys.has("Tab"));
+    this.arms.pad(this.host.pad, this.host.touch, this.host.keys.has("Tab"), this.host.available());
     this.arms.frame(wallDt);
     this.host.ragdolls.walker.holdGun(this.armed() && this.arms.heldOut());
     this.settle(wallDt);

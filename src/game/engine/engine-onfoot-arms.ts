@@ -78,7 +78,7 @@ export class OnFootArms {
 
   /** Fire goes down: a left press with the mouse captured, a click with it free, the right trigger, the touch button. */
   press(): void {
-    if (!this.host.armed()) return;
+    if (!this.host.armed() || this.wheelOpen) return;
     this.firing = true;
     this.fire();
   }
@@ -102,10 +102,10 @@ export class OnFootArms {
     }
   }
 
-  /** The pad's triggers this frame. The poll merges the touch stick (up: RT, down: LT) and the pedals (gas: RT, brake: LT) into `pad.rt` and `pad.lt`, so a trigger counts only when it is above what the touch layout alone puts there. */
-  pad(pad: PadState | null, touch: TouchPad, wheelKey = false): void {
+  /** The pad's triggers this frame (`offered`: the game offers the walk; false while paused). The poll merges the touch stick (up: RT, down: LT) and the pedals (gas: RT, brake: LT) into `pad.rt` and `pad.lt`, so a trigger counts only when it is above what the touch layout alone puts there. */
+  pad(pad: PadState | null, touch: TouchPad, wheelKey = false, offered = true): void {
     const live = pad !== null && pad.connected;
-    const fire = live && (pad.rt > Math.max(TRIGGER_PULLED, touch.gas, -touch.y) || (pad.held & (1 << PAD_BUTTON.rt)) !== 0);
+    const fire = live && (pad.rt > Math.max(TRIGGER_PULLED, touch.gas, -touch.y) || (touch.held & (1 << PAD_BUTTON.rt)) !== 0);
     if (fire && !this.padFire) this.press();
     if (!fire && this.padFire) this.release();
     this.padFire = fire;
@@ -114,7 +114,8 @@ export class OnFootArms {
       this.padAim = aim;
       this.aim(aim);
     }
-    this.wheelHeld(this.host.armed() && (wheelKey || (live && (pad.held & (1 << PAD_BUTTON.lb)) !== 0)));
+    if (!offered) this.shutWheel();
+    else this.wheelHeld(this.host.armed() && (wheelKey || (live && (pad.held & (1 << PAD_BUTTON.lb)) !== 0)));
     if (this.wheelOpen && live) {
       this.wheelAim(pad.rx, pad.ry);
       // The stick picks; the camera must not turn with it.
@@ -139,7 +140,7 @@ export class OnFootArms {
       this.wheelFor += dt;
       if (this.wheelFor >= WHEEL_HOLD_S) this.openWheel();
     }
-    if (this.firing && this.weapon !== "fists" && this.weapon !== "hook" && WEAPONS[this.weapon].auto && (this.aiming || this.host.captured())) this.fire();
+    if (this.firing && this.weapon !== "fists" && this.weapon !== "hook" && WEAPONS[this.weapon].auto && !this.wheelOpen && (this.aiming || this.host.captured())) this.fire();
     if (this.landIn >= 0) {
       this.landIn -= dt;
       if (this.landIn < 0) this.host.land();
@@ -207,6 +208,14 @@ export class OnFootArms {
     }
     this.wheelAim(this.wheelX, this.wheelY);
     return true;
+  }
+
+  /** The game stopped offering the walk (a pause): the wheel is dropped without equipping its pick. */
+  private shutWheel(): void {
+    if (!this.wheelOpen && !this.wheelDown) return;
+    this.wheelOpen = false;
+    this.wheelDown = false;
+    this.host.changed();
   }
 
   private openWheel(): void {

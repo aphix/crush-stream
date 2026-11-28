@@ -121,3 +121,10 @@ describe("given each touch scheme with the player on foot", () => {
     expect(drawnScheme("autogas", false)).toBe("autogas");
   });
 });
+
+describe("given the touch pad's Hand button on foot", () => {
+  it("when it is held, then he is held to a walk; released, he is not", () => {
+    expect(readWalkIntent(new Set(), blankPad(), { ...blankTouch(), held: 1 << PAD_BUTTON.west }, blankWalkIntent()).walk, "held").toBe(true);
+    expect(readWalkIntent(new Set(), blankPad(), blankTouch(), blankWalkIntent()).walk, "released").toBe(false);
+  });
+});
