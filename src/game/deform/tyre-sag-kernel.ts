@@ -92,8 +92,10 @@ export class TyreSagArena {
   private readonly bump = new Scratch(Float32Array);
   private readonly dirty = new Scratch(Uint8Array);
   private readonly read = new Scratch(Float32Array);
+  /** The pass's list of triangles to read (scratch). */
+  private readonly cand = new Scratch(Int32Array);
   private readonly job = new Scratch(Float64Array);
-  private readonly blocks = [this.pos, this.rest, this.weld, this.liftable, this.sagFree, this.tris, this.lift, this.bump, this.dirty, this.read, this.job];
+  private readonly blocks = [this.pos, this.rest, this.weld, this.liftable, this.sagFree, this.tris, this.lift, this.bump, this.dirty, this.read, this.cand, this.job];
   /** The skin whose positions and tables the arena holds (weakly), and its `serial` then; NaN: none. */
   private loaded: WeakRef<SagSkin> | null = null;
   private loadedSerial = NaN;
@@ -120,10 +122,10 @@ export class TyreSagArena {
       if (this.loaded?.deref() !== skin) this.loaded = new WeakRef(skin);
       this.loadedSerial = skin.serial;
     }
-    for (let k = 0; k < n; k++) this.tris.view[k] = tris[k]!;
+    this.tris.view.set(tris.subarray(0, n));
     this.lift.view.set(skin.lift);
     this.dirty.view.set(skin.dirty);
-    if (again) for (let k = 0; k < n; k++) this.read.view[k] = skin.sagRead[wheel]![k]!;
+    if (again) this.read.view.set(skin.sagRead[wheel]!.subarray(0, n));
     const job = this.job.view;
     for (let k = 0; k < HELD_LENGTH; k++) job[SAG_JOB.held + k] = skin.heldAt[wheel * HELD_LENGTH + k]!;
     job[SAG_JOB.tyreR] = tyre.r;
@@ -135,7 +137,7 @@ export class TyreSagArena {
     job[SAG_JOB.topNone] = skin.sagTop[1]!;
     job[SAG_JOB.fade] = skin.fade[wheel]!;
     const raised =
-      this.ex.sag_pass(this.pos.at, this.rest.at, this.weld.at, this.liftable.at, this.sagFree.at, this.tris.at, n, this.lift.at, this.bump.at, this.dirty.at, this.read.at, again ? 1 : 0, this.job.at) !== 0;
+      this.ex.sag_pass(this.pos.at, this.rest.at, this.weld.at, this.liftable.at, this.sagFree.at, this.tris.at, n, this.lift.at, this.bump.at, this.dirty.at, this.read.at, this.cand.at, again ? 1 : 0, this.job.at) !== 0;
     skin.sagRead[wheel]!.set(this.read.view.subarray(0, n));
     if (!raised) return false;
     skin.lift.set(this.lift.view.subarray(0, skin.lift.length));
@@ -155,6 +157,7 @@ export class TyreSagArena {
     this.want(this.bump, skin.lift.length);
     this.want(this.dirty, skin.dirty.length);
     this.want(this.read, n);
+    this.want(this.cand, n);
     this.settle();
   }
 

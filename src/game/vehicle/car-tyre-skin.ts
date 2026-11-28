@@ -441,6 +441,7 @@ export class TyreSkin {
       f[at] = sx;
       f[at + 1] = sz;
       this.carried.n[w] = 0;
+      this.carried.admitOk[w] = 0;
       if (!found) {
         this.mesh.updateMatrix();
         _mesh.makeTranslation(0, this.mesh.parent === group ? 0 : lift, 0).multiply(this.mesh.matrix).invert();
@@ -925,7 +926,8 @@ export class TyreSkin {
     if (!raised) return false;
     for (let k = 0; k < n; k++) {
       const p = weld[tris[k]!]!;
-      if (this.bump[p]! > 0) this.dirty[p] = 1;
+      if (!(this.bump[p]! > 0)) continue;
+      this.dirty[p] = 1;
       this.lift[p] = this.lift[p]! + this.bump[p]!;
       this.bump[p] = 0;
     }
