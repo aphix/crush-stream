@@ -128,6 +128,8 @@ const HOT = {
   "src/game/present/motor-voices.ts": ["assign"],
   "src/game/present/motor-tone.ts": ["motorRev", "accelLoad", "motorLoad", "motorRpm", "channelGains"],
   "src/game/present/game-audio.ts": ["frame"],
+  "src/game/present/hit-sound.ts": ["hit", "scrape", "frame", "claim", "play", "deflam", "release", "startScrape", "stopScrape", "fadeScrape", "nextIsCrash"],
+  "src/game/present/hit-synth.ts": ["hitSize", "hitGain", "distanceGain", "distanceCutoff", "hash32", "scrapeCutoff", "scrapeGain"],
   "src/game/present/paint-scratch.ts": ["frame", "draw", "touch", "sameStroke", "radiusOf", "growRect", "stamp"],
   "src/game/ai/civilians/civilian-leg.ts": ["legPose", "legPositionAt", "waitedWalk", "evadeAlarm", "cornerMiter"],
   "src/game/world/openworld/openworld-stoops.ts": ["liftFeet", "leadsToDoor", "keepOut"],
