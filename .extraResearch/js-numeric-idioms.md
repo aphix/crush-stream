@@ -70,3 +70,21 @@ So there is no further win from number forms in today's hot paths: the expensive
   its statements about what each compiler inlines are not tied to a source line.
 - Contradicted by the measurement: "`Math.round` usually inlines to a short sequence" (5.9 ns in V8) and "`Math.sign` may inline to comparisons" (4-5 ns in both).
 - It names no published measurement of these forms in current engines.
+
+## TypeScript against hand-written JS (owner, 2026-11-27)
+
+`computeNormalsFast` (`src/game/deform/fast-normals.ts`, area-weighted vertex normals) three ways, same inputs, outputs equal to the bit: the TS as Node runs it
+(types stripped), the same TS as the shipped build compiles it (rolldown, minified), and two hand-written JS twins. A crushed indexed mesh of ~14k triangles,
+best of 60 x 20 calls, µs per call, three runs each:
+
+| Arm | V8 (Node 24) | SpiderMonkey 162 |
+|---|---|---|
+| TS, types stripped | 158-182 (torus knot) | - |
+| TS, shipped build | 141-149 (grid), 157-182 (torus knot) | 142-147 |
+| JS, indexed and flat loops split, face in a helper function | 139-150 (grid), 144-165 (torus knot) | 168-174 (17-19 % slower) |
+| JS, one indexed loop, face inlined | 139-143 (grid) | 135-140 (3-5 % faster) |
+
+- The build emits the TS source with its types erased: the same code shape, the same speed. TS neither helps nor hurts here; it does not use its types to
+  optimise.
+- What moves the time is code shape: hoisting the indexed/unindexed choice out of the loop and keeping the face inline gives 1-5 %, in both engines; moving the
+  face into a helper costs SpiderMonkey 17-19 %. A shape is measured in both engines before it is kept.
