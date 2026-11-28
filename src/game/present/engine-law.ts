@@ -24,18 +24,18 @@ const ATTACK_TAU_S = 0.1;
 const RELEASE_TAU_S = 0.3;
 
 /**
- * Each class's generator output (RMS, dBFS at `MOTOR_OUTPUT_GAIN`) at 9 evenly spaced revs from `REV_IDLE` to 1, healthy, measured
- * by `motor-level-harness.ts`. The generator's resonances swing it +-4 dB with rpm and ignore the worklet's throttle parameter, so the
- * law's correction is a function of rev and class only. A damaged engine reads within 2 dB of this.
+ * Each class's voice output (RMS, dBFS at `MOTOR_OUTPUT_GAIN`) at 9 evenly spaced revs from `REV_IDLE` to 1, healthy, at half load, measured
+ * by `motor-level.test-util.ts`. The generator's resonances swing it +-4 dB with rpm and ignore the worklet's throttle parameter; the voice layers
+ * (saturation, thump, breath) move it under 2 dB between no load and full, so the law's correction is a function of rev and class only. A damaged engine reads within 2 dB of this.
  */
 const NATURAL_DB: Readonly<Record<VehicleClassId, readonly number[]>> = {
-  sedan: [-24.5, -24.1, -22.2, -21.4, -24.5, -26.0, -27.8, -29.2, -27.0],
-  police: [-23.8, -22.7, -20.1, -23.3, -26.2, -28.8, -26.3, -24.8, -24.0],
-  muscle: [-23.8, -22.7, -19.7, -22.6, -26.7, -27.8, -25.6, -24.5, -24.5],
-  truck: [-23.1, -22.7, -20.6, -22.1, -26.5, -28.7, -26.4, -24.3, -24.0],
-  monster: [-25.3, -26.2, -25.2, -28.9, -29.1, -27.7, -27.0, -25.2, -27.1],
-  hatch: [-24.8, -24.1, -22.6, -21.2, -23.0, -25.1, -25.8, -27.6, -29.2],
-  suv: [-26.2, -26.5, -25.3, -26.7, -28.7, -29.7, -30.5, -29.9, -28.6],
+  sedan: [-22.7, -22.6, -21.5, -20.8, -22.6, -23.5, -24.1, -24.1, -24.2],
+  police: [-21.3, -21.0, -19.5, -21.0, -22.6, -23.2, -23.0, -22.7, -22.1],
+  muscle: [-21.1, -21.0, -19.6, -21.0, -23.0, -23.5, -22.8, -23.2, -23.6],
+  truck: [-20.8, -20.2, -19.5, -20.4, -22.1, -22.2, -21.2, -21.7, -21.4],
+  monster: [-21.6, -21.7, -21.7, -22.6, -23.9, -24.1, -24.3, -23.2, -24.0],
+  hatch: [-23.3, -23.6, -22.6, -20.9, -21.8, -23.6, -24.0, -24.7, -24.9],
+  suv: [-21.9, -21.9, -21.4, -22.3, -22.9, -22.6, -22.9, -23.3, -23.3],
 };
 
 /** The target level (dB, <= 0) at the dial's `rpmFrac` (`REV_IDLE`..1, as `motorRev`) and `load` (0..1), under a redline at full load. */

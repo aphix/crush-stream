@@ -1,3 +1,4 @@
+import { type DspTone, dspTone } from "./motor-layers.ts";
 import { CLASSES, REV_IDLE, VEHICLE_CLASS_IDS, type DamageStage, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 
 /** Share of the gas that revs a standing or airborne car above idle (`motorRev`): the gauge's fake revs know only speed. */
@@ -164,6 +165,7 @@ export interface ToneOptions {
   action: number;
   outletWaveguideLength: number;
   outletReflectionFactor: number;
+  dsp: DspTone;
 }
 
 /** The generator's port message (snake_case): the same parameters. The worklet keeps one generator per message (keyed by its JSON, so keep the key order), and a re-tune swaps it in. */
@@ -183,6 +185,8 @@ export interface ToneMessage {
   action: number;
   outlet_waveguide_length: number;
   outlet_reflection_factor: number;
+  /** The voice layers' tuning (`motor-layers.ts`), part of the key like the rest. */
+  dsp: DspTone;
 }
 
 export function damageTone(stage: DamageStage): DamageTone {
@@ -242,6 +246,7 @@ export function toneOptions(cls: VehicleClassId, sampleRate: number): ToneOption
     action: t.action,
     outletWaveguideLength: samples(t.outlet, sampleRate),
     outletReflectionFactor: OPEN_REFLECTION,
+    dsp: dspTone(cls, "healthy", t.cylinders, t.idleRpm, t.redlineRpm),
   };
 }
 
@@ -264,6 +269,7 @@ export function toneMessage(cls: VehicleClassId, stage: DamageStage, sampleRate:
     action: t.action * DAMAGE_TONE[stage].actionScale,
     outlet_waveguide_length: samples(t.outlet, sampleRate),
     outlet_reflection_factor: OPEN_REFLECTION,
+    dsp: dspTone(cls, stage, t.cylinders, t.idleRpm, t.redlineRpm),
   };
 }
 

@@ -36,6 +36,7 @@ class EngineSoundGenerator extends AudioWorkletProcessor {
       // The tunings are a closed set (class x damage tone = 15), so about 1.5 MB for six voices.
       this.generators = new Map ();
       this.soundGenerator = null;
+      this.layers = new VoiceLayers ();
 
       this.port.onmessage = (event) => {
          if (this.soundGenerator === null) {
@@ -60,7 +61,8 @@ class EngineSoundGenerator extends AudioWorkletProcessor {
          "ignition_time": o.ignitionTime,
          "straight_pipe_waveguide_length": o.straightPipeWaveguideLength, "straight_pipe_reflection_factor": o.straightPipeReflectionFactor,
          "muffler_elements_length": o.mufflerElementsLength, "action": o.action,
-         "outlet_waveguide_length": o.outletWaveguideLength, "outlet_reflection_factor": o.outletReflectionFactor
+         "outlet_waveguide_length": o.outletWaveguideLength, "outlet_reflection_factor": o.outletReflectionFactor,
+         "dsp": o.dsp
       });
       this.pendingMessage = null;
    }
@@ -92,21 +94,16 @@ class EngineSoundGenerator extends AudioWorkletProcessor {
          this.generators.set (key, generator);
       }
       this.soundGenerator = generator;
+      this.layers.configure (parameters["dsp"]);
    }
 
    static get parameterDescriptors () {
-      return [{
-         name: 'throttle',
-         defaultValue: 0.0,
-         minValue: 0.0,
-         maxValue: 1.0,
-         automationRate: 'a-rate'
-       }, {
-         name: 'rpm',
-         defaultValue: 0.0,
-         minValue: 0.0,
-         automationRate: 'a-rate'
-       }];
+      // throttle is the engine load (0..1); shift is a k-rate trigger the shift thump fires on.
+      return [
+         { name: 'throttle', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0, automationRate: 'a-rate' },
+         { name: 'rpm', defaultValue: 0.0, minValue: 0.0, automationRate: 'a-rate' },
+         { name: 'shift', defaultValue: 0.0, minValue: 0.0, maxValue: 1.0, automationRate: 'k-rate' }
+      ];
    }
 
    allocateArray (allocatedArray, typedArray) {
@@ -170,6 +167,7 @@ class EngineSoundGenerator extends AudioWorkletProcessor {
       this.setChannelOutput (channelIntake, this.channelIntakeArray);
       this.setChannelOutput (channelEngineBlockVibrations, this.channelEngineBlockVibrationsArray);
       this.setChannelOutput (channelOutlet, this.channelOutletArray);
+      this.layers.process (channelIntake, channelEngineBlockVibrations, channelOutlet, rpm, parameters["throttle"], parameters["shift"][0]);
 
       return true;
    }

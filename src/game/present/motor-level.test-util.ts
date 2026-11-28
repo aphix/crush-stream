@@ -5,10 +5,11 @@ import { channelGains, motorRpm, MOTOR_OUTPUT_GAIN, toneMessage, toneOptions } f
 
 /** Test harness: renders the shipped worklet block by block in node (no browser) and measures a voice's level at a rev and throttle. */
 export const SAMPLE_RATE = 44100;
-const BLOCK = 128;
-const SETTLE_BLOCKS = 200;
+export const BLOCK = 128;
+export const SETTLE_BLOCKS = 200;
 const MEASURE_BLOCKS = 400;
-const WORKLET = readFileSync(new URL("../../../public/audio/motor-worklet.js", import.meta.url), "utf8");
+/** `MOTOR_WORKLET` names another build of the worklet to render (the owner's before/after listening renders); the tests render the shipped one. */
+const WORKLET = readFileSync(process.env.MOTOR_WORKLET ?? new URL("../../../public/audio/motor-worklet.js", import.meta.url), "utf8");
 /**
  * The wasm generator seeds its noise from the wall clock in whole seconds (`__emscripten_date_now`), so a voice's peak moved with the second
  * the test ran in: over 480 seconds a police redline read 0.24-0.43 against the 0.4 band edge (1 in 480 over it, a red gate on a green tree;
@@ -25,7 +26,7 @@ interface Processor {
 type ProcessorClass = new (options: { processorOptions: unknown }) => Processor;
 
 /** Runs the shipped worklet file in a stub of an AudioWorkletGlobalScope: the real wasm synthesis, block by block. `ready` resolves when the wasm runtime is in (emscripten's `onRuntimeInitialized`). */
-function loadProcessor(): { Processor: ProcessorClass; scope: { currentFrame: number }; ready: Promise<void> } {
+export function loadProcessor(): { Processor: ProcessorClass; scope: { currentFrame: number }; ready: Promise<void> } {
   let registered: ProcessorClass | null = null;
   let runtimeIn: () => void = () => {};
   const ready = new Promise<void>((resolve) => (runtimeIn = resolve));
@@ -56,6 +57,7 @@ function loadProcessor(): { Processor: ProcessorClass; scope: { currentFrame: nu
 }
 
 const { Processor, scope, ready } = loadProcessor();
+export const harness = { Processor, scope, ready };
 
 export interface Level {
   /** Peak and RMS of the voice's output (the class-tilted sum x `MOTOR_OUTPUT_GAIN`), 0..1 = full scale. */
@@ -63,11 +65,11 @@ export interface Level {
   rms: number;
 }
 
-/** The voice output of `cls` tuned to `stage` at throttle 0 (the game never sets it), one `Level` per dial rev (0..1, in order), after the settle time the generator needs. */
-export async function voiceLevels(cls: VehicleClassId, stage: DamageStage, revs: readonly number[]): Promise<Level[]> {
+/** The voice output of `cls` tuned to `stage` at engine load `load` (default 0), one `Level` per dial rev (0..1, in order), after the settle time the generator needs. */
+export async function voiceLevels(cls: VehicleClassId, stage: DamageStage, revs: readonly number[], load = 0): Promise<Level[]> {
   const processor = new Processor({ processorOptions: toneOptions(cls, SAMPLE_RATE) });
   const out = [[new Float32Array(BLOCK)], [new Float32Array(BLOCK)], [new Float32Array(BLOCK)]];
-  const idle = { rpm: new Float32Array(BLOCK), throttle: new Float32Array(BLOCK) };
+  const idle = { rpm: new Float32Array(BLOCK), throttle: new Float32Array(BLOCK), shift: new Float32Array(1) };
   // The processor is silent until the wasm runtime is in, and builds its generator on the first block after it.
   await ready;
   processor.process([], out, idle);
@@ -76,7 +78,7 @@ export async function voiceLevels(cls: VehicleClassId, stage: DamageStage, revs:
   channelGains(tilt, cls);
   const levels: Level[] = [];
   for (const rev of revs) {
-    const parameters = { rpm: new Float32Array(BLOCK).fill(motorRpm(cls, rev, 1)), throttle: idle.throttle };
+    const parameters = { rpm: new Float32Array(BLOCK).fill(motorRpm(cls, rev, 1)), throttle: new Float32Array(BLOCK).fill(load), shift: idle.shift };
     let peak = 0;
     let squares = 0;
     for (let block = 0; block < SETTLE_BLOCKS + MEASURE_BLOCKS; block++) {
