@@ -61,7 +61,7 @@ describe("given six voices re-tuned over and over, as every pool swap, class cha
     const tones = toneMessages(SAMPLE_RATE);
     const voices = Array.from({ length: VOICES }, () => new Processor({ processorOptions: toneOptions(VEHICLE_CLASS_IDS[0]!, SAMPLE_RATE) }));
     const out = [[new Float32Array(BLOCK)], [new Float32Array(BLOCK)], [new Float32Array(BLOCK)]];
-    const params = { rpm: new Float32Array(BLOCK).fill(3000), throttle: new Float32Array(BLOCK) };
+    const params = { rpm: new Float32Array(BLOCK).fill(3000), throttle: new Float32Array(BLOCK), shift: new Float32Array(1) };
     await ready;
     // A processor builds its generator on the first block after the runtime is in.
     for (const voice of voices) {

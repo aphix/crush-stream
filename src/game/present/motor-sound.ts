@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { carClass, carRpm, damageStage, VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
+import { carClass, carGear, carRpm, damageStage, VEHICLE_CLASS_IDS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { approach } from "./audio-mix.ts";
 import { easeLoad, engineLawGain } from "./engine-law.ts";
 import { accelLoad, channelGains, damageTone, DIE_DOWN_S, MOTOR_OUTPUT_GAIN, motorLoad, motorRev, motorRpm, TONE_COUNT, toneMessages, toneOptions, type ToneMessage, type ToneOptions } from "./motor-tone.ts";
+import { CABIN_BOOM_HZ, distanceCutoff, PERSPECTIVE_NAMES, PERSPECTIVES, perspectiveFor, perspectiveGains, SHIFT_CUT_S, SHIFT_CUT_SHARE, SHIFT_GAP_S, SHIFT_PULSE_S, SHIFT_RPM_TAU_S, SHIFT_THUMP_AT, shiftKind, shiftStrength } from "./motor-layers.ts";
 import { VoicePool } from "./motor-voices.ts";
 
 const WORKLET_URL = `${import.meta.env?.BASE_URL ?? "/"}audio/motor-worklet.js`;
@@ -37,6 +38,10 @@ const DIE_TAU_S = DIE_DOWN_S / 5;
 /** Smoothing (s) of the acceleration-derived load, and of the player's engine level that ducks the music. */
 const ACCEL_TAU_S = 0.15;
 const PLAYER_LEVEL_TAU_S = 0.3;
+/** The time constant (s) a voice moves between perspectives. */
+const VIEW_TAU_S = 0.06;
+/** The cabin boom's quality factor. */
+const CABIN_BOOM_Q = 1.1;
 
 /** One engine voice: the generator (or its oscillator fallback) through three channel gains, a fade gain and a damage lowpass into a panner. */
 interface Voice {
@@ -44,11 +49,16 @@ interface Voice {
   port: MessagePort | null;
   /** The worklet's rpm, or the oscillator's frequency. */
   rpm: AudioParam;
+  /** The worklet's engine load and its shift trigger; null for the oscillator fallback. */
+  throttle: AudioParam | null;
+  shift: AudioParam | null;
   intake: GainNode;
   block: GainNode;
   outlet: GainNode;
   gain: GainNode;
   filter: BiquadFilterNode;
+  /** The cabin's boom: a peaking filter, flat outside the followed car. */
+  boom: BiquadFilterNode;
   positional: THREE.PositionalAudio;
 }
 
@@ -84,6 +94,7 @@ export class MotorSound {
   private readonly pool: VoicePool;
   private readonly distSq = new Float64Array(MAX_CARS);
   private readonly gains = new Float64Array(3);
+  private readonly viewGains = new Float64Array(3);
   /** Per slot: the car its voice voices (-1 none), seconds of fade-out left, the class and tone it is tuned to, its last speed along its heading, its smoothed acceleration load, seconds silenced. */
   private readonly voiced: Int32Array;
   private readonly fadeLeftS: Float64Array;
@@ -100,6 +111,11 @@ export class MotorSound {
   /** Per slot: the load the engine law's loudness follows (the pedal's load eased quick-attack, slow-release, `easeLoad`), and seconds a misfire dip still holds the gain down. */
   private readonly lawLoad: Float64Array;
   private readonly dipS: Float64Array;
+  /** Per slot: the perspective its channel gains were last set for (-1 none), the gear it saw last, seconds since its last shift thump and seconds of torque cut left. */
+  private readonly viewIndex: Int8Array;
+  private readonly gearPrev: Int8Array;
+  private readonly sinceShiftS: Float64Array;
+  private readonly shiftCutS: Float64Array;
   /** True for the generator worklet (its output follows `naturalDb`), false for the flat oscillator fallback. */
   private worklet = true;
   private voices: Voice[] = [];
@@ -127,6 +143,10 @@ export class MotorSound {
     this.fresh = new Uint8Array(slots).fill(1);
     this.lawLoad = new Float64Array(slots);
     this.dipS = new Float64Array(slots);
+    this.viewIndex = new Int8Array(slots).fill(-1);
+    this.gearPrev = new Int8Array(slots);
+    this.sinceShiftS = new Float64Array(slots).fill(SHIFT_GAP_S);
+    this.shiftCutS = new Float64Array(slots);
   }
 
   /** Loads the worklet and builds the voices. `update` does nothing until this resolves. */
@@ -158,14 +178,22 @@ export class MotorSound {
     const gain = context.createGain();
     gain.gain.value = 0;
     const filter = lowpass(context, damageTone("healthy").cutoffHz);
+    const boom = context.createBiquadFilter();
+    boom.type = "peaking";
+    boom.frequency.value = CABIN_BOOM_HZ;
+    boom.Q.value = CABIN_BOOM_Q;
     let port: MessagePort | null = null;
     let node: AudioWorkletNode | null = null;
     let rpm: AudioParam;
+    let throttle: AudioParam | null = null;
+    let shift: AudioParam | null = null;
     if (options) {
       node = new AudioWorkletNode(context, PROCESSOR_NAME, { numberOfInputs: 0, numberOfOutputs: 3, outputChannelCount: [1, 1, 1], processorOptions: options });
       const param = node.parameters.get("rpm");
       if (!param) throw new Error(`${PROCESSOR_NAME} has no rpm parameter`);
       rpm = param;
+      throttle = node.parameters.get("throttle") ?? null;
+      shift = node.parameters.get("shift") ?? null;
       port = node.port;
       node.connect(intake, 0);
       node.connect(block, 1);
@@ -187,14 +215,15 @@ export class MotorSound {
     block.connect(gain);
     outlet.connect(gain);
     gain.connect(filter);
+    filter.connect(boom);
     const positional = new THREE.PositionalAudio(listener);
     positional.setDistanceModel(DISTANCE_MODEL);
     positional.setRefDistance(REF_DISTANCE);
     positional.setRolloffFactor(ROLLOFF_FACTOR);
     positional.setMaxDistance(VOICE_MAX_DISTANCE);
     positional.panner.panningModel = PANNING_MODEL;
-    positional.setNodeSource(filter);
-    const voice: Voice = { port, rpm, intake, block, outlet, gain, filter, positional };
+    positional.setNodeSource(boom);
+    const voice: Voice = { port, rpm, throttle, shift, intake, block, outlet, gain, filter, boom, positional };
     const dead = node;
     if (dead) {
       // A processor that threw (an abort, a full heap) fires this on every render quantum: cut it off and stop posting to it.
@@ -210,9 +239,9 @@ export class MotorSound {
   /**
    * One audio frame: ranks the cars by distance from `camera` (the listener rides it; its matrix is current), seats them in
    * the pool, moves the voices, and every `AUDIO_TICK_S` retunes them. `rate` is the presented-time rate (slow-mo pitches the
-   * engines down); `parked` holds every voice at rpm 0 (the engine volume is 0). Returns true on a tick frame.
+   * engines down); `parked` holds every voice at rpm 0 (the engine volume is 0); `firstPerson`: the priority car is seen from inside (its hood or driver's view), so it is heard from its cabin. Returns true on a tick frame.
    */
-  update(dt: number, cars: readonly DeformableCar[], camera: THREE.Camera, priority: DeformableCar | null, rate: number, parked: boolean): boolean {
+  update(dt: number, cars: readonly DeformableCar[], camera: THREE.Camera, priority: DeformableCar | null, rate: number, parked: boolean, firstPerson = false): boolean {
     const context = this.context;
     if (!this.ready || !context) return false;
     const e = camera.matrixWorld.elements;
@@ -259,7 +288,7 @@ export class MotorSound {
       const want = this.pool.car[s]!;
       if (this.voiced[s]! < 0 && want >= 0 && want < n) this.voiced[s] = want;
       const v = this.voiced[s]!;
-      if (v >= 0 && v < n) this.driveVoice(s, cars[v]!, v === priorityIndex, tick, rate, parked, now);
+      if (v >= 0 && v < n) this.driveVoice(s, cars[v]!, v === priorityIndex, firstPerson, this.distSq[v]!, tick, rate, parked, now);
     }
     this.playerLevel = approach(this.playerLevel, this.levelTarget, tick, PLAYER_LEVEL_TAU_S);
     return true;
@@ -285,20 +314,10 @@ export class MotorSound {
    * voice's kept generator for that tuning, so it happens under a fade or a misfire dip), rpm from the gauge's revs lifted by the load, misfires. A dead
    * or parked engine winds down to silence.
    */
-  private driveVoice(slot: number, car: DeformableCar, isPriority: boolean, tick: number, rate: number, parked: boolean, now: number): void {
+  private driveVoice(slot: number, car: DeformableCar, isPriority: boolean, firstPerson: boolean, distSq: number, tick: number, rate: number, parked: boolean, now: number): void {
     const voice = this.voices[slot]!;
     if (!car.deform.drivetrainAlive || parked) {
-      this.silentS[slot]! += tick;
-      if (this.gainOn[slot]) {
-        voice.gain.gain.setTargetAtTime(0, now, DIE_TAU_S);
-        this.gainOn[slot] = 0;
-      }
-      if (this.silentS[slot]! < DIE_DOWN_S) {
-        voice.rpm.setTargetAtTime(0, now, DIE_TAU_S);
-      } else if (!this.rpmCut[slot]) {
-        voice.rpm.setValueAtTime(0, now);
-        this.rpmCut[slot] = 1;
-      }
+      this.windDown(slot, voice, tick, now);
       return;
     }
     this.silentS[slot] = 0;
@@ -318,23 +337,22 @@ export class MotorSound {
     this.accel[slot] = accel;
     this.prevAlong[slot] = along;
     const load = motorLoad(car.drive.throttle, car.drive.boostK, accel);
+    this.trackGear(slot, voice, car, load, fresh, tick, now);
+    const pedal = this.shiftCutS[slot]! > 0 ? load * SHIFT_CUT_SHARE : load;
     const rev = motorRev(carRpm(car), load);
     // The engine law's loudness follows the eased load (quick attack, slower release): `level` is the voice gain it asks for.
-    this.lawLoad[slot] = fresh ? load : easeLoad(this.lawLoad[slot]!, load, tick);
+    this.lawLoad[slot] = fresh ? pedal : easeLoad(this.lawLoad[slot]!, pedal, tick);
     const level = MOTOR_OUTPUT_GAIN * engineLawGain(cls, rev, this.lawLoad[slot]!, this.worklet);
     if (this.dipS[slot]! > 0) this.dipS[slot]! -= tick;
     if (classIndex !== this.classIndex[slot] || damage.toneIndex !== this.toneIndex[slot]) {
       this.classIndex[slot] = classIndex;
       this.toneIndex[slot] = damage.toneIndex;
+      this.viewIndex[slot] = -1;
       // A live voice re-tunes under a misfire dip, a fresh one (silent after a fade) needs none: the swap to another kept generator clicks, the dip hides it.
       if (!fresh) this.dip(voice, level, slot, now);
       voice.port?.postMessage(this.messages[classIndex * TONE_COUNT + damage.toneIndex]);
-      voice.filter.frequency.setTargetAtTime(damage.cutoffHz, now, PARAM_TAU_S);
-      channelGains(this.gains, cls);
-      voice.intake.gain.setValueAtTime(this.gains[0]!, now);
-      voice.block.gain.setValueAtTime(this.gains[1]!, now);
-      voice.outlet.gain.setValueAtTime(this.gains[2]!, now);
     }
+    this.driveView(slot, voice, cls, isPriority, firstPerson, distSq, damage.cutoffHz, now);
     if (!this.gainOn[slot]) {
       voice.gain.gain.setTargetAtTime(level, now, PARAM_TAU_S);
       this.gainOn[slot] = 1;
@@ -345,8 +363,60 @@ export class MotorSound {
     }
     let rpm = motorRpm(cls, rev, rate);
     if (damage.rpmJitter > 0) rpm *= 1 + damage.rpmJitter * (2 * Math.random() - 1);
-    voice.rpm.setTargetAtTime(rpm * this.hzPerRpm[classIndex]!, now, PARAM_TAU_S);
+    voice.rpm.setTargetAtTime(rpm * this.hzPerRpm[classIndex]!, now, this.shiftCutS[slot]! > 0 ? SHIFT_RPM_TAU_S : PARAM_TAU_S);
+    voice.throttle?.setTargetAtTime(pedal, now, PARAM_TAU_S);
     if (isPriority) this.levelTarget = load * rev;
+  }
+
+  /** A dead or parked engine winds down to silence; its next drive starts fresh, so a respawn's jump of gear is no shift. */
+  private windDown(slot: number, voice: Voice, tick: number, now: number): void {
+    this.silentS[slot]! += tick;
+    this.fresh[slot] = 1;
+    if (this.gainOn[slot]) {
+      voice.gain.gain.setTargetAtTime(0, now, DIE_TAU_S);
+      this.gainOn[slot] = 0;
+    }
+    if (this.silentS[slot]! < DIE_DOWN_S) {
+      voice.rpm.setTargetAtTime(0, now, DIE_TAU_S);
+    } else if (!this.rpmCut[slot]) {
+      voice.rpm.setValueAtTime(0, now);
+      this.rpmCut[slot] = 1;
+    }
+  }
+
+  /** The drivetrain's gear changes: an upshift cuts the torque for `SHIFT_CUT_S` (the revs fall slowly meanwhile) and thumps as it re-engages; a downshift only thumps. */
+  private trackGear(slot: number, voice: Voice, car: DeformableCar, load: number, fresh: boolean, tick: number, now: number): void {
+    const gear = carGear(car);
+    this.sinceShiftS[slot]! += tick;
+    if (this.shiftCutS[slot]! > 0) this.shiftCutS[slot]! -= tick;
+    const previous = this.gearPrev[slot]!;
+    this.gearPrev[slot] = gear;
+    const kind = fresh ? 0 : shiftKind(previous, gear, this.sinceShiftS[slot]!);
+    if (kind === 0) return;
+    this.sinceShiftS[slot] = 0;
+    const up = kind > 0;
+    if (up) this.shiftCutS[slot] = SHIFT_CUT_S;
+    const strike = now + (up ? SHIFT_CUT_S * SHIFT_THUMP_AT : 0);
+    voice.shift?.setValueAtTime(shiftStrength(load, up), strike);
+    voice.shift?.setValueAtTime(0, strike + SHIFT_PULSE_S);
+  }
+
+  /** The ear the voice is heard from: the followed car from inside or behind, any other car at its distance. Gains and the cabin boom move on a change; the lowpass follows every tick. */
+  private driveView(slot: number, voice: Voice, cls: VehicleClassId, isPriority: boolean, firstPerson: boolean, distSq: number, cutoffHz: number, now: number): void {
+    const view = perspectiveFor(isPriority, firstPerson);
+    const name = PERSPECTIVE_NAMES[view]!;
+    const mix = PERSPECTIVES[name];
+    if (view !== this.viewIndex[slot]) {
+      this.viewIndex[slot] = view;
+      channelGains(this.gains, cls);
+      perspectiveGains(this.viewGains, this.gains, name);
+      voice.intake.gain.setTargetAtTime(this.viewGains[0]!, now, VIEW_TAU_S);
+      voice.block.gain.setTargetAtTime(this.viewGains[1]!, now, VIEW_TAU_S);
+      voice.outlet.gain.setTargetAtTime(this.viewGains[2]!, now, VIEW_TAU_S);
+      voice.boom.gain.setTargetAtTime(mix.boomDb, now, VIEW_TAU_S);
+    }
+    const air = name === "other" ? distanceCutoff(Math.sqrt(distSq)) : mix.openHz;
+    voice.filter.frequency.setTargetAtTime(Math.min(cutoffHz, air), now, PARAM_TAU_S);
   }
 
   /** Dips the voice gain to `MISFIRE_DIP_SHARE` of `level` for `MISFIRE_DIP_S`, then lets it back; the per-tick level waits out the dip (`dipS`). */

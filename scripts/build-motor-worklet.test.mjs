@@ -7,15 +7,16 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "public/audio/motor-worklet.js");
 const PREBUILT = readFileSync(join(ROOT, "kernels/motor/engine_sound_generator_worklet_webassembly.js"), "utf8");
+const LAYERS = readFileSync(join(ROOT, "kernels/motor/motor-layers.js"), "utf8");
 const PROCESSOR = readFileSync(join(ROOT, "kernels/motor/motor-processor.js"), "utf8");
 
 describe("given the engine-sound worklet shipped to the game", () => {
-  it("when it is compared with its sources, then it is the upstream prebuilt module with our processor spliced on", () => {
+  it("when it is compared with its sources, then it is the upstream prebuilt module with our layers and processor spliced on", () => {
     const upstreamProcessor = PREBUILT.indexOf("/*\n * Copyright (c) 2021-2022 Antonio-R1");
     expect(upstreamProcessor).toBeGreaterThan(0);
     const committed = readFileSync(OUT, "utf8");
     expect(committed.slice(0, upstreamProcessor)).toBe(PREBUILT.slice(0, upstreamProcessor));
-    expect(committed.slice(upstreamProcessor)).toBe(PROCESSOR.replace(/^\n/, ""));
+    expect(committed.slice(upstreamProcessor)).toBe(LAYERS.replace(/^\n/, "") + PROCESSOR.replace(/^\n/, ""));
   });
 
   it("when the worklet is built again, then the shipped file is unchanged", () => {

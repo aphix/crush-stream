@@ -11,23 +11,29 @@ const REDLINE_PEAK_MIN = 0.12;
 const REDLINE_PEAK_MAX = 0.4;
 /** A voice is never inaudibly thin: its RMS at any rev stays above -34 dBFS. */
 const VOICE_RMS_MIN = 0.02;
-/** The voice output of `cls` tuned to `stage`, per rev of `REVS`. */
-function revLevels(cls: VehicleClassId, stage: DamageStage): Promise<Level[]> {
-  return voiceLevels(cls, stage, REVS);
+/** The pedal's two ends: the layers (saturation, breath, thump) answer to it, the generator does not. */
+const LOADS = [0, 1] as const;
+/** The voice output of `cls` tuned to `stage` at engine load `load`, per rev of `REVS`. */
+function revLevels(cls: VehicleClassId, stage: DamageStage, load: number): Promise<Level[]> {
+  return voiceLevels(cls, stage, REVS, load);
 }
 
-describe("given each vehicle class's voice, rendered by the shipped worklet at every damage stage", () => {
+describe("given each vehicle class's voice, rendered by the shipped worklet at every damage stage and both ends of the pedal", () => {
   for (const cls of VEHICLE_CLASS_IDS) {
     for (const stage of STAGES) {
-      it(`when the ${cls} runs ${stage} from idle to redline, then no moment passes -6 dBFS and it is never thin`, async () => {
-        const levels = await revLevels(cls, stage);
-        expect(Math.max(...levels.map((l) => l.peak)), `${cls} ${stage} peaks ${levels.map((l) => l.peak.toFixed(3)).join(" ")}`).toBeLessThanOrEqual(VOICE_PEAK_LIMIT);
-        expect(Math.min(...levels.map((l) => l.rms)), `${cls} ${stage} rms ${levels.map((l) => l.rms.toFixed(3)).join(" ")}`).toBeGreaterThanOrEqual(VOICE_RMS_MIN);
+      for (const load of LOADS) {
+        it(`when the ${cls} runs ${stage} from idle to redline at load ${load}, then no moment passes -6 dBFS and it is never thin`, async () => {
+          const levels = await revLevels(cls, stage, load);
+          expect(Math.max(...levels.map((l) => l.peak)), `${cls} ${stage} peaks ${levels.map((l) => l.peak.toFixed(3)).join(" ")}`).toBeLessThanOrEqual(VOICE_PEAK_LIMIT);
+          expect(Math.min(...levels.map((l) => l.rms)), `${cls} ${stage} rms ${levels.map((l) => l.rms.toFixed(3)).join(" ")}`).toBeGreaterThanOrEqual(VOICE_RMS_MIN);
+        });
+      }
+    }
+    for (const load of LOADS) {
+      it(`when the ${cls} is at its redline healthy at load ${load}, then its peak sits in the -18 to -8 dBFS band around -12`, async () => {
+        const redline = (await revLevels(cls, "healthy", load)).at(-1)!;
+        expect(redline.peak >= REDLINE_PEAK_MIN && redline.peak <= REDLINE_PEAK_MAX, `${cls} redline peak ${redline.peak.toFixed(3)}`).toBeTruthy();
       });
     }
-    it(`when the ${cls} is at its redline healthy, then its peak sits in the -18 to -8 dBFS band around -12`, async () => {
-      const redline = (await revLevels(cls, "healthy")).at(-1)!;
-      expect(redline.peak >= REDLINE_PEAK_MIN && redline.peak <= REDLINE_PEAK_MAX, `${cls} redline peak ${redline.peak.toFixed(3)}`).toBeTruthy();
-    });
   }
 });

@@ -293,6 +293,8 @@ export class CrashEngine extends EngineGarage {
   );
   /** A gun was posed in the player's hand this frame: its muzzle is where a shot leaves from. */
   private gunPosed = false;
+  /** The drive frame that was just drawn is the first-person one: the audio hears the followed car from its cabin only then (not on foot, spectating or in a reel). */
+  private cabinEye = false;
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
   protected readonly deviceClass: DeviceClass;
@@ -1514,7 +1516,7 @@ export class CrashEngine extends EngineGarage {
       const simRate = stepping ? this.clock.timeScale * this.cine.timeWarp : 0;
       this.audioFeed.frame(wallDt, simRate, heard, eye[12]!, eye[13]!, eye[14]!);
       this.uiCues.frame(this.cuePhase(), this.cueTime(), this.cueWrecked(), this.onFoot.armed() ? this.onFoot.arms.weapon : null);
-      this.audio.frame(wallDt, this.highlights.playing ? this.highlights.cars() : this.live(), heard, this.clock.timeScale * this.cine.timeWarp, this.playing && !held, this.ambientScene());
+      this.audio.frame(wallDt, this.highlights.playing ? this.highlights.cars() : this.live(), heard, this.clock.timeScale * this.cine.timeWarp, this.playing && !held, this.ambientScene(), this.cabinEye && !this.highlights.playing);
     } else this.audioFeed.clear();
     lapPart(PART.audio);
     if (this.stage.night) this.stage.syncPools(this.poles);
@@ -1916,6 +1918,7 @@ export class CrashEngine extends EngineGarage {
   }
 
   private aimRigs(wallDt: number): void {
+    this.cabinEye = false;
     // Driving is not spectating: the free view ends where a seat takes the wheel.
     if (this.seat.mode === "drive") this.view.leaveFree();
     if (this.highlights.playing) {
@@ -1970,6 +1973,7 @@ export class CrashEngine extends EngineGarage {
       // The body's ride reaches the chase and hood cams on every FX tier but "off" (0.0004 ms a frame), unless motion is reduced.
       this.view.drive.ride = this.cine.tier !== "off" && !this.clock.reduceMotion;
       this.view.frameDrive(followed, this.specScene.fixed(), wallDt, this.playing);
+      this.cabinEye = this.seat.view === "first";
       return;
     }
     // Following (spectating): the chosen spectator cam, on the rigs too (their default is the orbit, which falls through).

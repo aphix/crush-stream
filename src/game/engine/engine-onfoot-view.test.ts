@@ -288,4 +288,15 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
       keys.clear();
     }
   });
+
+  it("when he drives in the first-person view and gets out, then the audio's cabin eye is on at the wheel and off on foot, though the seat's view is still first", () => {
+    const seat = rig.engine["seat"];
+    seat.view = "first";
+    rig.run(SETTLE_S);
+    expect(rig.engine["cabinEye"], "at the wheel, first-person").toBe(true);
+    rig.getOut();
+    rig.run(SETTLE_S);
+    expect(seat.view, "the seat remembers the view").toBe("first");
+    expect(rig.engine["cabinEye"], "on foot").toBe(false);
+  });
 });
