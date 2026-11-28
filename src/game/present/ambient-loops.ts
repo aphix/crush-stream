@@ -5,8 +5,8 @@ export const LAYER = { rumble: 0, hum: 1, wind: 2, murmur: 3, roar: 4, cheer: 5,
 export type Layer = keyof typeof LAYER;
 export const LAYERS = Object.keys(LAYER) as Layer[];
 
-/** Each layer's own sample rate (Hz): the lowest its band needs, since the loops are rendered on the main thread. */
-export const LAYER_RATE: Record<Layer, number> = { rumble: 8000, hum: 8000, wind: 11025, murmur: 8000, roar: 8000, cheer: 8000, insects: 11025 };
+/** Each layer's own sample rate (Hz): enough for each layer's band; the loops are rendered in a worker. */
+export const LAYER_RATE: Record<Layer, number> = { rumble: 8000, hum: 8000, wind: 16000, murmur: 11025, roar: 11025, cheer: 11025, insects: 16000 };
 /** Loop lengths (s) of a layer's left and right copies: unequal, so the pair repeats only every 26 x 31 s. */
 const LOOP_SECONDS = [26, 31] as const;
 /** Every loop is scaled to this RMS, so the layer gains in `bedLevels` are comparable. */
@@ -16,9 +16,9 @@ type Rng = () => number;
 type Crowd = { voices: number; noise: number; pitch: readonly [number, number]; mouth: readonly [number, number]; syllableHz: number; noiseBand: readonly [number, number] };
 
 const CROWDS: Record<"murmur" | "roar" | "cheer", Crowd> = {
-  murmur: { voices: 6, noise: 0.9, pitch: [95, 240], mouth: [550, 1800], syllableHz: 3.5, noiseBand: [350, 2200] },
-  roar: { voices: 10, noise: 1.8, pitch: [90, 260], mouth: [600, 1900], syllableHz: 1.6, noiseBand: [300, 3200] },
-  cheer: { voices: 8, noise: 0.6, pitch: [190, 340], mouth: [750, 1350], syllableHz: 0.7, noiseBand: [1500, 3600] },
+  murmur: { voices: 8, noise: 0.9, pitch: [95, 240], mouth: [550, 1800], syllableHz: 3.5, noiseBand: [350, 2200] },
+  roar: { voices: 14, noise: 1.8, pitch: [90, 260], mouth: [600, 1900], syllableHz: 1.6, noiseBand: [300, 3200] },
+  cheer: { voices: 12, noise: 0.6, pitch: [190, 340], mouth: [750, 1350], syllableHz: 0.7, noiseBand: [1500, 4500] },
 };
 
 function shaped(n: number, rng: Rng, gain: number, ...chain: Biquad[]): Float32Array {
@@ -66,7 +66,7 @@ function hum(rate: number, seconds: number, rng: Rng): Float32Array {
 
 /** Open wind with a faint whistle; its band is wide on purpose, the bed's low-pass closes it with speed. */
 function wind(rate: number, seconds: number, rng: Rng): Float32Array {
-  const loop = seamlessLoop((n) => addInto(shaped(n, rng, 1, Biquad.high(160, rate), Biquad.low(4800, rate)), shaped(n, rng, 0.12, Biquad.band(900, 12, rate))), rate, seconds);
+  const loop = seamlessLoop((n) => addInto(shaped(n, rng, 1, Biquad.high(160, rate), Biquad.low(6500, rate)), shaped(n, rng, 0.12, Biquad.band(900, 12, rate))), rate, seconds);
   return swelled(loop, seconds, rate, rng, 0.5, [2, 14]);
 }
 

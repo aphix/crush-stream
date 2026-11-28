@@ -5,7 +5,7 @@ export const EMITTERS = ["horn", "siren", "dog", "bird", "pa"] as const;
 export type Emitter = (typeof EMITTERS)[number];
 
 /** Sample rate (Hz) of every one-shot. */
-export const SHOT_RATE = 16000;
+export const SHOT_RATE = 22050;
 /** Variants rendered of each kind: the scheduler picks one, so a repeat is a different sound. */
 export const SHOT_VARIANTS = 3;
 /** A bark's length (s), and the fade (s) that ends it before it can click. */

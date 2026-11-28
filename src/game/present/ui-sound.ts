@@ -8,6 +8,7 @@ export class UiSound {
   private readonly out: AudioNode;
   private readonly buffers = new Map<UiName, AudioBuffer>();
   private readonly loading: RenderHandle;
+  private waiting = UI_NAMES.length;
 
   constructor(ctx: BaseAudioContext, out: AudioNode) {
     this.ctx = ctx;
@@ -15,7 +16,8 @@ export class UiSound {
     this.loading = renderOffThread(
       UI_NAMES.map((name): RenderJob => ({ kind: "ui", name })),
       (job, data) => {
-        if (job.kind !== "ui") return;
+        this.waiting--;
+        if (data === null || job.kind !== "ui") return;
         const buffer = ctx.createBuffer(1, data.length, UI_RATE);
         buffer.getChannelData(0).set(data);
         this.buffers.set(job.name, buffer);
@@ -23,9 +25,9 @@ export class UiSound {
     );
   }
 
-  /** Sounds not yet rendered. */
+  /** Sounds not yet rendered (one that failed is not counted: it stays missing). */
   get pending(): number {
-    return UI_NAMES.length - this.buffers.size;
+    return this.waiting;
   }
 
   /** Plays `name`; a sound still being rendered (the first moments after the game starts) is skipped. */

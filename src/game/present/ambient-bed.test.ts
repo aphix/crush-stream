@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { AmbientBed } from "./ambient-bed.ts";
+import { renderOffThread } from "./audio-render-remote.ts";
 import { fakeAudio } from "./ambient-fake-context.test-util.ts";
 import { bedLevels, LEVEL, LEVEL_COUNT, type AmbientPlace } from "./ambient-levels.ts";
 import { Biquad, filtered, rngOf, seamlessLoop, whiteNoise } from "./ambient-dsp.ts";
@@ -229,7 +230,7 @@ describe("given an AmbientBed on a recording context", () => {
 });
 
 describe("given what each place holds in memory", () => {
-  it("when each place is loaded, then its audio buffers stay under 14 MB; a place change drops the old one's, so one place at a time is resident", async () => {
+  it("when each place is loaded, then its audio buffers stay under 20 MB; a place change drops the old one's, so one place at a time is resident", async () => {
     const MB = 1024 * 1024;
     let sum = 0;
     const report: string[] = [];
@@ -238,19 +239,77 @@ describe("given what each place holds in memory", () => {
       const bytes = fake.residentBytes();
       sum += bytes;
       report.push(`${place} ${(bytes / MB).toFixed(1)} MB`);
-      expect(bytes / MB, `${place} resident MB`).toBeLessThan(14);
+      expect(bytes / MB, `${place} resident MB`).toBeLessThan(20);
       bed.dispose();
     }
     console.log(`resident audio buffers: ${report.join(", ")}, all places ${(sum / MB).toFixed(1)} MB`);
   });
 
-  it("when the place changes, then what the old place alone used is dropped and only the new place's sounds are asked for", async () => {
+  it("when the place changes from the arena to dirt, then only dirt's sounds are asked for, and the arena's crowd fades out gradually before it stops", async () => {
     const { fake, bed } = await loadedBed("arena", 12);
+    const roar = fake.nodes[3 + LAYER.roar]!;
+    const roarEars = fake.nodes.filter((node) => node.loop && node.started > 0 && node.buffer!.sampleRate === 11025);
+    const before = roar.gain.value;
+    expect(before, "the roar was playing").toBeGreaterThan(0.05);
     bed.set("dirt", 12, 0, false);
     bed.frame(1 / FRAME_HZ);
-    expect(bed.pending, "dirt's own loops and one-shots asked for").toBeGreaterThan(0);
-    expect(bed.pending, "its insects (2 ears) and its dog and bird (3 variants each)").toBe(8);
+    expect(bed.pending, "dirt's insects (2 ears), dog and bird (3 variants each)").toBe(8);
+    expect(roarEars.every((node) => node.stopped === 0), "nothing cut on the first frame").toBe(true);
+    expect(roar.gain.value, "one frame in, the roar is still most of itself").toBeGreaterThan(0.9 * before);
+    let frames = 1;
+    while (roarEars.some((node) => node.stopped === 0) && frames < FRAME_HZ * 30) {
+      bed.frame(1 / FRAME_HZ);
+      frames++;
+    }
+    expect(frames / FRAME_HZ, "seconds the fade took").toBeGreaterThan(2);
+    expect(roar.gain.value, "faded below the stop level").toBeLessThan(0.002);
     await framesUntil(bed, () => bed.pending === 0);
-    expect(fake.nodes.some((node) => node.loop && node.stopped > 0), "arena's crowd stopped").toBe(true);
+  });
+});
+
+describe("given the render remote", () => {
+  const spawned: { made: number; ended: number } = { made: 0, ended: 0 };
+
+  /** A Worker whose every job fails. */
+  class FailingWorker {
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+    onerror: (() => void) | null = null;
+    constructor() {
+      spawned.made++;
+    }
+    postMessage(jobs: { id: number }[]): void {
+      setTimeout(() => {
+        for (const { id } of jobs) this.onmessage?.({ data: { id, failed: "boom" } });
+      }, 0);
+    }
+    terminate(): void {
+      spawned.ended++;
+    }
+  }
+
+  it("when no jobs are asked for, then no worker is started", () => {
+    vi.stubGlobal("Worker", FailingWorker);
+    spawned.made = 0;
+    renderOffThread([], () => {}).cancel();
+    vi.unstubAllGlobals();
+    expect(spawned.made).toBe(0);
+  });
+
+  it("when every job fails, then each is still counted out, the bed's pending falls to 0 and the worker is ended", async () => {
+    vi.stubGlobal("Worker", FailingWorker);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    spawned.made = 0;
+    spawned.ended = 0;
+    const audio = fakeAudio();
+    const bed = new AmbientBed(audio.ctx, audio.out);
+    bed.set("dirt", 12, 0, false);
+    bed.frame(1 / FRAME_HZ);
+    expect(bed.pending, "asked").toBeGreaterThan(0);
+    await framesUntil(bed, () => bed.pending === 0);
+    vi.unstubAllGlobals();
+    logged.mockRestore();
+    expect(spawned.made, "one worker").toBe(1);
+    expect(spawned.ended, "ended").toBe(1);
+    expect(audio.fake.buffers.length, "nothing was made of the failures").toBe(0);
   });
 });

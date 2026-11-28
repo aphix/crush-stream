@@ -135,7 +135,7 @@ export class AmbientBed {
     }
   }
 
-  /** Enters `place`: what the old place left behind and this one does not use is dropped, and the rest is asked of the worker. */
+  /** Enters `place`: what this place does not use is dropped (its playing layers fade out and stop in `frame`), and the rest is asked of the worker. */
   private loadPlace(): void {
     this.loading?.cancel();
     this.loaded = this.place;
@@ -144,7 +144,6 @@ export class AmbientBed {
     const jobs: RenderJob[] = [];
     for (let l = 0; l < LAYERS.length; l++) {
       const used = layers.includes(l);
-      if (!used) this.stopLayer(l);
       for (const ear of [0, 1] as const) {
         if (!used) this.ears[l * 2 + ear] = null;
         else if (this.ears[l * 2 + ear] === null) jobs.push({ kind: "loop", layer: LAYERS[l]!, ear });
@@ -161,10 +160,10 @@ export class AmbientBed {
     this.loading = renderOffThread(jobs, (job, data) => this.receive(job, data));
   }
 
-  /** A rendered sound arrives: it becomes an audio buffer and the samples are let go. */
-  private receive(job: RenderJob, data: Float32Array): void {
+  /** A rendered sound arrives (null: its render failed and the sound stays missing): it becomes an audio buffer and the samples are let go. */
+  private receive(job: RenderJob, data: Float32Array | null): void {
     this.waiting--;
-    if (job.kind === "ui") return;
+    if (data === null || job.kind === "ui") return;
     const buffer = this.ctx.createBuffer(1, data.length, job.kind === "loop" ? LAYER_RATE[job.layer] : SHOT_RATE);
     buffer.getChannelData(0).set(data);
     if (job.kind === "loop") this.ears[LAYER[job.layer] * 2 + job.ear] = buffer;

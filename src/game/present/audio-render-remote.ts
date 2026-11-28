@@ -7,10 +7,11 @@ export interface RenderHandle {
 }
 
 /**
- * Renders `jobs` off the game's frames and hands each result to `onResult` as it is ready (the samples are the caller's to keep). In a worker where the browser has one; where it has none (or the worker would not start: logged),
+ * Renders `jobs` off the game's frames and hands each result to `onResult` as it is ready (the samples are the caller's to keep; null for a job that failed). In a worker where the browser has one; where it has none (or the worker would not start: logged),
  * one job per timer task on the main thread, so a slow render never holds more than one job's time.
  */
-export function renderOffThread(jobs: readonly RenderJob[], onResult: (job: RenderJob, data: Float32Array) => void): RenderHandle {
+export function renderOffThread(jobs: readonly RenderJob[], onResult: (job: RenderJob, data: Float32Array | null) => void): RenderHandle {
+  if (jobs.length === 0) return { cancel: () => {} };
   const received = new Uint8Array(jobs.length);
   let live = true;
   let worker: Worker | null = null;
@@ -21,7 +22,7 @@ export function renderOffThread(jobs: readonly RenderJob[], onResult: (job: Rend
   const take = (id: number, data: Float32Array | null): void => {
     if (!live || received[id] === 1) return;
     received[id] = 1;
-    if (data !== null) onResult(jobs[id]!, data);
+    onResult(jobs[id]!, data);
     if (++done === jobs.length) worker?.terminate();
   };
   const inline = (): void => {
